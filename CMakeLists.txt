@@ -31,6 +31,14 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #
 # Options
 #
+option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
+option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
+option(TRITON_ENABLE_ONNXRUNTIME_TENSORRT
+  "Enable TensorRT execution provider for ONNXRuntime backend in server" OFF)
+option(TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+  "Enable OpenVINO execution provider for ONNXRuntime backend in server" OFF)
+set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "" CACHE PATH "Paths to ONNXRuntime includes")
+
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
 
@@ -44,13 +52,13 @@ include(FetchContent)
 
 FetchContent_Declare(
   repo-common
-  GIT_REPOSITORY git@github.com:triton-inference-server/common.git
+  GIT_REPOSITORY https://github.com/triton-inference-server/common.git
   GIT_TAG ${TRITON_COMMON_REPO_TAG}
   GIT_SHALLOW ON
 )
 FetchContent_Declare(
   repo-backend
-  GIT_REPOSITORY git@github.com:triton-inference-server/backend.git
+  GIT_REPOSITORY https://github.com/triton-inference-server/backend.git
   GIT_TAG ${TRITON_BACKEND_REPO_TAG}
   GIT_SHALLOW ON
 )
@@ -78,6 +86,7 @@ target_include_directories(
   triton-onnxruntime-backend
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${TRITON_ONNXRUNTIME_INCLUDE_PATHS}
 )
 
 target_compile_features(triton-onnxruntime-backend PRIVATE cxx_std_11)
@@ -87,9 +96,28 @@ target_compile_options(
     -Wall -Wextra -Wno-unused-parameter -Werror>
 )
 
+if(${TRITON_ENABLE_GPU})
+target_compile_definitions(
+  triton-onnxruntime-backend
+  PRIVATE TRITON_ENABLE_GPU=1
+)
+endif() # TRITON_ENABLE_GPU
+if(${TRITON_ENABLE_ONNXRUNTIME_TENSORRT})
+target_compile_definitions(
+  triton-onnxruntime-backend
+  PRIVATE TRITON_ENABLE_ONNXRUNTIME_TENSORRT=1
+)
+endif() # TRITON_ENABLE_ONNXRUNTIME_TENSORRT
+if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
+target_compile_definitions(
+  triton-onnxruntime-backend
+  PRIVATE TRITON_ENABLE_ONNXRUNTIME_OPENVINO=1
+)
+endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+
 target_link_libraries(
   triton-onnxruntime-backend
-  PUBLIC
+  PRIVATE
     triton-backend-utils  # from repo-backend
 )
 

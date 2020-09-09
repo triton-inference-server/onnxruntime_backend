@@ -24,11 +24,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/backends/backend/onnxruntime/onnx_utils.h"
+#include "onnxruntime_utils.h"
 
-#include "src/backends/backend/examples/backend_utils.h"
-
-namespace nib = nvidia::inferenceserver::backend;
+#include "triton/backend/backend_common.h"
 
 namespace triton { namespace backend { namespace onnxruntime {
 
@@ -85,10 +83,16 @@ InputOutputNames(
           ort_api->SessionGetOutputName(session, i, allocator, &node_name);
     }
 
+    // Make a std::string copy of the name and then free 'node_name'
+    // since the ORT API makes us responsible for doing that.
+    std::string name(node_name);
+    free(node_name);
+
     if (onnx_status != nullptr) {
       break;
     }
-    names.emplace(node_name);
+
+    names.emplace(std::move(name));
   }
   RETURN_IF_ORT_ERROR(onnx_status);
 
@@ -111,14 +115,19 @@ InputOutputInfos(
 
   // iterate over all nodes
   for (size_t i = 0; i < num_nodes; i++) {
-    char* name;
+    char* cname;
     if (is_input) {
       RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetInputName(session, i, allocator, &name));
+          ort_api->SessionGetInputName(session, i, allocator, &cname));
     } else {
       RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetOutputName(session, i, allocator, &name));
+          ort_api->SessionGetOutputName(session, i, allocator, &cname));
     }
+
+    // Make a std::string copy of the name and then free 'cname' since
+    // the ORT API makes us responsible for doing that.
+    std::string name(cname);
+    free(cname);
 
     OrtTypeInfo* typeinfo;
     if (is_input) {
@@ -153,7 +162,7 @@ InputOutputInfos(
     RETURN_IF_ORT_ERROR(
         ort_api->GetDimensions(tensor_info, (int64_t*)dims.data(), num_dims));
 
-    infos.emplace(name, OnnxTensorInfo(type, dims));
+    infos.emplace(std::move(name), OnnxTensorInfo(type, dims));
   }
 
   return nullptr;  // success
@@ -381,7 +390,7 @@ CompareDimsSupported(
             "': for the model to support batching the shape should have at "
             "least 1 dimension and the first dimension must be -1; but shape "
             "expected by the model is " +
-            nib::ShapeToString(model_shape));
+            ShapeToString(model_shape));
 
     std::vector<int64_t> full_dims;
     full_dims.reserve(1 + dims.size());
@@ -402,13 +411,13 @@ CompareDimsSupported(
         !succ, TRITONSERVER_ERROR_INVALID_ARG,
         std::string("model '") + model_name + "', tensor '" + tensor_name +
             "': the model expects " + std::to_string(model_shape.size()) +
-            " dimensions (shape " + nib::ShapeToString(model_shape) +
+            " dimensions (shape " + ShapeToString(model_shape) +
             ") but the model configuration specifies " +
             std::to_string(full_dims.size()) +
             " dimensions (an initial batch dimension because max_batch_size "
             "> 0 followed by the explicit tensor shape, making complete "
             "shape " +
-            nib::ShapeToString(full_dims) + ")");
+            ShapeToString(full_dims) + ")");
   } else {
     // ! supports_batching
     bool succ = (model_shape.size() == dims.size());
@@ -425,10 +434,10 @@ CompareDimsSupported(
         !succ, TRITONSERVER_ERROR_INVALID_ARG,
         std::string("model '") + model_name + "', tensor '" + tensor_name +
             "': the model expects " + std::to_string(model_shape.size()) +
-            " dimensions (shape " + nib::ShapeToString(model_shape) +
+            " dimensions (shape " + ShapeToString(model_shape) +
             ") but the model configuration specifies " +
             std::to_string(dims.size()) + " dimensions (shape " +
-            nib::ShapeToString(dims) + ")");
+            ShapeToString(dims) + ")");
   }
 
   return nullptr;  // success

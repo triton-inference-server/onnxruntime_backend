@@ -32,7 +32,7 @@
 
 The Triton backend for the ONNX Runtime.
 
-Use cmake 3.14 or later to build and install in a local directory.
+Use a recent cmake to build and install in a local directory.
 
 ```
 $ mkdir build

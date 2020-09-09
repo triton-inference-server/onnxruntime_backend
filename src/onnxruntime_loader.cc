@@ -24,11 +24,11 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/backends/backend/onnxruntime/loader.h"
+#include "onnxruntime_loader.h"
 
 #include <future>
 #include <thread>
-#include "src/backends/backend/onnxruntime/onnx_utils.h"
+#include "onnxruntime_utils.h"
 
 namespace triton { namespace backend { namespace onnxruntime {
 
