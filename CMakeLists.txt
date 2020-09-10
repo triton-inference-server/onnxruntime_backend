@@ -38,6 +38,7 @@ option(TRITON_ENABLE_ONNXRUNTIME_TENSORRT
 option(TRITON_ENABLE_ONNXRUNTIME_OPENVINO
   "Enable OpenVINO execution provider for ONNXRuntime backend in server" OFF)
 set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "" CACHE PATH "Paths to ONNXRuntime includes")
+set(TRITON_ONNXRUNTIME_LIB_PATHS "" CACHE PATH "Paths to ONNXRuntime libraries")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
@@ -67,6 +68,13 @@ FetchContent_Declare(
   GIT_SHALLOW ON
 )
 FetchContent_MakeAvailable(repo-common repo-backend)
+
+#
+# CUDA
+#
+if(${TRITON_ENABLE_GPU})
+  find_package(CUDAToolkit REQUIRED)
+endif() # TRITON_ENABLE_GPU
 
 #
 # Shared library implementing the Triton Backend API
@@ -101,37 +109,65 @@ target_compile_options(
 )
 
 if(${TRITON_ENABLE_GPU})
-target_compile_definitions(
-  triton-onnxruntime-backend
-  PRIVATE TRITON_ENABLE_GPU=1
-)
+  target_compile_definitions(
+    triton-onnxruntime-backend
+    PRIVATE TRITON_ENABLE_GPU=1
+  )
 endif() # TRITON_ENABLE_GPU
 if(${TRITON_ENABLE_ONNXRUNTIME_TENSORRT})
-target_compile_definitions(
-  triton-onnxruntime-backend
-  PRIVATE TRITON_ENABLE_ONNXRUNTIME_TENSORRT=1
-)
+  target_compile_definitions(
+    triton-onnxruntime-backend
+    PRIVATE TRITON_ENABLE_ONNXRUNTIME_TENSORRT=1
+  )
 endif() # TRITON_ENABLE_ONNXRUNTIME_TENSORRT
 if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
-target_compile_definitions(
-  triton-onnxruntime-backend
-  PRIVATE TRITON_ENABLE_ONNXRUNTIME_OPENVINO=1
-)
+  target_compile_definitions(
+    triton-onnxruntime-backend
+    PRIVATE TRITON_ENABLE_ONNXRUNTIME_OPENVINO=1
+  )
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+
+set_target_properties(
+  triton-onnxruntime-backend
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    OUTPUT_NAME triton_onnxruntime
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH "$\{ORIGIN\}"
+    LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_onnxruntime.ldscript
+    LINK_FLAGS "-Wl,--version-script libtriton_onnxruntime.ldscript"
+)
+
+set(TRITON_ONNXRUNTIME_LDFLAGS "")
+FOREACH(p ${TRITON_ONNXRUNTIME_LIB_PATHS})
+  set(TRITON_ONNXRUNTIME_LDFLAGS ${TRITON_ONNXRUNTIME_LDFLAGS} "-L${p}")
+ENDFOREACH(p)
 
 target_link_libraries(
   triton-onnxruntime-backend
   PRIVATE
     triton-backend-utils  # from repo-backend
+    ${TRITON_ONNXRUNTIME_LDFLAGS}
+    -lonnxruntime
 )
 
-set_target_properties(
-  triton-onnxruntime-backend PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-  OUTPUT_NAME triton_onnxruntime
-  LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_onnxruntime.ldscript
-  LINK_FLAGS "-Wl,--version-script libtriton_onnxruntime.ldscript"
-)
+if(${TRITON_ENABLE_GPU})
+  target_link_libraries(
+    triton-onnxruntime-backend
+    PRIVATE
+      CUDA::cudart
+  )
+endif() # TRITON_ENABLE_GPU
+if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
+  target_link_libraries(
+    triton-onnxruntime-backend
+    PRIVATE
+      -ltbb
+      -linference_engine
+  )
+endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 
 #
 # Install
