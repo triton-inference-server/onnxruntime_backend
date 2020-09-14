@@ -30,7 +30,7 @@
 #include <set>
 #include <unordered_map>
 #include <vector>
-#include "triton/common/tritonserver.h"
+#include "triton/core/tritonserver.h"
 
 namespace triton { namespace backend { namespace onnxruntime {
 
