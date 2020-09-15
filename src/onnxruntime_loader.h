@@ -27,7 +27,7 @@
 
 #include <onnxruntime_c_api.h>
 #include <mutex>
-#include "triton/common/tritonbackend.h"
+#include "triton/core/tritonbackend.h"
 
 namespace triton { namespace backend { namespace onnxruntime {
 

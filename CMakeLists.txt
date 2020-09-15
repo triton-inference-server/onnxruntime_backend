@@ -41,6 +41,7 @@ set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "" CACHE PATH "Paths to ONNXRuntime include
 set(TRITON_ONNXRUNTIME_LIB_PATHS "" CACHE PATH "Paths to ONNXRuntime libraries")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
+set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -62,12 +63,18 @@ FetchContent_Declare(
   GIT_SHALLOW ON
 )
 FetchContent_Declare(
+  repo-core
+  GIT_REPOSITORY https://github.com/triton-inference-server/core.git
+  GIT_TAG ${TRITON_CORE_REPO_TAG}
+  GIT_SHALLOW ON
+)
+FetchContent_Declare(
   repo-backend
   GIT_REPOSITORY https://github.com/triton-inference-server/backend.git
   GIT_TAG ${TRITON_BACKEND_REPO_TAG}
   GIT_SHALLOW ON
 )
-FetchContent_MakeAvailable(repo-common repo-backend)
+FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 
 #
 # CUDA
@@ -148,7 +155,9 @@ ENDFOREACH(p)
 target_link_libraries(
   triton-onnxruntime-backend
   PRIVATE
-    triton-backend-utils  # from repo-backend
+    triton-core-serverapi  # from repo-core
+    triton-core-backendapi # from repo-core
+    triton-backend-utils   # from repo-backend
     ${TRITON_ONNXRUNTIME_LDFLAGS}
     -lonnxruntime
 )
