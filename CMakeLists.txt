@@ -189,8 +189,8 @@ install(
     triton-onnxruntime-backend
   EXPORT
     triton-onnxruntime-backend-targets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
 )
 
 install(
