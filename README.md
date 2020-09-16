@@ -30,7 +30,12 @@
 
 # ONNX Runtime Backend
 
-The Triton backend for the ONNX Runtime.
+The Triton backend for the [ONNX
+Runtime](https://github.com/microsoft/onnxruntime). You can learn more
+about Triton backends in the [backend
+repo](https://github.com/triton-inference-server/backend). Ask
+questions or report problems on the [issues
+page](https://github.com/triton-inference-server/onnxruntime_backend/issues).
 
 Use a recent cmake to build and install in a local directory.
 
