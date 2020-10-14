@@ -155,9 +155,10 @@ ENDFOREACH(p)
 target_link_libraries(
   triton-onnxruntime-backend
   PRIVATE
-    triton-core-serverapi  # from repo-core
-    triton-core-backendapi # from repo-core
-    triton-backend-utils   # from repo-backend
+    triton-core-serverapi   # from repo-core
+    triton-core-backendapi  # from repo-core
+    triton-core-serverstub  # from repo-core
+    triton-backend-utils    # from repo-backend
     ${TRITON_ONNXRUNTIME_LDFLAGS}
     -lonnxruntime
 )
