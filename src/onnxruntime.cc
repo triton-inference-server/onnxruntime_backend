@@ -1224,10 +1224,11 @@ ModelInstanceState::SetInputTensors(
       BackendMemory* input_memory;
       RESPOND_ALL_AND_RETURN_IF_ERROR(
           responses, request_count,
-          BackendMemory::CreateWithFallback(
+          BackendMemory::Create(
               model_state_->TritonMemoryManager(),
-              TRITONSERVER_MEMORY_CPU_PINNED, 0 /* memory_type_id */,
-              batchn_byte_size, &input_memory));
+              {BackendMemory::AllocationType::CPU_PINNED_POOL,
+               BackendMemory::AllocationType::CPU},
+              0 /* memory_type_id */, batchn_byte_size, &input_memory));
       input_tensor_memories_.push_back(input_memory);
 
       TRITONSERVER_MemoryType input_memtype = input_memory->MemoryType();
@@ -1324,8 +1325,10 @@ ModelInstanceState::SetStringInputTensor(
   BackendMemory* input_memory;
   RESPOND_ALL_AND_RETURN_IF_ERROR(
       responses, request_count,
-      BackendMemory::CreateWithFallback(
-          model_state_->TritonMemoryManager(), TRITONSERVER_MEMORY_CPU_PINNED,
+      BackendMemory::Create(
+          model_state_->TritonMemoryManager(),
+          {BackendMemory::AllocationType::CPU_PINNED_POOL,
+           BackendMemory::AllocationType::CPU},
           0 /* memory_type_id */, total_byte_size + 1, &input_memory));
   input_tensor_memories_.push_back(input_memory);
 
