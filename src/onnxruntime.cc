@@ -56,7 +56,7 @@ namespace triton { namespace backend { namespace onnxruntime {
 
 /// Deleter for OrtSession.
 struct SessionDeleter {
-errorxx  void operator()(OrtSession* f) { OnnxLoader::UnloadSession(f); }
+ void operator()(OrtSession* f) { OnnxLoader::UnloadSession(f); }
 };
 
 //
