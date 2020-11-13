@@ -28,7 +28,7 @@ jobs:
         if: github.event.client_payload.slash_command.args.named.tests != ''
         continue-on-error: true
         run: (cd /home/runner &&
-              bash -x ./test.sh --tests ${{ github.event.client_payload.slash_command.args.named.tests }}")
+              bash -x ./test.sh --tests "${{ github.event.client_payload.slash_command.args.named.tests }}")
 
       - name: Run Sanity Tests
         id: sanity
