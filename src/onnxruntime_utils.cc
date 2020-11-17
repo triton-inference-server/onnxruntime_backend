@@ -86,7 +86,16 @@ InputOutputNames(
     // Make a std::string copy of the name and then free 'node_name'
     // since the ORT API makes us responsible for doing that.
     std::string name(node_name);
-    ort_api->AllocatorFree(allocator, node_name);
+    auto free_status = ort_api->AllocatorFree(allocator, node_name);
+    if (free_status != nullptr) {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_ERROR,
+          (std::string("onnx runtime allocator free error:") +
+           std::to_string(ort_api->GetErrorCode(free_status)) +
+           ort_api->GetErrorMessage(free_status))
+              .c_str());
+      ort_api->ReleaseStatus(free_status);
+    }
 
     if (onnx_status != nullptr) {
       break;
@@ -127,7 +136,16 @@ InputOutputInfos(
     // Make a std::string copy of the name and then free 'cname' since
     // the ORT API makes us responsible for doing that.
     std::string name(cname);
-    ort_api->AllocatorFree(allocator, cname);
+    auto free_status = ort_api->AllocatorFree(allocator, cname);
+    if (free_status != nullptr) {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_ERROR,
+          (std::string("onnx runtime allocator free error:") +
+           std::to_string(ort_api->GetErrorCode(free_status)) +
+           ort_api->GetErrorMessage(free_status))
+              .c_str());
+      ort_api->ReleaseStatus(free_status);
+    }
 
     OrtTypeInfo* typeinfo;
     if (is_input) {

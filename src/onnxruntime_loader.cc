@@ -26,12 +26,12 @@
 
 #include "onnxruntime_loader.h"
 
+#include <codecvt>
 #include <future>
+#include <locale>
+#include <string>
 #include <thread>
 #include "onnxruntime_utils.h"
-#include <locale>
-#include <codecvt>
-#include <string>
 
 namespace triton { namespace backend { namespace onnxruntime {
 
@@ -110,7 +110,7 @@ OnnxLoader::LoadSession(
 #ifdef _WIN32
   std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
   std::wstring ort_style_model_str = converter.from_bytes(model);
-#else 
+#else
   const auto& ort_style_model_str = model;
 #endif
   if (loader != nullptr) {
@@ -127,7 +127,8 @@ OnnxLoader::LoadSession(
     OrtStatus* status = nullptr;
     if (!is_path) {
       status = ort_api->CreateSessionFromArray(
-          loader->env_, ort_style_model_str.c_str(), model.size(), session_options, session);
+          loader->env_, ort_style_model_str.c_str(), model.size(),
+          session_options, session);
     } else {
       status = ort_api->CreateSession(
           loader->env_, ort_style_model_str.c_str(), session_options, session);

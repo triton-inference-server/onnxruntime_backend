@@ -1553,7 +1553,8 @@ ModelInstanceState::ReadOutputTensors(
       RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
           responses, request_count,
           ort_api->GetStringTensorContent(
-              output_tensor, content, total_length, offsets.data(), element_count));
+              output_tensor, content, total_length, offsets.data(),
+              element_count));
       // Mark "passed end byte offset"
       offsets[element_count] = total_length;
 

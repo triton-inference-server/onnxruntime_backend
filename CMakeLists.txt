@@ -183,11 +183,13 @@ if(${TRITON_ENABLE_GPU})
   )
 endif() # TRITON_ENABLE_GPU
 if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
+  find_library(TBB_LIBRARY NAMES tbb PATHS ${TRITON_ONNXRUNTIME_LDFLAGS})
+  find_library(INFERENCE_ENGINE_LIBRARY NAMES inference_engine PATHS ${TRITON_ONNXRUNTIME_LDFLAGS})
   target_link_libraries(
     triton-onnxruntime-backend
     PRIVATE
-      tbb
-      inference_engine
+      ${TBB_LIBRARY}
+      ${INFERENCE_ENGINE_LIBRARY}
   )
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 

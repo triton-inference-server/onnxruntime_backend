@@ -26,6 +26,7 @@
 #pragma once
 
 #include <onnxruntime_c_api.h>
+#include <memory>
 #include <mutex>
 #include "triton/core/tritonbackend.h"
 
