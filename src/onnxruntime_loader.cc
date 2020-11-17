@@ -35,7 +35,7 @@
 
 namespace triton { namespace backend { namespace onnxruntime {
 
-OnnxLoader* OnnxLoader::loader = nullptr;
+std::unique_ptr<OnnxLoader> OnnxLoader::loader = nullptr;
 
 OnnxLoader::~OnnxLoader()
 {
@@ -60,7 +60,7 @@ OnnxLoader::Init()
       status = ort_api->CreateEnv(ORT_LOGGING_LEVEL_ERROR, "log", &env);
     }
 
-    loader = new OnnxLoader(env);
+    loader.reset(new OnnxLoader(env));
     RETURN_IF_ORT_ERROR(status);
   } else {
     return TRITONSERVER_ErrorNew(
@@ -74,14 +74,16 @@ OnnxLoader::Init()
 void
 OnnxLoader::TryRelease(bool decrement_session_cnt)
 {
-  std::lock_guard<std::mutex> lk(loader->mu_);
-  if (decrement_session_cnt) {
-    loader->live_session_cnt_--;
-  }
+  std::unique_ptr<OnnxLoader> lloader;
+  {
+    std::lock_guard<std::mutex> lk(loader->mu_);
+    if (decrement_session_cnt) {
+      loader->live_session_cnt_--;
+    }
 
-  if (loader->closing_ && (loader->live_session_cnt_ == 0)) {
-    delete loader;
-    loader = nullptr;
+    if (loader->closing_ && (loader->live_session_cnt_ == 0)) {
+      lloader.swap(loader);
+    }
   }
 }
 
