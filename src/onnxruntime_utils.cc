@@ -74,7 +74,7 @@ InputOutputNames(
   RETURN_IF_ORT_ERROR(ort_api->GetAllocatorWithDefaultOptions(&allocator));
   OrtStatus* onnx_status = nullptr;
   for (size_t i = 0; i < num_nodes; i++) {
-    char* node_name;
+    char* node_name = nullptr;
     if (is_input) {
       onnx_status =
           ort_api->SessionGetInputName(session, i, allocator, &node_name);
@@ -86,7 +86,7 @@ InputOutputNames(
     // Make a std::string copy of the name and then free 'node_name'
     // since the ORT API makes us responsible for doing that.
     std::string name(node_name);
-    free(node_name);
+    ort_api->AllocatorFree(allocator, node_name);
 
     if (onnx_status != nullptr) {
       break;
@@ -115,7 +115,7 @@ InputOutputInfos(
 
   // iterate over all nodes
   for (size_t i = 0; i < num_nodes; i++) {
-    char* cname;
+    char* cname = nullptr;
     if (is_input) {
       RETURN_IF_ORT_ERROR(
           ort_api->SessionGetInputName(session, i, allocator, &cname));
@@ -127,7 +127,7 @@ InputOutputInfos(
     // Make a std::string copy of the name and then free 'cname' since
     // the ORT API makes us responsible for doing that.
     std::string name(cname);
-    free(cname);
+    ort_api->AllocatorFree(allocator, cname);
 
     OrtTypeInfo* typeinfo;
     if (is_input) {
