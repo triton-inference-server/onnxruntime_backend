@@ -1705,7 +1705,7 @@ ModelInstanceState::SetStringOutputBuffer(
 
 extern "C" {
 
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
 {
   const char* cname;
@@ -1754,14 +1754,14 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   return nullptr;  // success
 }
 
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
 {
   LOG_IF_ERROR(OnnxLoader::Stop(), "failed to stop OnnxLoader");
   return nullptr;  // success
 }
 
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
 {
   const char* cname;
@@ -1787,7 +1787,7 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
   return nullptr;  // success
 }
 
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
 {
   void* vstate;
@@ -1802,7 +1802,7 @@ TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
   return nullptr;  // success
 }
 
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
 {
   const char* cname;
@@ -1840,7 +1840,7 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   return nullptr;  // success
 }
 
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance)
 {
   void* vstate;
@@ -1857,7 +1857,7 @@ TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance)
   return nullptr;  // success
 }
 
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count)
