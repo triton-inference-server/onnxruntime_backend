@@ -26,13 +26,16 @@
 
 #include "onnxruntime_loader.h"
 
+#include <codecvt>
 #include <future>
+#include <locale>
+#include <string>
 #include <thread>
 #include "onnxruntime_utils.h"
 
 namespace triton { namespace backend { namespace onnxruntime {
 
-OnnxLoader* OnnxLoader::loader = nullptr;
+std::unique_ptr<OnnxLoader> OnnxLoader::loader = nullptr;
 
 OnnxLoader::~OnnxLoader()
 {
@@ -57,7 +60,7 @@ OnnxLoader::Init()
       status = ort_api->CreateEnv(ORT_LOGGING_LEVEL_ERROR, "log", &env);
     }
 
-    loader = new OnnxLoader(env);
+    loader.reset(new OnnxLoader(env));
     RETURN_IF_ORT_ERROR(status);
   } else {
     return TRITONSERVER_ErrorNew(
@@ -71,14 +74,16 @@ OnnxLoader::Init()
 void
 OnnxLoader::TryRelease(bool decrement_session_cnt)
 {
-  std::lock_guard<std::mutex> lk(loader->mu_);
-  if (decrement_session_cnt) {
-    loader->live_session_cnt_--;
-  }
+  std::unique_ptr<OnnxLoader> lloader;
+  {
+    std::lock_guard<std::mutex> lk(loader->mu_);
+    if (decrement_session_cnt) {
+      loader->live_session_cnt_--;
+    }
 
-  if (loader->closing_ && (loader->live_session_cnt_ == 0)) {
-    delete loader;
-    loader = nullptr;
+    if (loader->closing_ && (loader->live_session_cnt_ == 0)) {
+      lloader.swap(loader);
+    }
   }
 }
 
@@ -102,6 +107,12 @@ OnnxLoader::LoadSession(
     const bool is_path, const std::string& model,
     const OrtSessionOptions* session_options, OrtSession** session)
 {
+#ifdef _WIN32
+  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+  std::wstring ort_style_model_str = converter.from_bytes(model);
+#else
+  const auto& ort_style_model_str = model;
+#endif
   if (loader != nullptr) {
     {
       std::lock_guard<std::mutex> lk(loader->mu_);
@@ -116,10 +127,11 @@ OnnxLoader::LoadSession(
     OrtStatus* status = nullptr;
     if (!is_path) {
       status = ort_api->CreateSessionFromArray(
-          loader->env_, model.c_str(), model.size(), session_options, session);
+          loader->env_, ort_style_model_str.c_str(), model.size(),
+          session_options, session);
     } else {
       status = ort_api->CreateSession(
-          loader->env_, model.c_str(), session_options, session);
+          loader->env_, ort_style_model_str.c_str(), session_options, session);
     }
 
     if (status != nullptr) {

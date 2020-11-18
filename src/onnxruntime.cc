@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 #include <mutex>
+#include <vector>
 #include "onnxruntime_loader.h"
 #include "onnxruntime_utils.h"
 #include "triton/backend/backend_common.h"
@@ -1548,16 +1549,17 @@ ModelInstanceState::ReadOutputTensors(
 
       string_buffers.emplace_back(std::vector<char>(total_length));
       auto content = string_buffers.back().data();
-      size_t offsets[element_count + 1];
+      std::vector<size_t> offsets(element_count + 1);
       RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
           responses, request_count,
           ort_api->GetStringTensorContent(
-              output_tensor, content, total_length, offsets, element_count));
+              output_tensor, content, total_length, offsets.data(),
+              element_count));
       // Mark "passed end byte offset"
       offsets[element_count] = total_length;
 
       cuda_copy |= SetStringOutputBuffer(
-          name, content, offsets, &batchn_shape, requests, request_count,
+          name, content, offsets.data(), &batchn_shape, requests, request_count,
           responses);
     } else {
       // Fixed size data type...
@@ -1703,7 +1705,7 @@ ModelInstanceState::SetStringOutputBuffer(
 
 extern "C" {
 
-TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
 {
   const char* cname;
@@ -1752,14 +1754,14 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
 {
   LOG_IF_ERROR(OnnxLoader::Stop(), "failed to stop OnnxLoader");
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
 {
   const char* cname;
@@ -1785,7 +1787,7 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
 {
   void* vstate;
@@ -1800,7 +1802,7 @@ TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
 {
   const char* cname;
@@ -1838,7 +1840,7 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance)
 {
   void* vstate;
@@ -1855,7 +1857,7 @@ TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count)

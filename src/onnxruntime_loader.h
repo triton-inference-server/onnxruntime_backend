@@ -26,6 +26,7 @@
 #pragma once
 
 #include <onnxruntime_c_api.h>
+#include <memory>
 #include <mutex>
 #include "triton/core/tritonbackend.h"
 
@@ -71,7 +72,7 @@ class OnnxLoader {
   /// \param decrement_session_cnt Whether to decrease the 'live_session_cnt_'
   static void TryRelease(bool decrement_session_cnt);
 
-  static OnnxLoader* loader;
+  static std::unique_ptr<OnnxLoader> loader;
 
   OrtEnv* env_;
 

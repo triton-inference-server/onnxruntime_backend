@@ -28,6 +28,7 @@
 
 #include <onnxruntime_c_api.h>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include "triton/core/tritonserver.h"

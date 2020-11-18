@@ -113,6 +113,7 @@ target_compile_options(
   triton-onnxruntime-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
     -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
+  $<$<CXX_COMPILER_ID:MSVC>:/Wall /D_WIN32_WINNT=0x0A00 /EHsc>
 )
 
 if(${TRITON_ENABLE_GPU})
@@ -134,6 +135,18 @@ if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
   )
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 
+if (WIN32)
+set_target_properties(
+  triton-onnxruntime-backend
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    OUTPUT_NAME triton_onnxruntime
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH "$\{ORIGIN\}"
+)
+else ()
 set_target_properties(
   triton-onnxruntime-backend
   PROPERTIES
@@ -146,12 +159,13 @@ set_target_properties(
     LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_onnxruntime.ldscript
     LINK_FLAGS "-Wl,--version-script libtriton_onnxruntime.ldscript"
 )
+endif()
 
 set(TRITON_ONNXRUNTIME_LDFLAGS "")
 FOREACH(p ${TRITON_ONNXRUNTIME_LIB_PATHS})
-  set(TRITON_ONNXRUNTIME_LDFLAGS ${TRITON_ONNXRUNTIME_LDFLAGS} "-L${p}")
+  set(TRITON_ONNXRUNTIME_LDFLAGS ${TRITON_ONNXRUNTIME_LDFLAGS} "${p}")
 ENDFOREACH(p)
-
+find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime PATHS ${TRITON_ONNXRUNTIME_LDFLAGS})
 target_link_libraries(
   triton-onnxruntime-backend
   PRIVATE
@@ -159,8 +173,7 @@ target_link_libraries(
     triton-core-backendapi  # from repo-core
     triton-core-serverstub  # from repo-core
     triton-backend-utils    # from repo-backend
-    ${TRITON_ONNXRUNTIME_LDFLAGS}
-    -lonnxruntime
+    ${ONNXRUNTIME_LIBRARY}
 )
 
 if(${TRITON_ENABLE_GPU})
@@ -171,11 +184,13 @@ if(${TRITON_ENABLE_GPU})
   )
 endif() # TRITON_ENABLE_GPU
 if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
+  find_library(TBB_LIBRARY NAMES tbb PATHS ${TRITON_ONNXRUNTIME_LDFLAGS})
+  find_library(INFERENCE_ENGINE_LIBRARY NAMES inference_engine PATHS ${TRITON_ONNXRUNTIME_LDFLAGS})
   target_link_libraries(
     triton-onnxruntime-backend
     PRIVATE
-      -ltbb
-      -linference_engine
+      ${TBB_LIBRARY}
+      ${INFERENCE_ENGINE_LIBRARY}
   )
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 
