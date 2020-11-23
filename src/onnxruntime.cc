@@ -350,8 +350,8 @@ ModelState::LoadModel(
 TRITONSERVER_Error*
 ModelState::AutoCompleteConfig()
 {
-  // If the model configuration already specifies max_batch_size,
-  // inputs or outputs then don't to any auto-completion.
+  // If the model configuration already specifies inputs and outputs
+  // then don't perform any auto-completion.
   size_t input_cnt = 0;
   size_t output_cnt = 0;
   {
@@ -365,11 +365,11 @@ ModelState::AutoCompleteConfig()
     }
   }
 
-  if ((MaxBatchSize() > 0) || (input_cnt > 0) || (output_cnt > 0)) {
+  if ((input_cnt > 0) && (output_cnt > 0)) {
     LOG_MESSAGE(
         TRITONSERVER_LOG_INFO,
         (std::string("skipping model configuration auto-complete for '") +
-         Name() + "': max_batch_size, inupts or outputs already specified")
+         Name() + "': inputs and outputs already specified")
             .c_str());
     return nullptr;  // success
   }
@@ -398,8 +398,12 @@ ModelState::AutoCompleteConfig()
 
   RETURN_IF_ERROR(
       AutoCompleteMaxBatch(input_tensor_infos, output_tensor_infos));
-  RETURN_IF_ERROR(AutoCompleteIO("input", input_tensor_infos));
-  RETURN_IF_ERROR(AutoCompleteIO("output", output_tensor_infos));
+  if (input_cnt == 0) {
+    RETURN_IF_ERROR(AutoCompleteIO("input", input_tensor_infos));
+  }
+  if (output_cnt == 0) {
+    RETURN_IF_ERROR(AutoCompleteIO("output", output_tensor_infos));
+  }
 
   if (TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)) {
     triton::common::TritonJson::WriteBuffer buffer;
@@ -436,7 +440,7 @@ ModelState::AutoCompleteMaxBatch(
   // Set max-batch-size to 1 if we have determined that batching is
   // supported. We need to update the configuration itself as well as
   // the cached value we have already initialized in the model state.
-  if (can_support_batching) {
+  if (can_support_batching && (MaxBatchSize() == 0)) {
     triton::common::TritonJson::Value mbs_value;
     ModelConfig().Find("max_batch_size", &mbs_value);
     mbs_value.SetInt(1);
