@@ -438,13 +438,22 @@ ModelState::AutoCompleteMaxBatch(
   }
 
   // Set max-batch-size to 1 if we have determined that batching is
-  // supported. We need to update the configuration itself as well as
-  // the cached value we have already initialized in the model state.
-  if (can_support_batching && (MaxBatchSize() == 0)) {
-    triton::common::TritonJson::Value mbs_value;
-    ModelConfig().Find("max_batch_size", &mbs_value);
-    mbs_value.SetInt(1);
-    SetMaxBatchSize(1);
+  // supported and max-batch-size is not specified. We need to update
+  // the configuration itself as well as the cached value we have already
+  // initialized in the model state.
+  if (can_support_batching) {
+    if (MaxBatchSize() == 0) {
+      triton::common::TritonJson::Value mbs_value;
+      ModelConfig().Find("max_batch_size", &mbs_value);
+      mbs_value.SetInt(1);
+      SetMaxBatchSize(1);
+    }
+  } else if (MaxBatchSize() != 0) {
+    return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("autofill failed for model '") + model_state_->Name() +
+           "': model does not support batching while non-zero max_batch_size"
+           " is specified").c_str());
   }
 
   return nullptr;  // success
