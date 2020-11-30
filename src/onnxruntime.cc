@@ -451,7 +451,7 @@ ModelState::AutoCompleteMaxBatch(
   } else if (MaxBatchSize() != 0) {
     return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("autofill failed for model '") + model_state_->Name() +
+          (std::string("autofill failed for model '") + Name() +
            "': model does not support batching while non-zero max_batch_size"
            " is specified").c_str());
   }
