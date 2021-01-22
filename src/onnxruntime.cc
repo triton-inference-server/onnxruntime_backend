@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -35,6 +35,14 @@
 #include "triton/backend/backend_model.h"
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
+
+#ifdef _WIN32
+// suppress the min and max definitions in Windef.h.
+#define NOMINMAX
+#include <Windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_provider_factory.h>
@@ -78,13 +86,14 @@ class ModelState : public BackendModel {
   // TRITONSERVER_INSTANCEGROUPKIND_AUTO then use it and
   // 'instance_group_device_id' to initialize the appropriate
   // execution providers. Return in 'model_path' the full path to the
-  // onnx file, return in 'session' and 'allocator' the ORT session
-  // and allocator.
+  // onnx file, in 'custom_library_handles' the handles to the registered custom
+  // op libraries, in 'session' and 'allocator' the ORT session and allocator.
   TRITONSERVER_Error* LoadModel(
       const std::string& artifact_name,
       const TRITONSERVER_InstanceGroupKind instance_group_kind,
       const int32_t instance_group_device_id, std::string* model_path,
-      OrtSession** session, OrtAllocator** allocator);
+      OrtSession** session, OrtAllocator** allocator,
+      std::vector<void*>* custom_library_handles);
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -174,7 +183,8 @@ ModelState::LoadModel(
     const std::string& artifact_name,
     const TRITONSERVER_InstanceGroupKind instance_group_kind,
     const int32_t instance_group_device_id, std::string* model_path,
-    OrtSession** session, OrtAllocator** allocator)
+    OrtSession** session, OrtAllocator** allocator,
+    std::vector<void*>* custom_library_handles)
 {
   // Find the ONNX file that describes the model itself. If the model
   // configuration doesn't have an explicit model file specified then
@@ -313,7 +323,8 @@ ModelState::LoadModel(
     }
   }
 
-  // Register all op libraries that contain custom operations.
+  // Register all op libraries that contain custom operations. Must dlclose
+  // during unload.
   {
     triton::common::TritonJson::Value model_ops;
     if (model_config_.Find("model_operations", &model_ops)) {
@@ -327,6 +338,7 @@ ModelState::LoadModel(
           void* library_handle = nullptr;
           RETURN_IF_ORT_ERROR(ort_api->RegisterCustomOpsLibrary(
               soptions, op_filename.c_str(), &library_handle));
+          custom_library_handles->emplace_back(library_handle);
         }
       }
     }
@@ -383,11 +395,12 @@ ModelState::AutoCompleteConfig()
   std::unique_ptr<OrtSession, SessionDeleter> session;
   OrtAllocator* allocator;
   std::string model_path;
+  std::vector<void*> custom_library_handles;
   {
     OrtSession* sptr = nullptr;
     RETURN_IF_ERROR(LoadModel(
         artifact_name, TRITONSERVER_INSTANCEGROUPKIND_AUTO, 0, &model_path,
-        &sptr, &allocator));
+        &sptr, &allocator, &custom_library_handles));
     session.reset(sptr);
   }
 
@@ -450,10 +463,10 @@ ModelState::AutoCompleteMaxBatch(
     }
   } else if (MaxBatchSize() != 0) {
     return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("autofill failed for model '") + Name() +
-           "': model does not support batching while non-zero max_batch_size"
-           " is specified").c_str());
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("autofill failed for model '") + Name() +
+         "': model does not support batching while non-zero max_batch_size"
+         " is specified").c_str());
   }
 
   return nullptr;  // success
@@ -572,6 +585,7 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<int64_t>* batchn_shape, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
+  void CloseLibraryHandle(void* handles);
 
   ModelState* model_state_;
 
@@ -588,6 +602,7 @@ class ModelInstanceState : public BackendModelInstance {
   std::vector<OrtValue*> input_tensors_;
   std::vector<OrtValue*> output_tensors_;
   std::vector<BackendMemory*> input_tensor_memories_;
+  std::vector<void*> custom_library_handles_;
 };
 
 TRITONSERVER_Error*
@@ -615,7 +630,7 @@ ModelInstanceState::ModelInstanceState(
 {
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
       ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
-      &allocator_));
+      &allocator_, &custom_library_handles_));
 
   size_t expected_input_cnt = 0;
   {
@@ -668,6 +683,11 @@ ModelInstanceState::~ModelInstanceState()
   if (session_ != nullptr) {
     OnnxLoader::UnloadSession(session_);
   }
+
+  for (size_t i = 0; i < custom_library_handles_.size(); i++) {
+    CloseLibraryHandle(custom_library_handles_[i]);
+  }
+
   // 'allocator_' is default allocator which is managed by ONNX Runtime
 }
 
@@ -1712,6 +1732,35 @@ ModelInstanceState::SetStringOutputBuffer(
   }
 
   return cuda_copy;
+}
+
+void
+ModelInstanceState::CloseLibraryHandle(void* handle)
+{
+  if (handle != nullptr) {
+#ifdef _WIN32
+    if (FreeLibrary((HMODULE)handle) == 0) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_ERROR,
+          ("unable to unload custom library" + errstr).c_str());
+    }
+#else
+    if (dlclose(handle) != 0) {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_ERROR,
+          ("unable to unload custom library" + std::string(dlerror()))
+              .c_str());
+    }
+#endif
+  }
 }
 
 /////////////
