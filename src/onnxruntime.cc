@@ -686,6 +686,8 @@ ModelInstanceState::~ModelInstanceState()
 
   for (size_t i = 0; i < custom_library_handles_.size(); i++) {
     CloseLibraryHandle(custom_library_handles_[i]);
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_ERROR, "able to unload custom library");
   }
 
   // 'allocator_' is default allocator which is managed by ONNX Runtime
