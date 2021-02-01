@@ -38,13 +38,25 @@ questions or report problems on the [issues
 page](https://github.com/triton-inference-server/onnxruntime_backend/issues).
 
 Use a recent cmake to build and install in a local directory.
+Typically you will want to build an appropriate ONNX Runtime
+implementation as part of the build. You do this by specifying a ONNX
+Runtime version and a Triton container version that you want to use
+with the backend. You can find the combination of versions used in a
+particular Triton release in the TRITON_VERSION_MAP at the top of
+build.py in the branch matching the Triton release you are interested
+in. For example, to build the ONNX Runtime backend for Triton 21.02,
+use the versions from TRITON_VERSION_MAP in the [r21.02 branch of
+build.py](https://github.com/triton-inference-server/server/blob/r21.02/build.py#L60).
 
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.6.0 -DTRITON_BUILD_CONTAINER_VERSION=21.02 ..
 $ make install
 ```
+
+The resulting install/backends/onnxruntime directory can be added to a
+Triton installation as /opt/tritonserver/backends/onnxruntime.
 
 The following required Triton repositories will be pulled and used in
 the build. By default the "main" branch/tag will be used for each repo
@@ -53,3 +65,17 @@ but the listed CMake argument can be used to override.
 * triton-inference-server/backend: -DTRITON_BACKEND_REPO_TAG=[tag]
 * triton-inference-server/core: -DTRITON_CORE_REPO_TAG=[tag]
 * triton-inference-server/common: -DTRITON_COMMON_REPO_TAG=[tag]
+
+You can add TensorRT support to the ONNX Runtime backend by using
+-DTRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON. You can add OpenVino support
+by using -DTRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON
+-DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=<version>, where <version>
+is the OpenVino version to use and should match the TRITON_VERSION_MAP
+entry as described above. So, to build with both TensorRT and OpenVino
+support:
+
+$ mkdir build
+$ cd build
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.6.0 -DTRITON_BUILD_CONTAINER_VERSION=21.02 -DTRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON -DTRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON -DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=2021.1 ..
+$ make install
+```
