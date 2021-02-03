@@ -69,11 +69,12 @@ but the listed CMake argument can be used to override.
 You can add TensorRT support to the ONNX Runtime backend by using
 -DTRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON. You can add OpenVino support
 by using -DTRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON
--DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=<version>, where <version>
-is the OpenVino version to use and should match the TRITON_VERSION_MAP
-entry as described above. So, to build with both TensorRT and OpenVino
-support:
+-DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=\<version\>, where
+\<version\> is the OpenVino version to use and should match the
+TRITON_VERSION_MAP entry as described above. So, to build with both
+TensorRT and OpenVino support:
 
+```
 $ mkdir build
 $ cd build
 $ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.6.0 -DTRITON_BUILD_CONTAINER_VERSION=21.02 -DTRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON -DTRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON -DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=2021.1 ..

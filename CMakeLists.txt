@@ -71,8 +71,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-if(TRITON_BUILD_ONNXRUNTIME_VERSION STREQUAL "")
-  set(TRITON_BUILD_ONNXRUNTIME_LIBNAME "")
+if("${TRITON_BUILD_ONNXRUNTIME_VERSION}" STREQUAL "")
   find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     find_library(TBB_LIBRARY NAMES tbb PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
@@ -86,12 +85,11 @@ else()
   if(NOT TRITON_BUILD_CONTAINER_VERSION)
     message(FATAL_ERROR "TRITON_BUILD_ONNXRUNTIME_VERSION requires TRITON_BUILD_CONTAINER_VERSION")
   endif()
-  
-  set(TRITON_BUILD_ONNXRUNTIME_LIBNAME "libonnxruntime.so.${TRITON_BUILD_ONNXRUNTIME_VERSION}")
+
   set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/include")
   set(TRITON_ONNXRUNTIME_LIB_PATHS "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/lib")
   set(TRITON_ONNXRUNTIME_DOCKER_IMAGE "tritonserver_onnxruntime")
-  set(ONNXRUNTIME_LIBRARY ${TRITON_BUILD_ONNXRUNTIME_LIBNAME})
+  set(ONNXRUNTIME_LIBRARY "libonnxruntime.so.${TRITON_BUILD_ONNXRUNTIME_VERSION}")
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     set(TBB_LIBRARY "libtbb.so")
     set(INFERENCE_ENGINE_LIBRARY "libinference_engine.so")
@@ -244,9 +242,9 @@ if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 
 #
-# ONNX Runtime - if requested, build ORT using docker
+# Build the ONNX Runtime libraries using docker.
 #
-if(NOT ("${TRITON_BUILD_ONNXRUNTIME_LIBNAME}" STREQUAL ""))
+if(NOT ("${TRITON_BUILD_ONNXRUNTIME_VERSION}" STREQUAL ""))
   set(_GEN_FLAGS "")
   if(${TRITON_ENABLE_ONNXRUNTIME_TENSORRT})
     set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-tensorrt")
@@ -256,7 +254,7 @@ if(NOT ("${TRITON_BUILD_ONNXRUNTIME_LIBNAME}" STREQUAL ""))
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
   add_custom_command(
     OUTPUT
-      onnxruntime/lib/${TRITON_BUILD_ONNXRUNTIME_LIBNAME}
+      onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" ${_GEN_FLAGS} --output=Dockerfile.ort
     COMMAND docker build --cache-from=tritonserver_onnxruntime --cache-from=tritonserver_onnxruntime_cache0 --cache-from=tritonserver_onnxruntime_cache1 -t ${TRITON_ONNXRUNTIME_DOCKER_IMAGE} -f ./Dockerfile.ort ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND docker rm onnxruntime_backend_ort || echo "error ignored..." || true
@@ -266,14 +264,14 @@ if(NOT ("${TRITON_BUILD_ONNXRUNTIME_LIBNAME}" STREQUAL ""))
     COMMAND docker rm onnxruntime_backend_ort
     COMMENT "Building ONNX Runtime"
   )
-  add_custom_target(ort_target DEPENDS onnxruntime/lib/${TRITON_BUILD_ONNXRUNTIME_LIBNAME})
+  add_custom_target(ort_target DEPENDS onnxruntime/lib/${ONNXRUNTIME_LIBRARY})
   add_library(onnxruntime-library SHARED IMPORTED GLOBAL)
   add_dependencies(onnxruntime-library ort_target)
   add_dependencies(triton-onnxruntime-backend onnxruntime-library)
   set_target_properties(
     onnxruntime-library
     PROPERTIES
-      IMPORTED_LOCATION onnxruntime/lib/${TRITON_BUILD_ONNXRUNTIME_LIBNAME}
+      IMPORTED_LOCATION onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
   )
 endif() # TRITON_ONNXRUNTIME_DOCKER_BUILD
 
