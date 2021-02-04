@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -31,12 +31,35 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #
 # Options
 #
+# To build the ONNX Runtime backend you must either:
+#
+#   - Point to an already built ONNX Runtime using
+#     TRITON_ONNXRUNTIME_INCLUDE_PATHS and
+#     TRITON_ONNXRUNTIME_LIB_PATHS
+#
+#   or:
+#
+#   - Set TRITON_BUILD_ONNXRUNTIME_VERSION to the version of ONNX
+#     Runtime that you want to be built for the backend. Set
+#     TRITON_BUILD_CONTAINER_VERSION to the Triton container version
+#     that you want to target with the build.
+#   - If you want TensorRT support set
+#     TRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON.
+#   - If you want OpenVINO support set
+#     TRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON and set
+#     TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION to the OpenVino
+#     version that is compatible with the specified version of ONNX
+#     Runtime.
+#
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 option(TRITON_ENABLE_ONNXRUNTIME_TENSORRT
   "Enable TensorRT execution provider for ONNXRuntime backend in server" OFF)
 option(TRITON_ENABLE_ONNXRUNTIME_OPENVINO
   "Enable OpenVINO execution provider for ONNXRuntime backend in server" OFF)
+set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to build for")
+set(TRITON_BUILD_ONNXRUNTIME_VERSION "" CACHE STRING "ONNXRuntime version to build")
+set(TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION "" CACHE STRING "ONNXRuntime OpenVINO version to build")
 set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "" CACHE PATH "Paths to ONNXRuntime includes")
 set(TRITON_ONNXRUNTIME_LIB_PATHS "" CACHE PATH "Paths to ONNXRuntime libraries")
 
@@ -46,6 +69,31 @@ set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if("${TRITON_BUILD_ONNXRUNTIME_VERSION}" STREQUAL "")
+  find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
+  if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
+    find_library(TBB_LIBRARY NAMES tbb PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
+    find_library(INFERENCE_ENGINE_LIBRARY
+      NAMES inference_engine
+      PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
+  endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+
+else()
+
+  if(NOT TRITON_BUILD_CONTAINER_VERSION)
+    message(FATAL_ERROR "TRITON_BUILD_ONNXRUNTIME_VERSION requires TRITON_BUILD_CONTAINER_VERSION")
+  endif()
+
+  set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/include")
+  set(TRITON_ONNXRUNTIME_LIB_PATHS "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/lib")
+  set(TRITON_ONNXRUNTIME_DOCKER_IMAGE "tritonserver_onnxruntime")
+  set(ONNXRUNTIME_LIBRARY "libonnxruntime.so.${TRITON_BUILD_ONNXRUNTIME_VERSION}")
+  if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
+    set(TBB_LIBRARY "libtbb.so")
+    set(INFERENCE_ENGINE_LIBRARY "libinference_engine.so")
+  endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 endif()
 
 #
@@ -161,11 +209,10 @@ set_target_properties(
 )
 endif()
 
-set(TRITON_ONNXRUNTIME_LDFLAGS "")
 FOREACH(p ${TRITON_ONNXRUNTIME_LIB_PATHS})
-  set(TRITON_ONNXRUNTIME_LDFLAGS ${TRITON_ONNXRUNTIME_LDFLAGS} "${p}")
+  set(TRITON_ONNXRUNTIME_LDFLAGS ${TRITON_ONNXRUNTIME_LDFLAGS} "-L${p}")
 ENDFOREACH(p)
-find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime PATHS ${TRITON_ONNXRUNTIME_LDFLAGS})
+
 target_link_libraries(
   triton-onnxruntime-backend
   PRIVATE
@@ -173,6 +220,7 @@ target_link_libraries(
     triton-core-backendapi  # from repo-core
     triton-core-serverstub  # from repo-core
     triton-backend-utils    # from repo-backend
+    ${TRITON_ONNXRUNTIME_LDFLAGS}
     ${ONNXRUNTIME_LIBRARY}
 )
 
@@ -183,9 +231,8 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 endif() # TRITON_ENABLE_GPU
+
 if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
-  find_library(TBB_LIBRARY NAMES tbb PATHS ${TRITON_ONNXRUNTIME_LDFLAGS})
-  find_library(INFERENCE_ENGINE_LIBRARY NAMES inference_engine PATHS ${TRITON_ONNXRUNTIME_LDFLAGS})
   target_link_libraries(
     triton-onnxruntime-backend
     PRIVATE
@@ -193,6 +240,40 @@ if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
       ${INFERENCE_ENGINE_LIBRARY}
   )
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+
+#
+# Build the ONNX Runtime libraries using docker.
+#
+if(NOT ("${TRITON_BUILD_ONNXRUNTIME_VERSION}" STREQUAL ""))
+  set(_GEN_FLAGS "")
+  if(${TRITON_ENABLE_ONNXRUNTIME_TENSORRT})
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-tensorrt")
+  endif() # TRITON_ENABLE_ONNXRUNTIME_TENSORRT
+  if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-openvino=${TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION}")
+  endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+  add_custom_command(
+    OUTPUT
+      onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" ${_GEN_FLAGS} --output=Dockerfile.ort
+    COMMAND docker build --cache-from=tritonserver_onnxruntime --cache-from=tritonserver_onnxruntime_cache0 --cache-from=tritonserver_onnxruntime_cache1 -t ${TRITON_ONNXRUNTIME_DOCKER_IMAGE} -f ./Dockerfile.ort ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMAND docker rm onnxruntime_backend_ort || echo "error ignored..." || true
+    COMMAND docker create --name onnxruntime_backend_ort ${TRITON_ONNXRUNTIME_DOCKER_IMAGE}
+    COMMAND rm -fr onnxruntime
+    COMMAND docker cp onnxruntime_backend_ort:/opt/onnxruntime onnxruntime
+    COMMAND docker rm onnxruntime_backend_ort
+    COMMENT "Building ONNX Runtime"
+  )
+  add_custom_target(ort_target DEPENDS onnxruntime/lib/${ONNXRUNTIME_LIBRARY})
+  add_library(onnxruntime-library SHARED IMPORTED GLOBAL)
+  add_dependencies(onnxruntime-library ort_target)
+  add_dependencies(triton-onnxruntime-backend onnxruntime-library)
+  set_target_properties(
+    onnxruntime-library
+    PROPERTIES
+      IMPORTED_LOCATION onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
+  )
+endif() # TRITON_ONNXRUNTIME_DOCKER_BUILD
 
 #
 # Install
@@ -207,6 +288,31 @@ install(
     triton-onnxruntime-backend-targets
   LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
   ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
+)
+
+install(
+  DIRECTORY
+    ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
+  PATTERN *lib EXCLUDE
+  PATTERN *bin EXCLUDE
+  PATTERN *include EXCLUDE
+  PATTERN *test EXCLUDE
+)
+
+install(
+  DIRECTORY
+    ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/bin/
+    ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/lib/
+  USE_SOURCE_PERMISSIONS
+  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
+)
+
+install(
+  DIRECTORY
+    ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/test
+  USE_SOURCE_PERMISSIONS
+  DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
 install(
