@@ -110,7 +110,7 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
         df += '''
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
-ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110
+ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
 ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64:$INTEL_OPENVINO_DIR/deployment_tools/ngraph/lib:$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/external/tbb/lib:/usr/local/openblas/lib:$LD_LIBRARY_PATH
 ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
 ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64
@@ -120,7 +120,7 @@ RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-20
     cd /etc/apt/sources.list.d && \
     echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
     apt update && \
-    apt install -y intel-openvino-dev-ubuntu20-${ONNXRUNTIME_OPENVINO_VERSION}.110 && \
+    apt install -y intel-openvino-dev-ubuntu20-${ONNXRUNTIME_OPENVINO_VERSION} && \
     cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh
 
 ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
@@ -212,7 +212,7 @@ RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensor
     if FLAGS.ort_openvino is not None:
         df += '''
 # OpenVino specific headers and libraries
-RUN cp -r /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/licensing \
+RUN cp -r /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/licensing \
        /opt/onnxruntime/LICENSE.openvino
 
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
@@ -222,23 +222,23 @@ RUN cp /workspace/build/Release/libonnxruntime_providers_shared.so \
        /opt/onnxruntime/lib && \
     cp /workspace/build/Release/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine_legacy.so \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_legacy.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine_transformations.so \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_transformations.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/ngraph/lib/libngraph.so \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/ngraph/lib/libngraph.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/ngraph/lib/libonnx_importer.so \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/ngraph/lib/libonnx_importer.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/inference_engine/external/tbb/lib/libtbb.so.2 \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/external/tbb/lib/libtbb.so.2 \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/plugins.xml \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/plugins.xml \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libMKLDNNPlugin.so \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libMKLDNNPlugin.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}.110/deployment_tools/inference_engine/lib/intel64/libinference_engine_lp_transformations.so \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_lp_transformations.so \
        /opt/onnxruntime/lib && \
     (cd /opt/onnxruntime/lib && \
      chmod a-x * && \
