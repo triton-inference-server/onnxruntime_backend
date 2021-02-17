@@ -40,11 +40,27 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #   or:
 #
 #   - Set TRITON_BUILD_ONNXRUNTIME_VERSION to the version of ONNX
-#     Runtime that you want to be built for the backend. Set
-#     TRITON_BUILD_CONTAINER_VERSION to the Triton container version
-#     that you want to target with the build.
+#     Runtime that you want to be built for the backend.
+#
+#   - Set TRITON_BUILD_CONTAINER to the Triton container to use as a
+#     base for the build. On linux you can instead set
+#     TRITON_BUILD_CONTAINER_VERSION to the Triton version that you
+#     want to target with the build and the corresponding container
+#     from NGC will be used.
+#
+#   - Optionally set TRITON_BUILD_CUDA_VERSION and
+#     TRITON_BUILD_CUDA_HOME. If not set these are automatically set
+#     by using the standard cuda install location. For example on
+#     windows these will be automatically set based on CUDA_PATH, for
+#     example:
+#
+#         TRITON_BUILD_CUDA_VERSION=11.1
+#         TRITON_BUILD_CUDA_HOME="C:\Program Files\NVIDIA GPU Computing Toolkit\v11.1"
+#
 #   - If you want TensorRT support set
-#     TRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON.
+#     TRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON and set
+#     TRITON_BUILD_TENSORRT_HOME.
+#
 #   - If you want OpenVINO support set
 #     TRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON and set
 #     TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION to the OpenVino
@@ -57,15 +73,26 @@ option(TRITON_ENABLE_ONNXRUNTIME_TENSORRT
   "Enable TensorRT execution provider for ONNXRuntime backend in server" OFF)
 option(TRITON_ENABLE_ONNXRUNTIME_OPENVINO
   "Enable OpenVINO execution provider for ONNXRuntime backend in server" OFF)
-set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to build for")
+set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
+set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
 set(TRITON_BUILD_ONNXRUNTIME_VERSION "" CACHE STRING "ONNXRuntime version to build")
 set(TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION "" CACHE STRING "ONNXRuntime OpenVINO version to build")
+set(TRITON_BUILD_CUDA_VERSION "" CACHE STRING "Version of CUDA install")
+set(TRITON_BUILD_CUDA_HOME "" CACHE PATH "Path to CUDA install")
+set(TRITON_BUILD_TENSORRT_HOME "" CACHE PATH "Path to TensorRT install")
 set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "" CACHE PATH "Paths to ONNXRuntime includes")
 set(TRITON_ONNXRUNTIME_LIB_PATHS "" CACHE PATH "Paths to ONNXRuntime libraries")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
+
+if (WIN32)
+  if(TRITON_ENABLE_ONNXRUNTIME_OPENVINO)
+    message(FATAL_ERROR
+      "TRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON not supported for Windows")
+  endif()
+endif() # WIN32
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -82,14 +109,23 @@ if("${TRITON_BUILD_ONNXRUNTIME_VERSION}" STREQUAL "")
 
 else()
 
-  if(NOT TRITON_BUILD_CONTAINER_VERSION)
-    message(FATAL_ERROR "TRITON_BUILD_ONNXRUNTIME_VERSION requires TRITON_BUILD_CONTAINER_VERSION")
+  if(NOT TRITON_BUILD_CONTAINER AND NOT TRITON_BUILD_CONTAINER_VERSION)
+    message(FATAL_ERROR
+      "TRITON_BUILD_ONNXRUNTIME_VERSION requires TRITON_BUILD_CONTAINER or TRITON_BUILD_CONTAINER_VERSION")
   endif()
 
+  if(NOT TRITON_BUILD_CONTAINER)
+    set(TRITON_BUILD_CONTAINER "nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min")
+  endif()
+
+  set(TRITON_ONNXRUNTIME_DOCKER_IMAGE "tritonserver_onnxruntime")
   set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/include")
   set(TRITON_ONNXRUNTIME_LIB_PATHS "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/lib")
-  set(TRITON_ONNXRUNTIME_DOCKER_IMAGE "tritonserver_onnxruntime")
-  set(ONNXRUNTIME_LIBRARY "libonnxruntime.so.${TRITON_BUILD_ONNXRUNTIME_VERSION}")
+  if (WIN32)
+    set(ONNXRUNTIME_LIBRARY "onnxruntime")
+  else()
+    set(ONNXRUNTIME_LIBRARY "libonnxruntime.so.${TRITON_BUILD_ONNXRUNTIME_VERSION}")
+  endif() # WIN32
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     set(TBB_LIBRARY "libtbb.so")
     set(INFERENCE_ENGINE_LIBRARY "libinference_engine.so")
@@ -210,7 +246,10 @@ set_target_properties(
 endif()
 
 FOREACH(p ${TRITON_ONNXRUNTIME_LIB_PATHS})
-  set(TRITON_ONNXRUNTIME_LDFLAGS ${TRITON_ONNXRUNTIME_LDFLAGS} "-L${p}")
+  target_link_directories(
+    triton-onnxruntime-backend
+    PRIVATE ${p}
+  )
 ENDFOREACH(p)
 
 target_link_libraries(
@@ -246,33 +285,68 @@ endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 #
 if(NOT ("${TRITON_BUILD_ONNXRUNTIME_VERSION}" STREQUAL ""))
   set(_GEN_FLAGS "")
+  if(${TRITON_BUILD_CUDA_VERSION})
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--cuda-version=${TRITON_BUILD_CUDA_VERSION}")
+  endif() # TRITON_BUILD_CUDA_VERSION
+  if(${TRITON_BUILD_CUDA_HOME})
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--cuda-home=${TRITON_BUILD_CUDA_HOME}")
+  endif() # TRITON_BUILD_CUDA_HOME
+  if(${TRITON_BUILD_TENSORRT_HOME})
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--tensorrt-home=${TRITON_BUILD_TENSORRT_HOME}")
+  endif() # TRITON_BUILD_TENSORRT_HOME
   if(${TRITON_ENABLE_ONNXRUNTIME_TENSORRT})
     set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-tensorrt")
   endif() # TRITON_ENABLE_ONNXRUNTIME_TENSORRT
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-openvino=${TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION}")
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
-  add_custom_command(
-    OUTPUT
-      onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" ${_GEN_FLAGS} --output=Dockerfile.ort
-    COMMAND docker build --cache-from=tritonserver_onnxruntime --cache-from=tritonserver_onnxruntime_cache0 --cache-from=tritonserver_onnxruntime_cache1 -t ${TRITON_ONNXRUNTIME_DOCKER_IMAGE} -f ./Dockerfile.ort ${CMAKE_CURRENT_SOURCE_DIR}
-    COMMAND docker rm onnxruntime_backend_ort || echo "error ignored..." || true
-    COMMAND docker create --name onnxruntime_backend_ort ${TRITON_ONNXRUNTIME_DOCKER_IMAGE}
-    COMMAND rm -fr onnxruntime
-    COMMAND docker cp onnxruntime_backend_ort:/opt/onnxruntime onnxruntime
-    COMMAND docker rm onnxruntime_backend_ort
-    COMMENT "Building ONNX Runtime"
-  )
+
+  if (WIN32)
+    add_custom_command(
+      OUTPUT
+        onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
+      COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="${TRITON_BUILD_CONTAINER}" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" ${_GEN_FLAGS} --output=Dockerfile.ort
+      COMMAND docker build --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE} --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE}_cache1 -t ${TRITON_ONNXRUNTIME_DOCKER_IMAGE} -f ./Dockerfile.ort ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMAND powershell.exe -noprofile -c "docker rm onnxruntime_backend_ort > $null 2>&1; if ($LASTEXITCODE) { 'error ignored...' }; exit 0"
+      COMMAND docker create --name onnxruntime_backend_ort ${TRITON_ONNXRUNTIME_DOCKER_IMAGE}
+      COMMAND rmdir /s/q onnxruntime
+      COMMAND docker cp onnxruntime_backend_ort:/opt/onnxruntime onnxruntime
+      COMMAND docker rm onnxruntime_backend_ort
+      COMMENT "Building ONNX Runtime"
+    )
+  else()
+    add_custom_command(
+      OUTPUT
+        onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="${TRITON_BUILD_CONTAINER}" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" ${_GEN_FLAGS} --output=Dockerfile.ort
+      COMMAND docker build --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE} --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE}_cache1 -t ${TRITON_ONNXRUNTIME_DOCKER_IMAGE} -f ./Dockerfile.ort ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMAND docker rm onnxruntime_backend_ort || echo 'error ignored...' || true
+      COMMAND docker create --name onnxruntime_backend_ort ${TRITON_ONNXRUNTIME_DOCKER_IMAGE}
+      COMMAND rm -fr onnxruntime
+      COMMAND docker cp onnxruntime_backend_ort:/opt/onnxruntime onnxruntime
+      COMMAND docker rm onnxruntime_backend_ort
+      COMMENT "Building ONNX Runtime"
+    )
+  endif() # WIN32
+
   add_custom_target(ort_target DEPENDS onnxruntime/lib/${ONNXRUNTIME_LIBRARY})
   add_library(onnxruntime-library SHARED IMPORTED GLOBAL)
   add_dependencies(onnxruntime-library ort_target)
   add_dependencies(triton-onnxruntime-backend onnxruntime-library)
-  set_target_properties(
-    onnxruntime-library
-    PROPERTIES
-      IMPORTED_LOCATION onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
-  )
+
+  if (WIN32)
+    set_target_properties(
+      onnxruntime-library
+      PROPERTIES
+        IMPORTED_LOCATION onnxruntime/bin/${ONNXRUNTIME_LIBRARY}
+    )
+  else()
+    set_target_properties(
+      onnxruntime-library
+      PROPERTIES
+        IMPORTED_LOCATION onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
+    )
+  endif() # WIN32
 endif() # TRITON_ONNXRUNTIME_DOCKER_BUILD
 
 #
@@ -287,7 +361,7 @@ install(
   EXPORT
     triton-onnxruntime-backend-targets
   LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
+  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
 )
 
 install(
@@ -303,17 +377,25 @@ install(
 install(
   DIRECTORY
     ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/bin/
-    ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/lib/
   USE_SOURCE_PERMISSIONS
   DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
 )
 
-install(
-  DIRECTORY
-    ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/test
-  USE_SOURCE_PERMISSIONS
-  DESTINATION ${CMAKE_INSTALL_PREFIX}
-)
+if (NOT WIN32)
+  install(
+    DIRECTORY
+      ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/lib/
+    USE_SOURCE_PERMISSIONS
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
+  )
+
+  install(
+    DIRECTORY
+      ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/test
+    USE_SOURCE_PERMISSIONS
+    DESTINATION ${CMAKE_INSTALL_PREFIX}
+  )
+endif() # NOT WIN32
 
 install(
   EXPORT

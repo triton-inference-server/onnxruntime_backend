@@ -26,33 +26,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import os
+import platform
+import re
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+FLAGS = None
 
-    parser.add_argument('--triton-container',
-                        type=str,
-                        required=True,
-                        help='Triton base container to use for ORT build.')
-    parser.add_argument('--ort-version',
-                        type=str,
-                        required=True,
-                        help='ORT version.')
-    parser.add_argument('--output',
-                        type=str,
-                        required=True,
-                        help='File to write Dockerfile to.')
-    parser.add_argument('--ort-openvino',
-                        type=str,
-                        required=False,
-                        help='Enable OpenVino execution provider using specified OpenVINO version.')
-    parser.add_argument('--ort-tensorrt',
-                        action="store_true",
-                        required=False,
-                        help='Enable TensorRT execution provider.')
 
-    FLAGS = parser.parse_args()
+def target_platform():
+    if FLAGS.target_platform is not None:
+        return FLAGS.target_platform
+    return platform.system().lower()
 
+
+def dockerfile_common():
     df = '''
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
@@ -63,14 +50,19 @@ ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
         df += '''
 ARG ONNXRUNTIME_OPENVINO_VERSION={}
 '''.format(FLAGS.ort_openvino)
-        
+
     df += '''
 FROM ${BASE_IMAGE}
+WORKDIR /workspace
+'''
+    return df
 
+
+def dockerfile_for_linux(output_file):
+    df = dockerfile_common()
+    df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
-
-WORKDIR /workspace
 
 # The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
@@ -132,19 +124,14 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     dpkg -i *.deb && rm -rf *.deb
 '''
 
-    ep_flags = ""
-    if FLAGS.ort_tensorrt:
-        ep_flags += " --tensorrt_home /usr/src/tensorrt --use_tensorrt"
-    if FLAGS.ort_openvino is not None:
-        ep_flags += " --use_openvino CPU_FP32"
-        
     df += '''
 #
 # ONNX Runtime build
 #
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
-RUN git clone -b rel-${{ONNXRUNTIME_VERSION}} --recursive ${{ONNXRUNTIME_REPO}} onnxruntime && \
+
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
 
 # Need to patch until https://github.com/onnx/onnx-tensorrt/pull/568
@@ -152,17 +139,26 @@ RUN git clone -b rel-${{ONNXRUNTIME_VERSION}} --recursive ${{ONNXRUNTIME_REPO}} 
 COPY tools/onnx_tensorrt.patch /tmp/onnx_tensorrt.patch
 RUN cd /workspace/onnxruntime/cmake/external/onnx-tensorrt && \
     patch -i /tmp/onnx_tensorrt.patch builtin_op_importers.cpp
+'''
 
-ARG COMMON_BUILD_ARGS="--skip_submodule_sync --parallel --build_shared_lib --use_openmp"
-RUN mkdir -p /workspace/build
-RUN python3 /workspace/onnxruntime/tools/ci_build/build.py --build_dir /workspace/build \
-            --config Release $COMMON_BUILD_ARGS \
-            --cmake_extra_defines ONNXRUNTIME_VERSION=$(cat /workspace/onnxruntime/VERSION_NUMBER) \
-            --cuda_home /usr/local/cuda \
-            --cudnn_home /usr/local/cudnn-$(echo $CUDNN_VERSION | cut -d. -f1-2)/cuda \
-            --use_cuda \
-            --update \
-            --build {}
+    ep_flags = '--use_cuda'
+    if FLAGS.cuda_version is not None:
+        ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
+    if FLAGS.cuda_home is not None:
+        ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
+    if FLAGS.cudnn_home is not None:
+        ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
+    if FLAGS.ort_tensorrt:
+        ep_flags += ' --use_tensorrt'
+        if FLAGS.tensorrt_home is not None:
+            ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
+    if FLAGS.ort_openvino is not None:
+        ep_flags += ' --use_openvino CPU_FP32'
+
+    df += '''
+WORKDIR /workspace/onnxruntime
+ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --use_openmp --build_dir /workspace/build"
+RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 '''.format(ep_flags)
 
     df += '''
@@ -258,6 +254,190 @@ RUN mkdir -p /opt/onnxruntime/test && \
     cp /workspace/build/Release/testdata/custom_op_library/custom_op_test.onnx \
        /opt/onnxruntime/test
 '''
-    
-    with open(FLAGS.output, "w") as dfile:
+
+    with open(output_file, "w") as dfile:
         dfile.write(df)
+
+
+def dockerfile_for_windows(output_file):
+    df = dockerfile_common()
+    df += '''
+SHELL ["cmd", "/S", "/C"]
+
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
+    (cd onnxruntime && git submodule update --init --recursive)
+'''
+
+    ep_flags = '--use_cuda'
+    if FLAGS.cuda_version is not None:
+        ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
+    if FLAGS.cuda_home is not None:
+        ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
+    if FLAGS.cudnn_home is not None:
+        ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
+    if FLAGS.ort_tensorrt:
+        ep_flags += ' --use_tensorrt'
+        if FLAGS.tensorrt_home is not None:
+            ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
+    if FLAGS.ort_openvino is not None:
+        ep_flags += ' --use_openvino CPU_FP32'
+
+    df += '''
+WORKDIR /workspace/onnxruntime
+ARG VS_DEVCMD_BAT="\BuildTools\Common7\Tools\VsDevCmd.bat"
+RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
+RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --skip_submodule_sync --build_shared_lib --use_openmp --update --build --build_dir /workspace/build {}
+'''.format(ep_flags)
+
+    df += '''
+#
+# Copy all artifacts needed by the backend to /opt/onnxruntime
+#
+WORKDIR /opt/onnxruntime
+RUN copy \\workspace\\onnxruntime\\LICENSE \\opt\\onnxruntime
+RUN copy \\workspace\\onnxruntime\\cmake\\external\\onnx\\VERSION_NUMBER \\opt\\onnxruntime\\ort_onnx_version.txt
+
+# ONNX Runtime headers, libraries and binaries
+WORKDIR /opt/onnxruntime/include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_c_api.h \\opt\\onnxruntime\\include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\cuda_provider_factory.h \\opt\\onnxruntime\\include
+
+WORKDIR /opt/onnxruntime/bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
+
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
+'''
+
+    if FLAGS.ort_tensorrt:
+        df += '''
+# TensorRT specific headers and libraries
+WORKDIR /opt/onnxruntime/include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\tensorrt\\tensorrt_provider_factory.h \\opt\\onnxruntime\\include
+
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dll \\opt\\onnxruntime\\bin
+
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
+'''
+    with open(output_file, "w") as dfile:
+        dfile.write(df)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--triton-container',
+                        type=str,
+                        required=True,
+                        help='Triton base container to use for ORT build.')
+    parser.add_argument('--ort-version',
+                        type=str,
+                        required=True,
+                        help='ORT version.')
+    parser.add_argument('--output',
+                        type=str,
+                        required=True,
+                        help='File to write Dockerfile to.')
+    parser.add_argument(
+        '--target-platform',
+        required=False,
+        default=None,
+        help=
+        'Target for build, can be "ubuntu", "windows" or "jetpack". If not specified, build targets the current platform.'
+    )
+
+    parser.add_argument('--cuda-version',
+                        type=str,
+                        required=False,
+                        help='Version for CUDA.')
+    parser.add_argument('--cuda-home',
+                        type=str,
+                        required=False,
+                        help='Home directory for CUDA.')
+    parser.add_argument('--cudnn-home',
+                        type=str,
+                        required=False,
+                        help='Home directory for CUDNN.')
+
+    parser.add_argument(
+        '--ort-openvino',
+        type=str,
+        required=False,
+        help=
+        'Enable OpenVino execution provider using specified OpenVINO version.')
+    parser.add_argument('--ort-tensorrt',
+                        action="store_true",
+                        required=False,
+                        help='Enable TensorRT execution provider.')
+    parser.add_argument('--tensorrt-home',
+                        type=str,
+                        required=False,
+                        help='Home directory for TensorRT.')
+
+    FLAGS = parser.parse_args()
+
+    if target_platform() == 'windows':
+        # OpenVINO EP not yet supported for windows build
+        if FLAGS.ort_openvino is not None:
+            print("warning: OpenVINO not supported for windows, ignoring")
+            FLAGS.ort_openvino = None
+
+        # Default to CUDA based on CUDA_PATH envvar and TensorRT in
+        # C:/tensorrt
+        if 'CUDA_PATH'in os.environ:
+            if FLAGS.cuda_home is None:
+                FLAGS.cuda_home = os.environ['CUDA_PATH']
+            elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
+                print("warning: --cuda-home does not match CUDA_PATH envvar")
+
+        if FLAGS.cudnn_home is None:
+            FLAGS.cudnn_home = FLAGS.cuda_home
+
+        version = None
+        m = re.match(r'.*v([1-9]?[0-9]+\.[0-9]+)$', FLAGS.cuda_home)
+        if m:
+            version = m.group(1)
+
+        if FLAGS.cuda_version is None:
+            FLAGS.cuda_version = version
+        elif FLAGS.cuda_version != version:
+            print("warning: --cuda-version does not match CUDA_PATH envvar")
+
+        if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
+            print("error: windows build requires --cuda-version and --cuda-home")
+
+        if FLAGS.tensorrt_home is None:
+            FLAGS.tensorrt_home = '/tensorrt'
+
+        dockerfile_for_windows(FLAGS.output)
+
+    else:
+        if 'CUDNN_VERSION'in os.environ:
+            version = None
+            m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
+            if m:
+                version = m.group(1)
+            if FLAGS.cudnn_home is None:
+                FLAGS.cudnn_home = '/usr/local/cudnn-{}/cuda'.format(version)
+
+        if FLAGS.cuda_home is None:
+            FLAGS.cuda_home = '/usr/local/cuda'
+
+        if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
+            print("error: linux build requires --cudnn-home and --cuda-home")
+
+        if FLAGS.tensorrt_home is None:
+            FLAGS.tensorrt_home = '/usr/src/tensorrt'
+
+        dockerfile_for_linux(FLAGS.output)
