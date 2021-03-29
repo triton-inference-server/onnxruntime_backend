@@ -450,10 +450,11 @@ ModelState::AutoCompleteMaxBatch(
     }
   } else if (MaxBatchSize() != 0) {
     return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("autofill failed for model '") + Name() +
-           "': model does not support batching while non-zero max_batch_size"
-           " is specified").c_str());
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("autofill failed for model '") + Name() +
+         "': model does not support batching while non-zero max_batch_size"
+         " is specified")
+            .c_str());
   }
 
   return nullptr;  // success
@@ -1225,28 +1226,17 @@ ModelInstanceState::SetInputTensors(
       // The input must be in contiguous CPU memory. Use a pinned
       // memory if possible for the case where the inputs are being
       // provided in GPU memory.
-      //
-      // [TODO] a couple of optimizations are possible here. 1) if we
-      // know that all data for this input across all requests was not
-      // in GPU memory, then we could just use regular CPU memory and
-      // not pinned memory. 2) if there is a single request and for
-      // this input the data is already in contiguous CPU memory then
-      // we don't need to copy at all.
-      const int64_t batchn_byte_size =
-          GetByteSize(input_datatype, batchn_shape);
-
-      BackendMemory* input_memory;
+      const char* input_buffer;
+      size_t batchn_byte_size;
+      TRITONSERVER_MemoryType memory_type;
+      int64_t memory_type_id;
       RESPOND_ALL_AND_RETURN_IF_ERROR(
           responses, request_count,
-          BackendMemory::Create(
-              model_state_->TritonMemoryManager(),
-              {BackendMemory::AllocationType::CPU_PINNED_POOL,
-               BackendMemory::AllocationType::CPU},
-              0 /* memory_type_id */, batchn_byte_size, &input_memory));
-      input_tensor_memories_.push_back(input_memory);
-
-      TRITONSERVER_MemoryType input_memtype = input_memory->MemoryType();
-      char* input_buffer = input_memory->MemoryPtr();
+          collector->ProcessTensor(
+              input_name, nullptr, 0,
+              {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
+               {TRITONSERVER_MEMORY_CPU, 0}},
+              &input_buffer, &batchn_byte_size, &memory_type, &memory_type_id));
 
       // Create ORT Tensor
       const OrtMemoryInfo* allocator_info;
@@ -1259,9 +1249,6 @@ ModelInstanceState::SetInputTensors(
               allocator_info, (void*)input_buffer, batchn_byte_size,
               batchn_shape.data(), batchn_shape.size(),
               ConvertToOnnxDataType(input_datatype), &input_tensors_.back()));
-
-      collector->ProcessTensor(
-          input_name, input_buffer, batchn_byte_size, input_memtype, 0);
     } else {
       // For BYTES input, we need to convert the serialized string
       // representation into what is required for ORT. ORT expects a
