@@ -855,7 +855,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string("unable to load model '") + model_state_->Name() +
            "', configuration expects datatype " + io_dtype + " for input '" +
-           io_name + "', model provides " +
+           io_name + "', model provides TYPE_" +
            TRITONSERVER_DataTypeString(
                ConvertFromOnnxDataType(iit->second.type_)))
               .c_str());
@@ -914,7 +914,7 @@ ModelInstanceState::ValidateOutputs()
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string("unable to load model '") + model_state_->Name() +
            "', configuration expects datatype " + io_dtype + " for output '" +
-           io_name + "', model provides " +
+           io_name + "', model provides TYPE_" +
            TRITONSERVER_DataTypeString(
                ConvertFromOnnxDataType(iit->second.type_)))
               .c_str());
