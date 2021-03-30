@@ -746,9 +746,11 @@ ModelInstanceState::ValidateBooleanSequenceControl(
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string("unable to load model '") + model_state_->Name() +
-           "', configuration expects datatype " + tensor_datatype +
-           " for sequence control '" + tensor_name + "', model provides " +
-           OnnxDataTypeName(iit->second.type_))
+           "', sequence control '" + tensor_name +
+           "', the model expects data-type " +
+           OnnxDataTypeName(iit->second.type_) +
+           " but the model configuration specifies data-type " +
+           tensor_datatype)
               .c_str());
     }
   }
@@ -800,9 +802,11 @@ ModelInstanceState::ValidateTypedSequenceControl(
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string("unable to load model '") + model_state_->Name() +
-           "', configuration expects datatype " + tensor_datatype +
-           " for sequence control '" + tensor_name + "', model provides " +
-           OnnxDataTypeName(iit->second.type_))
+           "', sequence control '" + tensor_name +
+           "', the model expects data-type " +
+           OnnxDataTypeName(iit->second.type_) +
+           " but the model configuration specifies data-type " +
+           tensor_datatype)
               .c_str());
     }
   }
