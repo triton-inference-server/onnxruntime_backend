@@ -447,6 +447,13 @@ ModelState::AutoCompleteMaxBatch(
       ModelConfig().Find("max_batch_size", &mbs_value);
       mbs_value.SetInt(1);
       SetMaxBatchSize(1);
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_WARN,
+          (std::string("autofilled max_batch_size to 1 for model '") + Name() +
+           "' since batching is supporrted but no max_batch_size is specified "
+           "in model configuration. Must specify max_batch_size to utilize "
+           "autofill with a larger max batch size")
+              .c_str());
     }
   } else if (MaxBatchSize() != 0) {
     return TRITONSERVER_ErrorNew(
