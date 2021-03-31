@@ -136,7 +136,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
 
 # Need to patch until https://github.com/microsoft/onnxruntime/pull/7193
 COPY tools/onnxruntime_cuda_header.patch /tmp/onnxruntime_cuda_header.patch
-RUN cd /workspace/onnxruntime/core/providers/shared_library && \
+RUN cd /workspace/onnxruntime/onnxruntime/core/providers/shared_library && \
     patch -i /tmp/onnxruntime_cuda_header.patch provider_interfaces.h
 '''
 
