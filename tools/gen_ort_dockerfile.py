@@ -134,11 +134,10 @@ ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
 
-# Need to patch until https://github.com/onnx/onnx-tensorrt/pull/568
-# is merged and used in ORT
-COPY tools/onnx_tensorrt.patch /tmp/onnx_tensorrt.patch
-RUN cd /workspace/onnxruntime/cmake/external/onnx-tensorrt && \
-    patch -i /tmp/onnx_tensorrt.patch builtin_op_importers.cpp
+# Need to patch until https://github.com/microsoft/onnxruntime/pull/7193
+COPY tools/onnxruntime_cuda_header.patch /tmp/onnxruntime_cuda_header.patch
+RUN cd /workspace/onnxruntime/onnxruntime/core/providers/shared_library && \
+    patch -i /tmp/onnxruntime_cuda_header.patch provider_interfaces.h
 '''
 
     ep_flags = '--use_cuda'
