@@ -201,6 +201,8 @@ RUN mkdir -p /opt/onnxruntime/bin && \
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensorrt_provider_factory.h \
        /opt/onnxruntime/include && \
     cp /workspace/build/Release/libonnxruntime_providers_tensorrt.so \
+       /opt/onnxruntime/lib && \
+    cp /workspace/build/Release/libonnxruntime_providers_shared.so \
        /opt/onnxruntime/lib
 '''
 
@@ -325,9 +327,11 @@ RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\tensor
 
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
 
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
     with open(output_file, "w") as dfile:
         dfile.write(df)
