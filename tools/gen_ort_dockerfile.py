@@ -274,7 +274,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
     (cd onnxruntime && git submodule update --init --recursive)
 '''
 
-    ep_flags = '--use_cuda'
+    ep_flags = '--use_cuda --use_dml'
     if FLAGS.cuda_version is not None:
         ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
     if FLAGS.cuda_home is not None:
@@ -315,8 +315,11 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntim
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
 
+RUN copy \\workspace\\build\\Release\\Release\\DirectML.dll \\opt\\onnxruntime\\bin
+
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_dml.lib \\opt\\onnxruntime\\lib
 '''
 
     if FLAGS.ort_tensorrt:

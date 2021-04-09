@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2019-2021, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -44,6 +44,14 @@
 #ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
 #include <tensorrt_provider_factory.h>
 #endif  // TRITON_ENABLE_ONNXRUNTIME_TENSORRT
+
+//#ifdef TRITON_ENABLE_ONNXRUNTIME_DIRECTML
+//#include <dml_provider_factory.h>
+extern "C" {
+OrtStatus* OrtSessionOptionsAppendExecutionProvider_DML(
+           OrtSessionOptions* options, int device_id);
+}
+//#endif  // TRITON_ENABLE_ONNXRUNTIME_DIRECTML
 
 #ifdef TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 #include <openvino_provider_factory.h>
@@ -252,6 +260,21 @@ ModelState::LoadModel(
                 continue;
               }
 #endif  // TRITON_ENABLE_ONNXRUNTIME_TENSORRT
+// #ifdef TRITON_ENABLE_ONNXRUNTIME_DIRECTML
+              if (name == "directml") {
+                RETURN_IF_ORT_ERROR(
+                    OrtSessionOptionsAppendExecutionProvider_DML(
+                        soptions, instance_group_device_id));
+                LOG_MESSAGE(
+                    TRITONSERVER_LOG_VERBOSE,
+                    (std::string(
+                         "DirectML Execution Accelerator is set for '") +
+                     Name() + "' on device " +
+                     std::to_string(instance_group_device_id))
+                        .c_str());
+                continue;
+              }
+// #endif  // TRITON_ENABLE_ONNXRUNTIME_DIRECTML
               return TRITONSERVER_ErrorNew(
                   TRITONSERVER_ERROR_INVALID_ARG,
                   (std::string("unknown Execution Accelerator '") + name +
