@@ -1246,7 +1246,7 @@ ModelInstanceState::SetInputTensors(
           batchn_shape[0] += GetElementCount(input_shape, input_dims_count);
         }
       }
-      // The shape for the entire input patch, [total_batch_size, ...]
+      // The shape for the entire input batch, [total_batch_size, ...]
       else {
         batchn_shape = std::vector<int64_t>(input_shape, input_shape + input_dims_count);
         if (max_batch_size != 0) {
@@ -1311,37 +1311,37 @@ ModelInstanceState::SetInputTensors(
   }
 
   // Process batch input if any
-    for (const auto& batch_input : StateForModel()->BatchInputs()) {
-      std::vector<int64_t> shape;
-      collector->BatchInputShape(batch_input, &shape);
+  for (const auto& batch_input : StateForModel()->BatchInputs()) {
+    std::vector<int64_t> shape;
+    collector->BatchInputShape(batch_input, &shape);
 
-      const char* dst_buffer;
-      size_t dst_buffer_byte_size;
-      TRITONSERVER_MemoryType dst_memory_type;
-      int64_t dst_memory_type_id;
-      std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> allowed_input_types;
-      allowed_input_types = {{TRITONSERVER_MEMORY_CPU, 0}};
+    const char* dst_buffer;
+    size_t dst_buffer_byte_size;
+    TRITONSERVER_MemoryType dst_memory_type;
+    int64_t dst_memory_type_id;
+    std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> allowed_input_types;
+    allowed_input_types = {{TRITONSERVER_MEMORY_CPU, 0}};
 
-      RESPOND_ALL_AND_SET_NULL_IF_ERROR(
-          (*responses), responses->size(),
-          collector->ProcessBatchInput(
-              batch_input, nullptr, 0,
-                allowed_input_types,
-                &dst_buffer, &dst_buffer_byte_size, &dst_memory_type,
-                &dst_memory_type_id));
+    RESPOND_ALL_AND_SET_NULL_IF_ERROR(
+        (*responses), responses->size(),
+        collector->ProcessBatchInput(
+            batch_input, nullptr, 0,
+              allowed_input_types,
+              &dst_buffer, &dst_buffer_byte_size, &dst_memory_type,
+              &dst_memory_type_id));
 
-      // Create ORT Tensor
-      const OrtMemoryInfo* allocator_info;
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, responses->size(),
-          ort_api->AllocatorGetInfo(allocator_, &allocator_info));
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, responses->size(),
-          ort_api->CreateTensorWithDataAsOrtValue(
-              allocator_info, (void*)dst_buffer, dst_buffer_byte_size,
-              shape.data(), shape.size(),
-              ConvertToOnnxDataType(batch_input.DataType()), &input_tensors_.back()));      
-    }
+    // Create ORT Tensor
+    const OrtMemoryInfo* allocator_info;
+    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+        responses, responses->size(),
+        ort_api->AllocatorGetInfo(allocator_, &allocator_info));
+    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+        responses, responses->size(),
+        ort_api->CreateTensorWithDataAsOrtValue(
+            allocator_info, (void*)dst_buffer, dst_buffer_byte_size,
+            shape.data(), shape.size(),
+            ConvertToOnnxDataType(batch_input.DataType()), &input_tensors_.back()));      
+  }
 
   // Finalize...
   *cuda_copy |= collector->Finalize();
