@@ -359,6 +359,12 @@ ModelState::AutoCompleteConfig()
     if (ModelConfig().Find("input", &inputs)) {
       input_cnt = inputs.ArraySize();
     }
+
+    triton::common::TritonJson::Value config_batch_inputs;
+    if (ModelConfig().Find("batch_input", &config_batch_inputs)) {
+      input_cnt += config_batch_inputs.ArraySize();
+    }
+
     triton::common::TritonJson::Value outputs;
     if (ModelConfig().Find("output", &outputs)) {
       output_cnt = outputs.ArraySize();
@@ -1220,12 +1226,33 @@ ModelInstanceState::SetInputTensors(
     input_names->emplace_back(input_name);
     input_tensors_.emplace_back(nullptr);
 
-    // The shape for the entire input patch, [total_batch_size, ...]
-    std::vector<int64_t> batchn_shape(
-        input_shape, input_shape + input_dims_count);
-    if (max_batch_size != 0) {
-      batchn_shape[0] = total_batch_size;
-    }
+    std::vector<int64_t> batchn_shape;
+      // For a ragged input tensor, the tensor shape should be
+      // the flatten shape of the whole batch
+      if (StateForModel()->IsInputRagged(input_name)) {
+        batchn_shape = std::vector<int64_t>{0};
+        for (size_t idx = 0; idx < request_count; idx++) {
+          TRITONBACKEND_Input* input;
+          RESPOND_AND_SET_NULL_IF_ERROR(
+              &((*responses)[idx]),
+              TRITONBACKEND_RequestInput(requests[idx], input_name, &input));
+          const int64_t* input_shape;
+          uint32_t input_dims_count;
+          RESPOND_AND_SET_NULL_IF_ERROR(
+              &((*responses)[idx]), TRITONBACKEND_InputProperties(
+                                   input, nullptr, nullptr, &input_shape, &input_dims_count,
+                                   nullptr, nullptr));
+
+          batchn_shape[0] += GetElementCount(input_shape, input_dims_count);
+        }
+      }
+      // The shape for the entire input patch, [total_batch_size, ...]
+      else {
+        batchn_shape = std::vector<int64_t>(input_shape, input_shape + input_dims_count);
+        if (max_batch_size != 0) {
+          batchn_shape[0] = total_batch_size;
+        }
+      }
 
     // [TODO] currently ONNX Runtime only recognize input data on CPU
     // https://github.com/microsoft/onnxruntime/issues/1621
@@ -1282,6 +1309,39 @@ ModelInstanceState::SetInputTensors(
               input_tensors_.back(), string_ptrs.data(), string_ptrs.size()));
     }
   }
+
+  // Process batch input if any
+    for (const auto& batch_input : StateForModel()->BatchInputs()) {
+      std::vector<int64_t> shape;
+      collector->BatchInputShape(batch_input, &shape);
+
+      const char* dst_buffer;
+      size_t dst_buffer_byte_size;
+      TRITONSERVER_MemoryType dst_memory_type;
+      int64_t dst_memory_type_id;
+      std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> allowed_input_types;
+      allowed_input_types = {{TRITONSERVER_MEMORY_CPU, 0}};
+
+      RESPOND_ALL_AND_SET_NULL_IF_ERROR(
+          (*responses), responses->size(),
+          collector->ProcessBatchInput(
+              batch_input, nullptr, 0,
+                allowed_input_types,
+                &dst_buffer, &dst_buffer_byte_size, &dst_memory_type,
+                &dst_memory_type_id));
+
+      // Create ORT Tensor
+      const OrtMemoryInfo* allocator_info;
+      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+          responses, responses->size(),
+          ort_api->AllocatorGetInfo(allocator_, &allocator_info));
+      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+          responses, responses->size(),
+          ort_api->CreateTensorWithDataAsOrtValue(
+              allocator_info, (void*)dst_buffer, dst_buffer_byte_size,
+              shape.data(), shape.size(),
+              ConvertToOnnxDataType(batch_input.DataType()), &input_tensors_.back()));      
+    }
 
   // Finalize...
   *cuda_copy |= collector->Finalize();
@@ -1507,79 +1567,90 @@ ModelInstanceState::ReadOutputTensors(
   bool cuda_copy = false;
   std::vector<std::vector<char>> string_buffers;
   for (size_t idx = 0; idx < output_names.size(); idx++) {
+    OrtValue* output_tensor = output_tensors_[idx];
     std::string name = output_names[idx];
 
-    OrtValue* output_tensor = output_tensors_[idx];
-    if (output_tensor == nullptr) {
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          responses, request_count,
-          TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INTERNAL,
-              (std::string("output tensor '") + name + "' is not found")
-                  .c_str()));
-    }
+    const BatchOutput* batch_output = StateForModel()->FindBatchOutput(name);
+    if (batch_output == nullptr) {
+      if (output_tensor == nullptr) {
+        RESPOND_ALL_AND_RETURN_IF_ERROR(
+            responses, request_count,
+            TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INTERNAL,
+                (std::string("output tensor '") + name + "' is not found")
+                    .c_str()));
+      }
 
-    // Get output type and shape
-    OrtTypeInfo* typeinfo;
-    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-        responses, request_count,
-        ort_api->GetTypeInfo(output_tensor, &typeinfo));
-    std::unique_ptr<OrtTypeInfo, TypeInfoDeleter> typeinfo_wrapper(typeinfo);
-
-    const OrtTensorTypeAndShapeInfo* type_and_shape;
-    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-        responses, request_count,
-        ort_api->CastTypeInfoToTensorInfo(typeinfo, &type_and_shape));
-
-    size_t num_dims;
-    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-        responses, request_count,
-        ort_api->GetDimensionsCount(type_and_shape, &num_dims));
-
-    std::vector<int64_t> batchn_shape(num_dims);
-    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-        responses, request_count,
-        ort_api->GetDimensions(
-            type_and_shape, batchn_shape.data(), batchn_shape.size()));
-
-    ONNXTensorElementDataType type;
-    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-        responses, request_count,
-        ort_api->GetTensorElementType(type_and_shape, &type));
-
-    if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
-      const size_t element_count = GetElementCount(batchn_shape);
-      size_t total_length = 0;
+      // Get output type and shape
+      OrtTypeInfo* typeinfo;
       RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
           responses, request_count,
-          ort_api->GetStringTensorDataLength(output_tensor, &total_length));
+          ort_api->GetTypeInfo(output_tensor, &typeinfo));
+      std::unique_ptr<OrtTypeInfo, TypeInfoDeleter> typeinfo_wrapper(typeinfo);
 
-      string_buffers.emplace_back(std::vector<char>(total_length));
-      auto content = string_buffers.back().data();
-      std::vector<size_t> offsets(element_count + 1);
+      const OrtTensorTypeAndShapeInfo* type_and_shape;
       RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
           responses, request_count,
-          ort_api->GetStringTensorContent(
-              output_tensor, content, total_length, offsets.data(),
-              element_count));
-      // Mark "passed end byte offset"
-      offsets[element_count] = total_length;
+          ort_api->CastTypeInfoToTensorInfo(typeinfo, &type_and_shape));
 
-      cuda_copy |= SetStringOutputBuffer(
-          name, content, offsets.data(), &batchn_shape, requests, request_count,
-          responses);
-    } else {
-      // Fixed size data type...
+      size_t num_dims;
+      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+          responses, request_count,
+          ort_api->GetDimensionsCount(type_and_shape, &num_dims));
+
+      std::vector<int64_t> batchn_shape(num_dims);
+      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+          responses, request_count,
+          ort_api->GetDimensions(
+              type_and_shape, batchn_shape.data(), batchn_shape.size()));
+
+      ONNXTensorElementDataType type;
+      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+          responses, request_count,
+          ort_api->GetTensorElementType(type_and_shape, &type));
+
+      if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
+        const size_t element_count = GetElementCount(batchn_shape);
+        size_t total_length = 0;
+        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+            responses, request_count,
+            ort_api->GetStringTensorDataLength(output_tensor, &total_length));
+
+        string_buffers.emplace_back(std::vector<char>(total_length));
+        auto content = string_buffers.back().data();
+        std::vector<size_t> offsets(element_count + 1);
+        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+            responses, request_count,
+            ort_api->GetStringTensorContent(
+                output_tensor, content, total_length, offsets.data(),
+                element_count));
+        // Mark "passed end byte offset"
+        offsets[element_count] = total_length;
+
+        cuda_copy |= SetStringOutputBuffer(
+            name, content, offsets.data(), &batchn_shape, requests, request_count,
+            responses);
+      } else {
+        // Fixed size data type...
+        char* output_buffer = nullptr;
+        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+            responses, request_count,
+            ort_api->GetTensorMutableData(output_tensor, (void**)&output_buffer));
+
+        // [TODO] currently ONNX output data are always on CPU
+        // https://github.com/microsoft/onnxruntime/issues/1621
+        responder.ProcessTensor(
+            name, ConvertFromOnnxDataType(type), batchn_shape, output_buffer,
+            TRITONSERVER_MEMORY_CPU, 0);
+      }
+    } else{
       char* output_buffer = nullptr;
       RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
-          ort_api->GetTensorMutableData(output_tensor, (void**)&output_buffer));
-
-      // [TODO] currently ONNX output data are always on CPU
-      // https://github.com/microsoft/onnxruntime/issues/1621
-      responder.ProcessTensor(
-          name, ConvertFromOnnxDataType(type), batchn_shape, output_buffer,
-          TRITONSERVER_MEMORY_CPU, 0);
+            responses, request_count,
+            ort_api->GetTensorMutableData(output_tensor, (void**)&output_buffer));
+      responder.ProcessBatchOutput(
+            name, *batch_output, output_buffer,
+            TRITONSERVER_MEMORY_CPU, 0);
     }
   }
 
