@@ -371,6 +371,10 @@ install(
   RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
 )
 
+# For Jetson, we build the onnxruntime backend once and re-use
+# that tar file. We copy over the libraries and other requirements
+# prior to running this build and therefore these set of install
+# commands are not needed.
 if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   install(
     DIRECTORY
