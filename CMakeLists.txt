@@ -98,7 +98,14 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-if("${TRITON_BUILD_ONNXRUNTIME_VERSION}" STREQUAL "")
+set(TRITON_ONNXRUNTIME_DOCKER_BUILD OFF)
+if(TRITON_ONNXRUNTIME_LIB_PATHS STREQUAL "")
+  set(TRITON_ONNXRUNTIME_DOCKER_BUILD ON)
+endif()
+
+message(STATUS "Using Onnxruntime docker: ${TRITON_ONNXRUNTIME_DOCKER_BUILD}")
+
+if(NOT TRITON_ONNXRUNTIME_DOCKER_BUILD)
   find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     find_library(TBB_LIBRARY NAMES tbb PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
@@ -283,7 +290,7 @@ endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 #
 # Build the ONNX Runtime libraries using docker.
 #
-if(NOT ("${TRITON_BUILD_ONNXRUNTIME_VERSION}" STREQUAL ""))
+if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   set(_GEN_FLAGS "")
   if(${TRITON_BUILD_CUDA_VERSION})
     set(_GEN_FLAGS ${_GEN_FLAGS} "--cuda-version=${TRITON_BUILD_CUDA_VERSION}")
@@ -364,38 +371,44 @@ install(
   RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
 )
 
-install(
-  DIRECTORY
-    ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
-  PATTERN *lib EXCLUDE
-  PATTERN *bin EXCLUDE
-  PATTERN *include EXCLUDE
-  PATTERN *test EXCLUDE
-)
-
-install(
-  DIRECTORY
-    ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/bin/
-  USE_SOURCE_PERMISSIONS
-  DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
-)
-
-if (NOT WIN32)
+# For Jetson, we build the onnxruntime backend once and re-use
+# that tar file. We copy over the libraries and other requirements
+# prior to running this build and therefore these set of install
+# commands are not needed.
+if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   install(
     DIRECTORY
-      ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/lib/
+      ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/
+    DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
+    PATTERN *lib EXCLUDE
+    PATTERN *bin EXCLUDE
+    PATTERN *include EXCLUDE
+    PATTERN *test EXCLUDE
+  )
+
+  install(
+    DIRECTORY
+      ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/bin/
     USE_SOURCE_PERMISSIONS
     DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
   )
 
-  install(
-    DIRECTORY
-      ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/test
-    USE_SOURCE_PERMISSIONS
-    DESTINATION ${CMAKE_INSTALL_PREFIX}
-  )
-endif() # NOT WIN32
+  if (NOT WIN32)
+    install(
+      DIRECTORY
+        ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/lib/
+      USE_SOURCE_PERMISSIONS
+      DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/onnxruntime
+    )
+
+    install(
+      DIRECTORY
+        ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/test
+      USE_SOURCE_PERMISSIONS
+      DESTINATION ${CMAKE_INSTALL_PREFIX}
+    )
+  endif() # NOT WIN32
+endif() # TRITON_ONNXRUNTIME_DOCKER_BUILD
 
 install(
   EXPORT
