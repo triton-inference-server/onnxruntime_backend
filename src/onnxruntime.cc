@@ -637,6 +637,11 @@ ModelInstanceState::ModelInstanceState(
     if (model_state->ModelConfig().Find("input", &inputs)) {
       expected_input_cnt = inputs.ArraySize();
     }
+
+    triton::common::TritonJson::Value config_batch_inputs;
+    if (model_state->ModelConfig().Find("batch_input", &config_batch_inputs)) {
+      expected_input_cnt += config_batch_inputs.ArraySize();
+    }
   }
 
   // If this is a sequence model then make sure that the required
@@ -880,9 +885,30 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     } else {
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
-    RETURN_IF_ERROR(CompareDimsSupported(
-        model_state_->Name(), io_name, iit->second.dims_, dims,
-        model_state_->MaxBatchSize(), false /* compare_exact */));
+
+    triton::common::TritonJson::Value allow_ragged_batch_json;
+      bool allow_ragged_batch = false;
+      if (io.Find("allow_ragged_batch", &allow_ragged_batch_json)) {
+        RETURN_IF_ERROR(allow_ragged_batch_json.AsBool(&allow_ragged_batch));
+      }
+      if (allow_ragged_batch) {
+        const std::vector<int64_t>& model_shape = iit->second.dims_;
+        // Make sure the input has shpae [-1]
+        if ((model_shape.size() != 1) ||
+            (model_shape[0] != WILDCARD_DIM)) {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              (std::string("unable to load model '") + model_state_->Name() +
+               "', configuration expects model provides input with shape [-1]  "
+               "for ragged input '" +
+               io_name + "', model provides " + ShapeToString(model_shape))
+                  .c_str());
+        }
+      } else {
+        RETURN_IF_ERROR(CompareDimsSupported(
+            model_state_->Name(), io_name, iit->second.dims_, dims,
+            model_state_->MaxBatchSize(), false /* compare_exact */));
+      }
   }
 
   return nullptr;  // success
@@ -939,9 +965,13 @@ ModelInstanceState::ValidateOutputs()
     } else {
       RETURN_IF_ERROR(ParseShape(io, "dims", &dims));
     }
-    RETURN_IF_ERROR(CompareDimsSupported(
-        model_state_->Name(), io_name, iit->second.dims_, dims,
-        model_state_->MaxBatchSize(), true /* compare_exact */));
+
+    // The batch output shape doesn't necessarily match the model
+    if (model_state_->FindBatchOutput(io_name) == nullptr) {
+      RETURN_IF_ERROR(CompareDimsSupported(
+          model_state_->Name(), io_name, iit->second.dims_, dims,
+          model_state_->MaxBatchSize(), true /* compare_exact */));
+    }
   }
 
   return nullptr;  // success
