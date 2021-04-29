@@ -1202,10 +1202,6 @@ ModelInstanceState::OrtRun(
     const uint32_t response_count, const std::vector<const char*>& input_names,
     const std::vector<const char*>& output_names)
 {
-  std::cout << "LINE 1206" << std::endl;
-  for (const auto& val : input_names) {
-    std::cout << val << std::endl;
-  }
   OrtStatus* status = ort_api->Run(
       session_, NULL /* run options */, input_names.data(),
       (const OrtValue* const*)input_tensors_.data(), input_tensors_.size(),
