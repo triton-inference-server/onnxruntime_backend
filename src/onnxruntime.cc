@@ -887,28 +887,27 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     }
 
     triton::common::TritonJson::Value allow_ragged_batch_json;
-      bool allow_ragged_batch = false;
-      if (io.Find("allow_ragged_batch", &allow_ragged_batch_json)) {
-        RETURN_IF_ERROR(allow_ragged_batch_json.AsBool(&allow_ragged_batch));
+    bool allow_ragged_batch = false;
+    if (io.Find("allow_ragged_batch", &allow_ragged_batch_json)) {
+      RETURN_IF_ERROR(allow_ragged_batch_json.AsBool(&allow_ragged_batch));
+    }
+    if (allow_ragged_batch) {
+      const std::vector<int64_t>& model_shape = iit->second.dims_;
+      // Make sure the input has shpae [-1]
+      if ((model_shape.size() != 1) || (model_shape[0] != WILDCARD_DIM)) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INVALID_ARG,
+            (std::string("unable to load model '") + model_state_->Name() +
+             "', configuration expects model provides input with shape [-1]  "
+             "for ragged input '" +
+             io_name + "', model provides " + ShapeToString(model_shape))
+                .c_str());
       }
-      if (allow_ragged_batch) {
-        const std::vector<int64_t>& model_shape = iit->second.dims_;
-        // Make sure the input has shpae [-1]
-        if ((model_shape.size() != 1) ||
-            (model_shape[0] != WILDCARD_DIM)) {
-          return TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INVALID_ARG,
-              (std::string("unable to load model '") + model_state_->Name() +
-               "', configuration expects model provides input with shape [-1]  "
-               "for ragged input '" +
-               io_name + "', model provides " + ShapeToString(model_shape))
-                  .c_str());
-        }
-      } else {
-        RETURN_IF_ERROR(CompareDimsSupported(
-            model_state_->Name(), io_name, iit->second.dims_, dims,
-            model_state_->MaxBatchSize(), false /* compare_exact */));
-      }
+    } else {
+      RETURN_IF_ERROR(CompareDimsSupported(
+          model_state_->Name(), io_name, iit->second.dims_, dims,
+          model_state_->MaxBatchSize(), false /* compare_exact */));
+    }
   }
 
   return nullptr;  // success
@@ -1203,6 +1202,10 @@ ModelInstanceState::OrtRun(
     const uint32_t response_count, const std::vector<const char*>& input_names,
     const std::vector<const char*>& output_names)
 {
+  std::cout << "LINE 1206" << std::endl;
+  for (const auto& val : input_names) {
+    std::cout << val << std::endl;
+  }
   OrtStatus* status = ort_api->Run(
       session_, NULL /* run options */, input_names.data(),
       (const OrtValue* const*)input_tensors_.data(), input_tensors_.size(),
@@ -1257,32 +1260,33 @@ ModelInstanceState::SetInputTensors(
     input_tensors_.emplace_back(nullptr);
 
     std::vector<int64_t> batchn_shape;
-      // For a ragged input tensor, the tensor shape should be
-      // the flatten shape of the whole batch
-      if (StateForModel()->IsInputRagged(input_name)) {
-        batchn_shape = std::vector<int64_t>{0};
-        for (size_t idx = 0; idx < request_count; idx++) {
-          TRITONBACKEND_Input* input;
-          RESPOND_AND_SET_NULL_IF_ERROR(
-              &((*responses)[idx]),
-              TRITONBACKEND_RequestInput(requests[idx], input_name, &input));
-          const int64_t* input_shape;
-          uint32_t input_dims_count;
-          RESPOND_AND_SET_NULL_IF_ERROR(
-              &((*responses)[idx]), TRITONBACKEND_InputProperties(
-                                   input, nullptr, nullptr, &input_shape, &input_dims_count,
-                                   nullptr, nullptr));
+    // For a ragged input tensor, the tensor shape should be
+    // the flatten shape of the whole batch
+    if (StateForModel()->IsInputRagged(input_name)) {
+      batchn_shape = std::vector<int64_t>{0};
+      for (size_t idx = 0; idx < request_count; idx++) {
+        TRITONBACKEND_Input* input;
+        RESPOND_AND_SET_NULL_IF_ERROR(
+            &((*responses)[idx]),
+            TRITONBACKEND_RequestInput(requests[idx], input_name, &input));
+        const int64_t* input_shape;
+        uint32_t input_dims_count;
+        RESPOND_AND_SET_NULL_IF_ERROR(
+            &((*responses)[idx]), TRITONBACKEND_InputProperties(
+                                      input, nullptr, nullptr, &input_shape,
+                                      &input_dims_count, nullptr, nullptr));
 
-          batchn_shape[0] += GetElementCount(input_shape, input_dims_count);
-        }
+        batchn_shape[0] += GetElementCount(input_shape, input_dims_count);
       }
-      // The shape for the entire input batch, [total_batch_size, ...]
-      else {
-        batchn_shape = std::vector<int64_t>(input_shape, input_shape + input_dims_count);
-        if (max_batch_size != 0) {
-          batchn_shape[0] = total_batch_size;
-        }
+    }
+    // The shape for the entire input batch, [total_batch_size, ...]
+    else {
+      batchn_shape =
+          std::vector<int64_t>(input_shape, input_shape + input_dims_count);
+      if (max_batch_size != 0) {
+        batchn_shape[0] = total_batch_size;
       }
+    }
 
     // [TODO] currently ONNX Runtime only recognize input data on CPU
     // https://github.com/microsoft/onnxruntime/issues/1621
@@ -1345,32 +1349,37 @@ ModelInstanceState::SetInputTensors(
     std::vector<int64_t> shape;
     collector->BatchInputShape(batch_input, &shape);
 
-    const char* dst_buffer;
-    size_t dst_buffer_byte_size;
-    TRITONSERVER_MemoryType dst_memory_type;
-    int64_t dst_memory_type_id;
-    std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> allowed_input_types;
-    allowed_input_types = {{TRITONSERVER_MEMORY_CPU, 0}};
+    for (const auto& input_name : batch_input.TargetNames()) {
+      input_names->emplace_back(input_name.c_str());
+      input_tensors_.emplace_back(nullptr);
 
-    RESPOND_ALL_AND_SET_NULL_IF_ERROR(
-        (*responses), responses->size(),
-        collector->ProcessBatchInput(
-            batch_input, nullptr, 0,
-              allowed_input_types,
-              &dst_buffer, &dst_buffer_byte_size, &dst_memory_type,
-              &dst_memory_type_id));
+      const char* dst_buffer;
+      size_t dst_buffer_byte_size;
+      TRITONSERVER_MemoryType dst_memory_type;
+      int64_t dst_memory_type_id;
+      std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>>
+          allowed_input_types;
+      allowed_input_types = {{TRITONSERVER_MEMORY_CPU, 0}};
 
-    // Create ORT Tensor
-    const OrtMemoryInfo* allocator_info;
-    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-        responses, responses->size(),
-        ort_api->AllocatorGetInfo(allocator_, &allocator_info));
-    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-        responses, responses->size(),
-        ort_api->CreateTensorWithDataAsOrtValue(
-            allocator_info, (void*)dst_buffer, dst_buffer_byte_size,
-            shape.data(), shape.size(),
-            ConvertToOnnxDataType(batch_input.DataType()), &input_tensors_.back()));      
+      RESPOND_ALL_AND_SET_NULL_IF_ERROR(
+          (*responses), responses->size(),
+          collector->ProcessBatchInput(
+              batch_input, nullptr, 0, allowed_input_types, &dst_buffer,
+              &dst_buffer_byte_size, &dst_memory_type, &dst_memory_type_id));
+
+      // Create ORT Tensor
+      const OrtMemoryInfo* allocator_info;
+      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+          responses, responses->size(),
+          ort_api->AllocatorGetInfo(allocator_, &allocator_info));
+      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+          responses, responses->size(),
+          ort_api->CreateTensorWithDataAsOrtValue(
+              allocator_info, (void*)dst_buffer, dst_buffer_byte_size,
+              shape.data(), shape.size(),
+              ConvertToOnnxDataType(batch_input.DataType()),
+              &input_tensors_.back()));
+    }
   }
 
   // Finalize...
@@ -1658,14 +1667,15 @@ ModelInstanceState::ReadOutputTensors(
         offsets[element_count] = total_length;
 
         cuda_copy |= SetStringOutputBuffer(
-            name, content, offsets.data(), &batchn_shape, requests, request_count,
-            responses);
+            name, content, offsets.data(), &batchn_shape, requests,
+            request_count, responses);
       } else {
         // Fixed size data type...
         char* output_buffer = nullptr;
         RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
             responses, request_count,
-            ort_api->GetTensorMutableData(output_tensor, (void**)&output_buffer));
+            ort_api->GetTensorMutableData(
+                output_tensor, (void**)&output_buffer));
 
         // [TODO] currently ONNX output data are always on CPU
         // https://github.com/microsoft/onnxruntime/issues/1621
@@ -1673,14 +1683,13 @@ ModelInstanceState::ReadOutputTensors(
             name, ConvertFromOnnxDataType(type), batchn_shape, output_buffer,
             TRITONSERVER_MEMORY_CPU, 0);
       }
-    } else{
+    } else {
       char* output_buffer = nullptr;
       RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-            responses, request_count,
-            ort_api->GetTensorMutableData(output_tensor, (void**)&output_buffer));
+          responses, request_count,
+          ort_api->GetTensorMutableData(output_tensor, (void**)&output_buffer));
       responder.ProcessBatchOutput(
-            name, *batch_output, output_buffer,
-            TRITONSERVER_MEMORY_CPU, 0);
+          name, *batch_output, output_buffer, TRITONSERVER_MEMORY_CPU, 0);
     }
   }
 
