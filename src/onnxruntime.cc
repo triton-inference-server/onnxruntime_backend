@@ -239,9 +239,55 @@ ModelState::LoadModel(
               RETURN_IF_ERROR(ea.MemberAsString("name", &name));
 #ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
               if (name == kTensorRTExecutionAccelerator) {
+                // create tensorrt options with default values
+                OrtTensorRTProviderOptions trt_options{
+                    instance_group_device_id,  // cuda deivce id
+                    0,
+                    nullptr,
+                    1,
+                    1 << 30,  // max_workspace_size
+                    0,        // enable_fp16
+                    0,
+                    nullptr,
+                    0,
+                    0};
+                // Validate and set parameters
+                triton::common::TritonJson::Value params;
+                if (ea.Find("parameters", &params)) {
+                  std::vector<std::string> param_keys;
+                  RETURN_IF_ERROR(params.Members(&param_keys));
+                  for (const auto& param_key : param_keys) {
+                    std::string value_string;
+                    if (param_key == "precision_mode") {
+                      RETURN_IF_ERROR(params.MemberAsString(
+                          param_key.c_str(), &value_string));
+                      if (value_string == "FP16") {
+                        trt_options.trt_fp16_enable = 1;
+                      } else if (value_string != "FP32") {
+                        RETURN_ERROR_IF_FALSE(
+                            false, TRITONSERVER_ERROR_INVALID_ARG,
+                            std::string("unsupported precision mode '") +
+                                value_string + "' is requested");
+                      }
+                    } else if (param_key == "max_workspace_size_bytes") {
+                      RETURN_IF_ERROR(params.MemberAsString(
+                          param_key.c_str(), &value_string));
+                      RETURN_IF_ERROR(ParseLongLongValue(
+                          value_string, &trt_options.trt_max_workspace_size));
+                    } else {
+                      return TRITONSERVER_ErrorNew(
+                          TRITONSERVER_ERROR_INVALID_ARG,
+                          std::string(
+                              "unknown parameter '" + param_key +
+                              "' is provided for TensorRT Execution "
+                              "Accelerator")
+                              .c_str());
+                    }
+                  }
+                }
                 RETURN_IF_ORT_ERROR(
-                    OrtSessionOptionsAppendExecutionProvider_Tensorrt(
-                        soptions, instance_group_device_id));
+                  ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
+                    soptions, &trt_options);
                 LOG_MESSAGE(
                     TRITONSERVER_LOG_VERBOSE,
                     (std::string(
