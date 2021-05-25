@@ -1270,14 +1270,6 @@ ModelInstanceState::SetInputTensors(
   RESPOND_ALL_AND_RETURN_IF_ERROR(
       responses, request_count,
       TRITONBACKEND_RequestInputCount(requests[0], &input_count));
-  std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>> allowed_input_types;
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-    allowed_input_types = {{TRITONSERVER_MEMORY_GPU, DeviceId()},
-                           {TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                           {TRITONSERVER_MEMORY_CPU, 0}};
-  } else {
-    allowed_input_types = {{TRITONSERVER_MEMORY_CPU, 0}};
-  }
 
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
@@ -1335,6 +1327,16 @@ ModelInstanceState::SetInputTensors(
       size_t batchn_byte_size;
       TRITONSERVER_MemoryType memory_type;
       int64_t memory_type_id;
+      std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>>
+          allowed_input_types;
+      if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+        allowed_input_types = {{TRITONSERVER_MEMORY_GPU, DeviceId()},
+                               {TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                               {TRITONSERVER_MEMORY_CPU, 0}};
+      } else {
+        allowed_input_types = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                               {TRITONSERVER_MEMORY_CPU, 0}};
+      }
 
       RESPOND_ALL_AND_RETURN_IF_ERROR(
           responses, request_count,
@@ -1398,20 +1400,21 @@ ModelInstanceState::SetInputTensors(
       TRITONSERVER_MemoryType dst_memory_type;
       int64_t dst_memory_type_id;
 
+      // Batch inputs are always created on CPU
       RESPOND_ALL_AND_SET_NULL_IF_ERROR(
           (*responses), responses->size(),
           collector->ProcessBatchInput(
-              batch_input, nullptr, 0, allowed_input_types, &dst_buffer,
-              &dst_buffer_byte_size, &dst_memory_type, &dst_memory_type_id));
+              batch_input, nullptr, 0, {{TRITONSERVER_MEMORY_CPU, 0}},
+              &dst_buffer, &dst_buffer_byte_size, &dst_memory_type,
+              &dst_memory_type_id));
 
       // Create ORT Tensor
       RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
           responses, responses->size(),
           ort_api->CreateTensorWithDataAsOrtValue(
-              dst_memory_type == TRITONSERVER_MEMORY_GPU ? cuda_allocator_info_
-                                                         : cpu_allocator_info_,
-              (void*)dst_buffer, dst_buffer_byte_size, shape.data(),
-              shape.size(), ConvertToOnnxDataType(batch_input.DataType()),
+              cpu_allocator_info_, (void*)dst_buffer, dst_buffer_byte_size,
+              shape.data(), shape.size(),
+              ConvertToOnnxDataType(batch_input.DataType()),
               &input_tensors_.back()));
 
       RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
