@@ -44,7 +44,7 @@ def dockerfile_common():
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
 ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
-ARG ONNXRUNTIME_BUILD_TYPE={}
+ARG ONNXRUNTIME_BUILD_CONFIG={}
 '''.format(FLAGS.triton_container, FLAGS.ort_version, FLAGS.ort_build_config)
 
     if FLAGS.ort_openvino is not None:
@@ -131,7 +131,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 #
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
-ARG ONNXRUNTIME_BUILD_TYPE
+ARG ONNXRUNTIME_BUILD_CONFIG
 
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
@@ -158,7 +158,7 @@ RUN cd /workspace/onnxruntime/onnxruntime/core/providers/shared_library && \
 
     df += '''
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${ONNXRUNTIME_BUILD_TYPE} --skip_submodule_sync --parallel --build_shared_lib --use_openmp --build_dir /workspace/build"
+ARG COMMON_BUILD_ARGS="--config ${ONNXRUNTIME_BUILD_CONFIG} --skip_submodule_sync --parallel --build_shared_lib --use_openmp --build_dir /workspace/build"
 '''
 
     df += '''
@@ -187,15 +187,15 @@ RUN mkdir -p /opt/onnxruntime/include && \
        /opt/onnxruntime/include
 
 RUN mkdir -p /opt/onnxruntime/lib && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/libonnxruntime.so.${ONNXRUNTIME_VERSION} \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so.${ONNXRUNTIME_VERSION} \
        /opt/onnxruntime/lib && \
     (cd /opt/onnxruntime/lib && \
      ln -sf libonnxruntime.so.${ONNXRUNTIME_VERSION} libonnxruntime.so)
 
 RUN mkdir -p /opt/onnxruntime/bin && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/onnxruntime_perf_test \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnxruntime_perf_test \
        /opt/onnxruntime/bin && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/onnx_test_runner \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnx_test_runner \
        /opt/onnxruntime/bin && \
     (cd /opt/onnxruntime/bin && chmod a+x *)
 '''
@@ -205,9 +205,9 @@ RUN mkdir -p /opt/onnxruntime/bin && \
 # TensorRT specific headers and libraries
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensorrt_provider_factory.h \
        /opt/onnxruntime/include && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/libonnxruntime_providers_tensorrt.so \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_tensorrt.so \
        /opt/onnxruntime/lib && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/libonnxruntime_providers_shared.so \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so \
        /opt/onnxruntime/lib
 '''
 
@@ -220,9 +220,9 @@ RUN cp -r /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/licensing \
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
-RUN cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/libonnxruntime_providers_shared.so \
+RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so \
        /opt/onnxruntime/lib && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/libonnxruntime_providers_openvino.so \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
     cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
        /opt/onnxruntime/lib && \
@@ -255,9 +255,9 @@ RUN cd /opt/onnxruntime/lib && \
 
 # For testing copy ONNX custom op library and model
 RUN mkdir -p /opt/onnxruntime/test && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/libcustom_op_library.so \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libcustom_op_library.so \
        /opt/onnxruntime/test && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_TYPE}/testdata/custom_op_library/custom_op_test.onnx \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/testdata/custom_op_library/custom_op_test.onnx \
        /opt/onnxruntime/test
 '''
 
@@ -275,7 +275,7 @@ SHELL ["cmd", "/S", "/C"]
 #
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
-ARG ONNXRUNTIME_BUILD_TYPE
+ARG ONNXRUNTIME_BUILD_CONFIG
 RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
 '''
@@ -298,7 +298,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\BuildTools\Common7\Tools\VsDevCmd.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 16 2019" --config ${ONNXRUNTIME_BUILD_TYPE} --skip_submodule_sync --build_shared_lib --use_openmp --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 16 2019" --config %ONNXRUNTIME_BUILD_CONFIG% --skip_submodule_sync --build_shared_lib --use_openmp --update --build --build_dir /workspace/build {}
 '''.format(ep_flags)
 
     df += '''
@@ -317,13 +317,20 @@ RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\c
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\cuda_provider_factory.h \\opt\\onnxruntime\\include
 
 WORKDIR /opt/onnxruntime/bin
-RUN copy \\workspace\\build\\${ONNXRUNTIME_BUILD_TYPE}\\${ONNXRUNTIME_BUILD_TYPE}\\onnxruntime.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\${ONNXRUNTIME_BUILD_TYPE}\\${ONNXRUNTIME_BUILD_TYPE}\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\${ONNXRUNTIME_BUILD_TYPE}\\${ONNXRUNTIME_BUILD_TYPE}\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
 
 WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\${ONNXRUNTIME_BUILD_TYPE}\\${ONNXRUNTIME_BUILD_TYPE}\\onnxruntime.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime.lib \\opt\\onnxruntime\\lib
 '''
+
+    if FLAGS.ort_build_config == "Debug":
+        df += '''
+WORKDIR /opt/onnxruntime/bin
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime.pdb \\opt\\onnxruntime\\bin
+'''
+
 
     if FLAGS.ort_tensorrt:
         df += '''
@@ -332,13 +339,21 @@ WORKDIR /opt/onnxruntime/include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\tensorrt\\tensorrt_provider_factory.h \\opt\\onnxruntime\\include
 
 WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\${ONNXRUNTIME_BUILD_TYPE}\\${ONNXRUNTIME_BUILD_TYPE}\\onnxruntime_providers_tensorrt.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\${ONNXRUNTIME_BUILD_TYPE}\\${ONNXRUNTIME_BUILD_TYPE}\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime_providers_tensorrt.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
 
 WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\${ONNXRUNTIME_BUILD_TYPE}\\${ONNXRUNTIME_BUILD_TYPE}\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
-RUN copy \\workspace\\build\\${ONNXRUNTIME_BUILD_TYPE}\\${ONNXRUNTIME_BUILD_TYPE}\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
+        if FLAGS.ort_build_config == "Debug":
+            df += '''
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime_providers_tensorrt.pdb \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\%ONNXRUNTIME_BUILD_CONFIG%\\%ONNXRUNTIME_BUILD_CONFIG%\\onnxruntime_providers_shared.pdb \\opt\\onnxruntime\\bin
+'''
+
+
     with open(output_file, "w") as dfile:
         dfile.write(df)
 
