@@ -654,7 +654,6 @@ ModelInstanceState::ModelInstanceState(
 
   THROW_IF_BACKEND_INSTANCE_ORT_ERROR(ort_api->CreateRunOptions(&runOptions_));
 
-
   size_t expected_input_cnt = 0;
   {
     triton::common::TritonJson::Value inputs;
@@ -1157,15 +1156,23 @@ ModelInstanceState::ProcessRequests(
           break;
         }
 
+        std::string io_dtype;
+        err = io.MemberAsString("data_type", &io_dtype);
+        auto onnx_data_type = ModelConfigDataTypeToOnnxDataType(io_dtype);
+
         output_names.emplace_back(io_name);
         output_tensors_.emplace_back(nullptr);
+
+        bool use_cpu_allocator =
+            (cuda_allocator_info_ == nullptr ||
+             onnx_data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
 
         RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
             &responses, request_count,
             ort_api->BindOutputToDevice(
                 io_binding_, io_name,
-                cuda_allocator_info_ == nullptr ? cpu_allocator_info_
-                                                : cuda_allocator_info_));
+                use_cpu_allocator ? cpu_allocator_info_
+                                  : cuda_allocator_info_));
       }
     }
 
