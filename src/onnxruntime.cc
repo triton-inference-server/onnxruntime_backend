@@ -608,6 +608,7 @@ class ModelInstanceState : public BackendModelInstance {
   // on this instance.
   std::vector<OrtValue*> input_tensors_;
   std::vector<OrtValue*> output_tensors_;
+  OrtValue** output_buffer_;
   std::vector<BackendMemory*> input_tensor_memories_;
 };
 
@@ -726,12 +727,29 @@ ModelInstanceState::ReleaseOrtRunResources()
   }
   input_tensors_.clear();
 
+  // first release the Ortvalues
   for (auto& tensor : output_tensors_) {
     if (tensor != nullptr) {
       ort_api->ReleaseValue(tensor);
     }
   }
   output_tensors_.clear();
+
+  // next release the allocated buffer using the specified allocator
+  if (output_buffer_) {
+    auto free_status =
+        ort_api->AllocatorFree(default_allocator_, output_buffer_);
+    output_buffer_ = nullptr;
+    if (free_status != nullptr) {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_ERROR,
+          (std::string("onnx runtime allocator free error:") +
+           std::to_string(ort_api->GetErrorCode(free_status)) +
+           ort_api->GetErrorMessage(free_status))
+              .c_str());
+      ort_api->ReleaseStatus(free_status);
+    }
+  }
 
   for (BackendMemory* mem : input_tensor_memories_) {
     delete mem;
@@ -1661,11 +1679,10 @@ ModelInstanceState::ReadOutputTensors(
   }
 
   size_t output_count = 0;
-  OrtValue** output_values = nullptr;
   RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
       responses, request_count,
       ort_api->GetBoundOutputValues(
-          io_binding_, default_allocator_, &output_values, &output_count));
+          io_binding_, default_allocator_, &output_buffer_, &output_count));
   if (output_count != output_names.size()) {
     RESPOND_ALL_AND_RETURN_IF_ERROR(
         responses, request_count,
@@ -1675,7 +1692,7 @@ ModelInstanceState::ReadOutputTensors(
   }
   std::vector<std::vector<char>> string_buffers;
   for (size_t idx = 0; idx < output_names.size(); idx++) {
-    OrtValue* output_tensor = output_tensors_[idx] = output_values[idx];
+    OrtValue* output_tensor = output_tensors_[idx] = output_buffer_[idx];
     std::string name = output_names[idx];
 
     const BatchOutput* batch_output = StateForModel()->FindBatchOutput(name);
