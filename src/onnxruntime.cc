@@ -635,7 +635,7 @@ ModelInstanceState::ModelInstanceState(
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state), session_(nullptr), default_allocator_(nullptr),
       cuda_allocator_info_(nullptr), cpu_allocator_info_(nullptr),
-      io_binding_(nullptr)
+      io_binding_(nullptr), output_buffer_(nullptr)
 {
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
       ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
