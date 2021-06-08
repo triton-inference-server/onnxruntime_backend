@@ -37,7 +37,6 @@
 #include "triton/backend/backend_output_responder.h"
 
 #ifdef TRITON_ENABLE_GPU
-#include <cuda_provider_factory.h>
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
@@ -84,7 +83,7 @@ class ModelState : public BackendModel {
       const std::string& artifact_name,
       const TRITONSERVER_InstanceGroupKind instance_group_kind,
       const int32_t instance_group_device_id, std::string* model_path,
-      OrtSession** session, OrtAllocator** default_allocator);
+      OrtSession** session, OrtAllocator** default_allocator, cudaStream_t stream);
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -174,7 +173,7 @@ ModelState::LoadModel(
     const std::string& artifact_name,
     const TRITONSERVER_InstanceGroupKind instance_group_kind,
     const int32_t instance_group_device_id, std::string* model_path,
-    OrtSession** session, OrtAllocator** default_allocator)
+    OrtSession** session, OrtAllocator** default_allocator, cudaStream_t stream)
 {
   // Find the ONNX file that describes the model itself. If the model
   // configuration doesn't have an explicit model file specified then
@@ -241,15 +240,23 @@ ModelState::LoadModel(
               if (name == kTensorRTExecutionAccelerator) {
                 // create tensorrt options with default values
                 OrtTensorRTProviderOptions trt_options{
-                    instance_group_device_id,  // cuda deivce id
-                    0,
-                    nullptr,
+                    instance_group_device_id,
+                    stream != nullptr ? 1 : 0,
+                    stream != nullptr ? (void*)stream : nullptr,
+                    1000,
                     1,
                     1 << 30,  // max_workspace_size
                     0,        // enable_fp16
                     0,
                     nullptr,
                     0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    nullptr,
+                    0,
+                    nullptr,
                     0};
                 // Validate and set parameters
                 triton::common::TritonJson::Value params;
@@ -272,8 +279,10 @@ ModelState::LoadModel(
                     } else if (param_key == "max_workspace_size_bytes") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
+                      int64_t max_workspace_size_bytes;
                       RETURN_IF_ERROR(ParseLongLongValue(
-                          value_string, &trt_options.trt_max_workspace_size));
+                          value_string, &max_workspace_size_bytes));
+                      trt_options.trt_max_workspace_size = static_cast<size_t>(max_workspace_size_bytes);
                     } else {
                       return TRITONSERVER_ErrorNew(
                           TRITONSERVER_ERROR_INVALID_ARG,
@@ -287,7 +296,7 @@ ModelState::LoadModel(
                 }
                 RETURN_IF_ORT_ERROR(
                   ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
-                    soptions, &trt_options);
+                    soptions, &trt_options));
                 LOG_MESSAGE(
                     TRITONSERVER_LOG_VERBOSE,
                     (std::string(
@@ -309,8 +318,18 @@ ModelState::LoadModel(
       }
 
       // Default GPU execution provider.
-      RETURN_IF_ORT_ERROR(OrtSessionOptionsAppendExecutionProvider_CUDA(
-          soptions, instance_group_device_id));
+      OrtCUDAProviderOptions cuda_options{
+      instance_group_device_id,
+      OrtCudnnConvAlgoSearch::EXHAUSTIVE,
+      std::numeric_limits<size_t>::max(),
+      0,
+      true,
+      stream != nullptr ? 1 : 0,
+      stream != nullptr ? (void*)stream : nullptr,
+      nullptr};
+      RETURN_IF_ORT_ERROR(
+                  ort_api->SessionOptionsAppendExecutionProvider_CUDA(
+                    soptions, &cuda_options));
       LOG_MESSAGE(
           TRITONSERVER_LOG_VERBOSE,
           (std::string("CUDA Execution Accelerator is set for '") + Name() +
@@ -442,7 +461,7 @@ ModelState::AutoCompleteConfig()
     OrtSession* sptr = nullptr;
     RETURN_IF_ERROR(LoadModel(
         artifact_name, TRITONSERVER_INSTANCEGROUPKIND_AUTO, 0, &model_path,
-        &sptr, &default_allocator));
+        &sptr, &default_allocator, nullptr));
     session.reset(sptr);
   }
   OnnxTensorInfoMap input_tensor_infos;
@@ -685,7 +704,7 @@ ModelInstanceState::ModelInstanceState(
 {
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
       ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
-      &default_allocator_));
+      &default_allocator_, CudaStream()));
 
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     THROW_IF_BACKEND_INSTANCE_ORT_ERROR(ort_api->CreateMemoryInfo(

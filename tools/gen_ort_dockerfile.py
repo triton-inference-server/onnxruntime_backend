@@ -134,10 +134,6 @@ ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
 
-# Need to patch until https://github.com/microsoft/onnxruntime/pull/7193
-COPY tools/onnxruntime_cuda_header.patch /tmp/onnxruntime_cuda_header.patch
-RUN cd /workspace/onnxruntime/onnxruntime/core/providers/shared_library && \
-    patch -i /tmp/onnxruntime_cuda_header.patch provider_interfaces.h
 '''
 
     ep_flags = '--use_cuda'
@@ -182,6 +178,10 @@ RUN mkdir -p /opt/onnxruntime/include && \
        /opt/onnxruntime/include
 
 RUN mkdir -p /opt/onnxruntime/lib && \
+    cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
+       /opt/onnxruntime/lib && \
+    cp /workspace/build/Release/libonnxruntime_providers_shared.so \
+       /opt/onnxruntime/lib && \
     cp /workspace/build/Release/libonnxruntime.so.${ONNXRUNTIME_VERSION} \
        /opt/onnxruntime/lib && \
     (cd /opt/onnxruntime/lib && \
@@ -201,8 +201,6 @@ RUN mkdir -p /opt/onnxruntime/bin && \
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensorrt_provider_factory.h \
        /opt/onnxruntime/include && \
     cp /workspace/build/Release/libonnxruntime_providers_tensorrt.so \
-       /opt/onnxruntime/lib && \
-    cp /workspace/build/Release/libonnxruntime_providers_shared.so \
        /opt/onnxruntime/lib
 '''
 
@@ -215,9 +213,7 @@ RUN cp -r /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/licensing \
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
-RUN cp /workspace/build/Release/libonnxruntime_providers_shared.so \
-       /opt/onnxruntime/lib && \
-    cp /workspace/build/Release/libonnxruntime_providers_openvino.so \
+RUN cp /workspace/build/Release/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
     cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
        /opt/onnxruntime/lib && \
@@ -312,11 +308,15 @@ RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\
 
 WORKDIR /opt/onnxruntime/bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
 
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
 
     if FLAGS.ort_tensorrt:
@@ -327,11 +327,9 @@ RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\tensor
 
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
 
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
     with open(output_file, "w") as dfile:
         dfile.write(df)

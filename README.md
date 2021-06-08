@@ -44,14 +44,14 @@ Runtime version and a Triton container version that you want to use
 with the backend. You can find the combination of versions used in a
 particular Triton release in the TRITON_VERSION_MAP at the top of
 build.py in the branch matching the Triton release you are interested
-in. For example, to build the ONNX Runtime backend for Triton 21.02,
-use the versions from TRITON_VERSION_MAP in the [r21.02 branch of
-build.py](https://github.com/triton-inference-server/server/blob/r21.02/build.py#L60).
+in. For example, to build the ONNX Runtime backend for Triton 21.05,
+use the versions from TRITON_VERSION_MAP in the [r21.05 branch of
+build.py](https://github.com/triton-inference-server/server/blob/r21.05/build.py#L66).
 
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.6.0 -DTRITON_BUILD_CONTAINER_VERSION=21.02 ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.8.0 -DTRITON_BUILD_CONTAINER_VERSION=21.06 ..
 $ make install
 ```
 
@@ -77,6 +77,6 @@ TensorRT and OpenVino support:
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.6.0 -DTRITON_BUILD_CONTAINER_VERSION=21.02 -DTRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON -DTRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON -DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=2021.1 ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.8.0 -DTRITON_BUILD_CONTAINER_VERSION=21.06 -DTRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON -DTRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON -DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=2021.2.200 ..
 $ make install
 ```
