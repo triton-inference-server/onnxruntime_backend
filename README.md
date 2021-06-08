@@ -51,7 +51,7 @@ build.py](https://github.com/triton-inference-server/server/blob/r21.05/build.py
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.8.0 -DTRITON_BUILD_CONTAINER_VERSION=21.06 ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.8.0 -DTRITON_BUILD_CONTAINER_VERSION=21.05 ..
 $ make install
 ```
 
@@ -77,6 +77,32 @@ TensorRT and OpenVino support:
 ```
 $ mkdir build
 $ cd build
-$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.8.0 -DTRITON_BUILD_CONTAINER_VERSION=21.06 -DTRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON -DTRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON -DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=2021.2.200 ..
+$ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_BUILD_ONNXRUNTIME_VERSION=1.8.0 -DTRITON_BUILD_CONTAINER_VERSION=21.05 -DTRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON -DTRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON -DTRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION=2021.2.200 ..
 $ make install
+```
+
+
+## ONNX Runtime with TensorRT optimization
+TensorRT can be used in conjunction with an ONNX model to further optimize the performance. To enable TensorRT optimization you must set the model configuration appropriately. There are several optimizations available for TensorRT, like selection of the compute precision and workspace size. The optimization parameters and their description are as follows.
+
+
+* `precision_mode`: The precision used for optimization. Allowed values are "FP32" and "FP16". Default value is "FP32".
+* `max_workspace_size_bytes`: The maximum GPU memory the model can use temporarily during execution. Default value is 1GB.
+
+The section of model config file specifying these parameters will look like:
+
+```
+.
+.
+.
+optimization { execution_accelerators {
+  gpu_execution_accelerator : [ {
+    name : "tensorrt"
+    parameters { key: "precision_mode" value: "FP16" }
+    parameters { key: "max_workspace_size_bytes" value: "1073741824" }}]
+}}
+.
+.
+.
+
 ```

@@ -321,7 +321,7 @@ ModelState::LoadModel(
       }
 
       // Default GPU execution provider.
-      // Using default values for evrything other than devide id and cuda stream
+      // Using default values for evrything other than device id and cuda stream
       OrtCUDAProviderOptions cuda_options{
           instance_group_device_id,
           OrtCudnnConvAlgoSearch::EXHAUSTIVE,  // cudnn_conv_algo_search
