@@ -83,7 +83,8 @@ class ModelState : public BackendModel {
       const std::string& artifact_name,
       const TRITONSERVER_InstanceGroupKind instance_group_kind,
       const int32_t instance_group_device_id, std::string* model_path,
-      OrtSession** session, OrtAllocator** default_allocator, cudaStream_t stream);
+      OrtSession** session, OrtAllocator** default_allocator,
+      cudaStream_t stream);
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
@@ -243,21 +244,22 @@ ModelState::LoadModel(
                     instance_group_device_id,
                     stream != nullptr ? 1 : 0,
                     stream != nullptr ? (void*)stream : nullptr,
-                    1000,
-                    1,
+                    1000,     // trt_max_partition_iterations
+                    1,        // trt_min_subgraph_size
                     1 << 30,  // max_workspace_size
-                    0,        // enable_fp16
-                    0,
-                    nullptr,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    nullptr,
-                    0,
-                    nullptr,
-                    0};
+                    0,        // trt_fp16_enable
+                    0,        // trt_int8_enable
+                    nullptr,  // trt_int8_calibration_table_name
+                    0,        // trt_int8_calibration_table_name
+                    0,        // trt_dla_enable
+                    0,        // trt_dla_core
+                    0,        // trt_dump_subgraphs
+                    0,        // trt_engine_cache_enable
+                    nullptr,  // trt_engine_cache_path
+                    0,        // trt_engine_decryption_enable
+                    nullptr,  // trt_engine_decryption_lib_path
+                    0         // trt_force_sequential_engine_build
+                };
                 // Validate and set parameters
                 triton::common::TritonJson::Value params;
                 if (ea.Find("parameters", &params)) {
@@ -282,7 +284,8 @@ ModelState::LoadModel(
                       int64_t max_workspace_size_bytes;
                       RETURN_IF_ERROR(ParseLongLongValue(
                           value_string, &max_workspace_size_bytes));
-                      trt_options.trt_max_workspace_size = static_cast<size_t>(max_workspace_size_bytes);
+                      trt_options.trt_max_workspace_size =
+                          static_cast<size_t>(max_workspace_size_bytes);
                     } else {
                       return TRITONSERVER_ErrorNew(
                           TRITONSERVER_ERROR_INVALID_ARG,
@@ -295,8 +298,8 @@ ModelState::LoadModel(
                   }
                 }
                 RETURN_IF_ORT_ERROR(
-                  ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
-                    soptions, &trt_options));
+                    ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
+                        soptions, &trt_options));
                 LOG_MESSAGE(
                     TRITONSERVER_LOG_VERBOSE,
                     (std::string(
@@ -318,18 +321,19 @@ ModelState::LoadModel(
       }
 
       // Default GPU execution provider.
+      // Using default values for evrything other than devide id and cuda stream
       OrtCUDAProviderOptions cuda_options{
-      instance_group_device_id,
-      OrtCudnnConvAlgoSearch::EXHAUSTIVE,
-      std::numeric_limits<size_t>::max(),
-      0,
-      true,
-      stream != nullptr ? 1 : 0,
-      stream != nullptr ? (void*)stream : nullptr,
-      nullptr};
-      RETURN_IF_ORT_ERROR(
-                  ort_api->SessionOptionsAppendExecutionProvider_CUDA(
-                    soptions, &cuda_options));
+          instance_group_device_id,
+          OrtCudnnConvAlgoSearch::EXHAUSTIVE,  // cudnn_conv_algo_search
+          std::numeric_limits<size_t>::max(),  // gpu_mem_limit
+          0,                                   // arena_extend_strategy
+          true,                                // do_copy_in_default_stream
+          stream != nullptr ? 1 : 0,
+          stream != nullptr ? (void*)stream : nullptr,
+          nullptr  // default_memory_arena_cfg
+      };
+      RETURN_IF_ORT_ERROR(ort_api->SessionOptionsAppendExecutionProvider_CUDA(
+          soptions, &cuda_options));
       LOG_MESSAGE(
           TRITONSERVER_LOG_VERBOSE,
           (std::string("CUDA Execution Accelerator is set for '") + Name() +
