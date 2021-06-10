@@ -40,14 +40,6 @@
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
-#ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
-#include <tensorrt_provider_factory.h>
-#endif  // TRITON_ENABLE_ONNXRUNTIME_TENSORRT
-
-#ifdef TRITON_ENABLE_ONNXRUNTIME_OPENVINO
-#include <openvino_provider_factory.h>
-#endif  // TRITON_ENABLE_ONNXRUNTIME_OPENVINO
-
 //
 // ONNX Runtime Backend that implements the TRITONBACKEND API.
 //
@@ -358,9 +350,14 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_ONNXRUNTIME_OPENVINO
               if (name == kOpenVINOExecutionAccelerator) {
                 need_lock = true;
+                OrtOpenVINOProviderOptions openvino_options;
+                openvino_options.device_type =
+                    "CPU_FP32";  // device_type default is CPU_FP32
+
                 RETURN_IF_ORT_ERROR(
-                    OrtSessionOptionsAppendExecutionProvider_OpenVINO(
-                        soptions, ""));
+                    ort_api->SessionOptionsAppendExecutionProvider_OpenVINO(
+                        soptions, &openvino_options));
+
                 LOG_MESSAGE(
                     TRITONSERVER_LOG_VERBOSE,
                     (std::string(
