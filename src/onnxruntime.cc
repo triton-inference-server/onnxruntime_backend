@@ -1240,23 +1240,13 @@ ModelInstanceState::ProcessRequests(
           break;
         }
 
-        std::string io_dtype;
-        err = io.MemberAsString("data_type", &io_dtype);
-        auto onnx_data_type = ModelConfigDataTypeToOnnxDataType(io_dtype);
-
         output_names.emplace_back(io_name);
         output_tensors_.emplace_back(nullptr);
-
-        bool use_cpu_allocator =
-            (cuda_allocator_info_ == nullptr ||
-             onnx_data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING);
 
         RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
             &responses, request_count,
             ort_api->BindOutputToDevice(
-                io_binding_, io_name,
-                use_cpu_allocator ? cpu_allocator_info_
-                                  : cuda_allocator_info_));
+                io_binding_, io_name, cpu_allocator_info_));
       }
     }
 
@@ -1737,12 +1727,8 @@ ModelInstanceState::ReadOutputTensors(
 
   // Use to hold string output contents
   bool cuda_copy = false;
-  std::pair<TRITONSERVER_MemoryType, int64_t> alloc_perference;
-  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-    alloc_perference = {TRITONSERVER_MEMORY_GPU, DeviceId()};
-  } else {
-    alloc_perference = {TRITONSERVER_MEMORY_CPU, 0};
-  }
+  std::pair<TRITONSERVER_MemoryType, int64_t> alloc_perference = {
+      TRITONSERVER_MEMORY_CPU, 0};
 
   size_t output_count = 0;
   RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
