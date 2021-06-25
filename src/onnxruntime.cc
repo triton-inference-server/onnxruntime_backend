@@ -1209,7 +1209,7 @@ ModelInstanceState::ProcessRequests(
   bool cuda_copy = false;
   BackendInputCollector collector(
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
-      model_state_->EnablePinnedInput(), CudaStream(),
+      model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
       HostPolicyName().c_str());
   SetInputTensors(
       total_batch_size, requests, request_count, &responses, &collector,
