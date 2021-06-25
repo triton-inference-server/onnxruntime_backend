@@ -1209,7 +1209,8 @@ ModelInstanceState::ProcessRequests(
   bool cuda_copy = false;
   BackendInputCollector collector(
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
-      model_state_->EnablePinnedInput(), CudaStream());
+      model_state_->EnablePinnedInput(), CudaStream(),
+      HostPolicyName().c_str());
   SetInputTensors(
       total_batch_size, requests, request_count, &responses, &collector,
       &input_names, &cuda_copy);
@@ -1574,9 +1575,9 @@ ModelInstanceState::SetStringInputTensor(
       uint32_t input_buffer_count;
       RESPOND_ALL_AND_RETURN_IF_ERROR(
           responses, request_count,
-          TRITONBACKEND_InputProperties(
-              in, nullptr, nullptr, nullptr, nullptr, nullptr,
-              &input_buffer_count));
+          TRITONBACKEND_InputPropertiesForHostPolicy(
+              in, HostPolicyName().c_str(), nullptr, nullptr, nullptr, nullptr,
+              nullptr, &input_buffer_count));
 
       size_t input_offset = 0;
       for (size_t idx = 0; idx < input_buffer_count; ++idx) {
@@ -1584,9 +1585,9 @@ ModelInstanceState::SetStringInputTensor(
         size_t src_byte_size;
         TRITONSERVER_MemoryType src_memory_type;
         int64_t src_memory_type_id;
-        err = TRITONBACKEND_InputBuffer(
-            in, idx, &src_buffer, &src_byte_size, &src_memory_type,
-            &src_memory_type_id);
+        err = TRITONBACKEND_InputBufferForHostPolicy(
+            in, HostPolicyName().c_str(), idx, &src_buffer, &src_byte_size,
+            &src_memory_type, &src_memory_type_id);
         if (err == nullptr) {
           if ((input_offset + src_byte_size) > expected_byte_sizes[ridx]) {
             err = TRITONSERVER_ErrorNew(
