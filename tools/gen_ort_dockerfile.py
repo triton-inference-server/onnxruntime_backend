@@ -90,15 +90,17 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86
     /bin/bash ~/miniconda.sh -b -p /opt/miniconda && \
     rm ~/miniconda.sh && \
     /opt/miniconda/bin/conda clean -ya
-
-# Allow configure to pick up cuDNN where it expects it.
-# (Note: $CUDNN_VERSION is defined by base image)
-RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
-    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
-    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 '''
+    if not FLAGS.cpu_only:
+        df += '''
+    # Allow configure to pick up cuDNN where it expects it.
+    # (Note: $CUDNN_VERSION is defined by base image)
+    RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
+        mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
+        ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
+        mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
+        ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
+    '''
 
     if FLAGS.ort_openvino is not None:
         df += '''
@@ -150,25 +152,25 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     #
     ARG ONNXRUNTIME_VERSION
     ARG ONNXRUNTIME_REPO
-
     RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
-
     '''
 
-    ep_flags = '--use_cuda'
-    if FLAGS.cuda_version is not None:
-        ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
-    if FLAGS.cuda_home is not None:
-        ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
-    if FLAGS.cudnn_home is not None:
-        ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
-    if FLAGS.ort_tensorrt:
-        ep_flags += ' --use_tensorrt'
-        if FLAGS.tensorrt_home is not None:
-            ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
-    if FLAGS.ort_openvino is not None:
-        ep_flags += ' --use_openvino CPU_FP32'
+    ep_flags = ''
+    if not FLAGS.cpu_only:
+        ep_flags = '--use_cuda'
+        if FLAGS.cuda_version is not None:
+            ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
+        if FLAGS.cuda_home is not None:
+            ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
+        if FLAGS.cudnn_home is not None:
+            ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
+        if FLAGS.ort_tensorrt:
+            ep_flags += ' --use_tensorrt'
+            if FLAGS.tensorrt_home is not None:
+                ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
+        if FLAGS.ort_openvino is not None:
+            ep_flags += ' --use_openvino CPU_FP32'
 
     df += '''
 WORKDIR /workspace/onnxruntime
@@ -196,11 +198,9 @@ RUN mkdir -p /opt/onnxruntime/include && \
     cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h \
        /opt/onnxruntime/include && \
     cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h \
-       /opt/onnxruntime/include
+       /opt/onnxruntime/include 
 
 RUN mkdir -p /opt/onnxruntime/lib && \
-    cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
-       /opt/onnxruntime/lib && \
     cp /workspace/build/Release/libonnxruntime_providers_shared.so \
        /opt/onnxruntime/lib && \
     cp /workspace/build/Release/libonnxruntime.so.${ONNXRUNTIME_VERSION} \
@@ -215,6 +215,14 @@ RUN mkdir -p /opt/onnxruntime/bin && \
        /opt/onnxruntime/bin && \
     (cd /opt/onnxruntime/bin && chmod a+x *)
 '''
+    if not FLAGS.cpu_only:
+        df += '''
+RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/cuda/cuda_provider_factory.h \
+       /opt/onnxruntime/include && \
+    cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
+       /opt/onnxruntime/lib    
+'''
+
 
     if FLAGS.ort_tensorrt:
         df += '''
@@ -309,20 +317,21 @@ ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
 '''
-
-    ep_flags = '--use_cuda'
-    if FLAGS.cuda_version is not None:
-        ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
-    if FLAGS.cuda_home is not None:
-        ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
-    if FLAGS.cudnn_home is not None:
-        ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
-    if FLAGS.ort_tensorrt:
-        ep_flags += ' --use_tensorrt'
-        if FLAGS.tensorrt_home is not None:
-            ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
-    if FLAGS.ort_openvino is not None:
-        ep_flags += ' --use_openvino CPU_FP32'
+    ep_flags = ''
+    if not FLAGS.cpu_only:
+        ep_flags = '--use_cuda'
+        if FLAGS.cuda_version is not None:
+            ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
+        if FLAGS.cuda_home is not None:
+            ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
+        if FLAGS.cudnn_home is not None:
+            ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
+        if FLAGS.ort_tensorrt:
+            ep_flags += ' --use_tensorrt'
+            if FLAGS.tensorrt_home is not None:
+                ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
+        if FLAGS.ort_openvino is not None:
+            ep_flags += ' --use_openvino CPU_FP32'
 
     df += '''
 WORKDIR /workspace/onnxruntime
@@ -344,18 +353,30 @@ WORKDIR /opt/onnxruntime/include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_c_api.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
-
+'''
+    if not FLAGS.cpu_only:
+        df += '''
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\cuda_provider_factory.h \\opt\\onnxruntime\\include
+'''
+    df += '''
 WORKDIR /opt/onnxruntime/bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
-
+'''
+    if not FLAGS.cpu_only:
+        df += '''
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
+'''
+    df += '''
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
+'''
+    if not FLAGS.cpu_only:
+        df += '''
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
 '''
 
     if FLAGS.ort_tensorrt:
@@ -389,6 +410,10 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='File to write Dockerfile to.')
+    parser.add_argument('--cpu-only',
+                        action="store_true",
+                        required=False,
+                        help='CPU only build.')
     parser.add_argument(
         '--target-platform',
         required=False,
@@ -433,51 +458,53 @@ if __name__ == '__main__':
             print("warning: OpenVINO not supported for windows, ignoring")
             FLAGS.ort_openvino = None
 
-        # Default to CUDA based on CUDA_PATH envvar and TensorRT in
-        # C:/tensorrt
-        if 'CUDA_PATH'in os.environ:
-            if FLAGS.cuda_home is None:
-                FLAGS.cuda_home = os.environ['CUDA_PATH']
-            elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
-                print("warning: --cuda-home does not match CUDA_PATH envvar")
+        if not FLAGS.cpu_only:
+            # Default to CUDA based on CUDA_PATH envvar and TensorRT in
+            # C:/tensorrt
+            if 'CUDA_PATH'in os.environ:
+                if FLAGS.cuda_home is None:
+                    FLAGS.cuda_home = os.environ['CUDA_PATH']
+                elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
+                    print("warning: --cuda-home does not match CUDA_PATH envvar")
 
-        if FLAGS.cudnn_home is None:
-            FLAGS.cudnn_home = FLAGS.cuda_home
+            if FLAGS.cudnn_home is None:
+                FLAGS.cudnn_home = FLAGS.cuda_home
 
-        version = None
-        m = re.match(r'.*v([1-9]?[0-9]+\.[0-9]+)$', FLAGS.cuda_home)
-        if m:
-            version = m.group(1)
+            version = None
+            m = re.match(r'.*v([1-9]?[0-9]+\.[0-9]+)$', FLAGS.cuda_home)
+            if m:
+                version = m.group(1)
 
-        if FLAGS.cuda_version is None:
-            FLAGS.cuda_version = version
-        elif FLAGS.cuda_version != version:
-            print("warning: --cuda-version does not match CUDA_PATH envvar")
+            if FLAGS.cuda_version is None:
+                FLAGS.cuda_version = version
+            elif FLAGS.cuda_version != version:
+                print("warning: --cuda-version does not match CUDA_PATH envvar")
 
-        if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
-            print("error: windows build requires --cuda-version and --cuda-home")
+            if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
+                print("error: windows build requires --cuda-version and --cuda-home")
 
-        if FLAGS.tensorrt_home is None:
-            FLAGS.tensorrt_home = '/tensorrt'
+            if FLAGS.tensorrt_home is None:
+                FLAGS.tensorrt_home = '/tensorrt'
 
         dockerfile_for_windows(FLAGS.output)
 
     else:
-        if 'CUDNN_VERSION'in os.environ:
-            version = None
-            m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
-            if m:
-                version = m.group(1)
-            if FLAGS.cudnn_home is None:
-                FLAGS.cudnn_home = '/usr/local/cudnn-{}/cuda'.format(version)
+        if not FLAGS.cpu_only:
+            if 'CUDNN_VERSION'in os.environ:
+                version = None
+                m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
+                if m:
+                    version = m.group(1)
+                if FLAGS.cudnn_home is None:
+                    FLAGS.cudnn_home = '/usr/local/cudnn-{}/cuda'.format(version)
 
-        if FLAGS.cuda_home is None:
-            FLAGS.cuda_home = '/usr/local/cuda'
+            if FLAGS.cuda_home is None:
+                FLAGS.cuda_home = '/usr/local/cuda'
 
-        if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
-            print("error: linux build requires --cudnn-home and --cuda-home")
+            if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
+                print("error: linux build requires --cudnn-home and --cuda-home")
 
-        if FLAGS.tensorrt_home is None:
-            FLAGS.tensorrt_home = '/usr/src/tensorrt'
+            if FLAGS.tensorrt_home is None:
+                FLAGS.tensorrt_home = '/usr/src/tensorrt'
 
         dockerfile_for_linux(FLAGS.output)
