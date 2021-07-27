@@ -324,8 +324,9 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 
   set(CPU_ONLY_EXTRA_ARGS "")
-  if (NOT RITON_ENABLE_GPU)
-    set(CPU_EXTRA_ARGS "--cpu-only")
+  if(NOT ${TRITON_ENABLE_GPU})
+    set(CPU_ONLY_EXTRA_ARGS "--cpu-only")
+    message(STATUS "Not using GPU")
   endif() # TRITON_CPU_ONLY
 
   if (WIN32)

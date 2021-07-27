@@ -101,6 +101,12 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86
         mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
         ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
     '''
+    else:
+        df += '''
+# Since base is likely to be Ubuntu therefore need to install more things
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git
+'''
 
     if FLAGS.ort_openvino is not None:
         df += '''
@@ -451,6 +457,7 @@ if __name__ == '__main__':
                         help='Home directory for TensorRT.')
 
     FLAGS = parser.parse_args()
+    print("cpu only is {}".format(FLAGS.cpu_only))
 
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
