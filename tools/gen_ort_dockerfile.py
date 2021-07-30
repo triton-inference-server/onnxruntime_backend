@@ -59,6 +59,8 @@ WORKDIR /workspace
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
+    dependencies = [
+        "wget","zip","ca-certificates","build-essential","cmake","curl","libcurl4-openssl-dev","libssl-dev", "patchelf", "python3-dev", "python3-pip","git", "gnupg", "gnupg1"]
     df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
@@ -91,7 +93,7 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86
     rm ~/miniconda.sh && \
     /opt/miniconda/bin/conda clean -ya
 '''
-    if not FLAGS.cpu_only:
+    if FLAGS.enable_gpu:
         df += '''
     # Allow configure to pick up cuDNN where it expects it.
     # (Note: $CUDNN_VERSION is defined by base image)
@@ -101,12 +103,6 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86
         mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
         ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
     '''
-    else:
-        df += '''
-# Since base is likely to be Ubuntu therefore need to install more things
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        git
-'''
 
     if FLAGS.ort_openvino is not None:
         df += '''
@@ -163,7 +159,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     '''
 
     ep_flags = ''
-    if not FLAGS.cpu_only:
+    if FLAGS.enable_gpu:
         ep_flags = '--use_cuda'
         if FLAGS.cuda_version is not None:
             ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
@@ -221,7 +217,7 @@ RUN mkdir -p /opt/onnxruntime/bin && \
        /opt/onnxruntime/bin && \
     (cd /opt/onnxruntime/bin && chmod a+x *)
 '''
-    if not FLAGS.cpu_only:
+    if FLAGS.enable_gpu:
         df += '''
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/cuda/cuda_provider_factory.h \
        /opt/onnxruntime/include && \
@@ -324,7 +320,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
     (cd onnxruntime && git submodule update --init --recursive)
 '''
     ep_flags = ''
-    if not FLAGS.cpu_only:
+    if FLAGS.enable_gpu:
         ep_flags = '--use_cuda'
         if FLAGS.cuda_version is not None:
             ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
@@ -360,7 +356,7 @@ RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxrunt
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
 '''
-    if not FLAGS.cpu_only:
+    if FLAGS.enable_gpu:
         df += '''
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\cuda_provider_factory.h \\opt\\onnxruntime\\include
 '''
@@ -371,7 +367,7 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll 
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
 '''
-    if not FLAGS.cpu_only:
+    if FLAGS.enable_gpu:
         df += '''
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
 '''
@@ -380,7 +376,7 @@ WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
-    if not FLAGS.cpu_only:
+    if FLAGS.enable_gpu:
         df += '''
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
 '''
@@ -416,7 +412,7 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='File to write Dockerfile to.')
-    parser.add_argument('--cpu-only',
+    parser.add_argument('--enable_gpu',
                         action="store_true",
                         required=False,
                         help='CPU only build.')
@@ -455,9 +451,14 @@ if __name__ == '__main__':
                         type=str,
                         required=False,
                         help='Home directory for TensorRT.')
+    
+    parser.add_argument('--common-repo-path',
+                        type=str,
+                        required=True,
+                        help='Path for add_dependencies.py.')
 
     FLAGS = parser.parse_args()
-    print("cpu only is {}".format(FLAGS.cpu_only))
+    print("cpu only is {}".format(not FLAGS.enable_gpu))
 
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
@@ -465,7 +466,7 @@ if __name__ == '__main__':
             print("warning: OpenVINO not supported for windows, ignoring")
             FLAGS.ort_openvino = None
 
-        if not FLAGS.cpu_only:
+        if FLAGS.enable_gpu:
             # Default to CUDA based on CUDA_PATH envvar and TensorRT in
             # C:/tensorrt
             if 'CUDA_PATH'in os.environ:
@@ -496,7 +497,7 @@ if __name__ == '__main__':
         dockerfile_for_windows(FLAGS.output)
 
     else:
-        if not FLAGS.cpu_only:
+        if FLAGS.enable_gpu:
             if 'CUDNN_VERSION'in os.environ:
                 version = None
                 m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
