@@ -59,6 +59,19 @@ WORKDIR /workspace
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
+
+    df += '''
+# Ensure apt-get won't prompt for selecting options
+ENV DEBIAN_FRONTEND=noninteractive
+
+# The Onnx Runtime dockerfile is the collection of steps in
+# https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
+
+# Install dependencies from
+# onnxruntime/dockerfiles/scripts/install_common_deps.sh. We don't run
+# that script directly because we don't want cmake installed from that
+# file. 
+'''
     dependencies = [
         "wget",
         "zip",
@@ -184,8 +197,8 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
             ep_flags += ' --use_tensorrt'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
-        if FLAGS.ort_openvino is not None:
-            ep_flags += ' --use_openvino CPU_FP32'
+    if FLAGS.ort_openvino is not None:
+        ep_flags += ' --use_openvino CPU_FP32'
 
     df += '''
 WORKDIR /workspace/onnxruntime
