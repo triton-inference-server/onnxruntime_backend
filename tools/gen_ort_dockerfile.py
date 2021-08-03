@@ -60,7 +60,20 @@ WORKDIR /workspace
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
     dependencies = [
-        "wget","zip","ca-certificates","build-essential","cmake","curl","libcurl4-openssl-dev","libssl-dev", "patchelf", "python3-dev", "python3-pip","git", "gnupg", "gnupg1"]
+        "wget",
+        "zip",
+        "ca-certificates",
+        "build-essential",
+        "cmake",
+        "curl",
+        "libcurl4-openssl-dev",
+        "libssl-dev", 
+        "patchelf", 
+        "python3-dev", 
+        "python3-pip",
+        "git", 
+        "gnupg", 
+        "gnupg1"]
     df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
