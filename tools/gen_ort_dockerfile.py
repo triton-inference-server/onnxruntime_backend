@@ -441,7 +441,7 @@ if __name__ == '__main__':
     parser.add_argument('--enable_gpu',
                         action="store_true",
                         required=False,
-                        help='CPU only build.')
+                        help='If true, enable GPU support ORT.')
     parser.add_argument(
         '--target-platform',
         required=False,
@@ -484,8 +484,7 @@ if __name__ == '__main__':
                         help='Path for add_dependencies.py.')
 
     FLAGS = parser.parse_args()
-    print("cpu only is {}".format(not FLAGS.enable_gpu))
-
+    
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
         if FLAGS.ort_openvino is not None:
