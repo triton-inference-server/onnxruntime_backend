@@ -102,7 +102,7 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86
         ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
         mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
         ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
-    '''
+'''
 
     if FLAGS.ort_openvino is not None:
         df += '''
@@ -391,51 +391,50 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.li
 
 
 def preprocess_gpu_flags():
-    if FLAGS.enable_gpu:
-        if target_platform() == 'windows': 
-            # Default to CUDA based on CUDA_PATH envvar and TensorRT in
-            # C:/tensorrt
-            if 'CUDA_PATH'in os.environ:
-                if FLAGS.cuda_home is None:
-                    FLAGS.cuda_home = os.environ['CUDA_PATH']
-                elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
-                    print("warning: --cuda-home does not match CUDA_PATH envvar")
+    if target_platform() == 'windows': 
+        # Default to CUDA based on CUDA_PATH envvar and TensorRT in
+        # C:/tensorrt
+        if 'CUDA_PATH'in os.environ:
+            if FLAGS.cuda_home is None:
+                FLAGS.cuda_home = os.environ['CUDA_PATH']
+            elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
+                print("warning: --cuda-home does not match CUDA_PATH envvar")
 
-            if FLAGS.cudnn_home is None:
-                FLAGS.cudnn_home = FLAGS.cuda_home
+        if FLAGS.cudnn_home is None:
+            FLAGS.cudnn_home = FLAGS.cuda_home
 
+        version = None
+        m = re.match(r'.*v([1-9]?[0-9]+\.[0-9]+)$', FLAGS.cuda_home)
+        if m:
+            version = m.group(1)
+
+        if FLAGS.cuda_version is None:
+            FLAGS.cuda_version = version
+        elif FLAGS.cuda_version != version:
+            print("warning: --cuda-version does not match CUDA_PATH envvar")
+
+        if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
+            print("error: windows build requires --cuda-version and --cuda-home")
+
+        if FLAGS.tensorrt_home is None:
+            FLAGS.tensorrt_home = '/tensorrt'
+    else:
+        if 'CUDNN_VERSION'in os.environ:
             version = None
-            m = re.match(r'.*v([1-9]?[0-9]+\.[0-9]+)$', FLAGS.cuda_home)
+            m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
             if m:
                 version = m.group(1)
+            if FLAGS.cudnn_home is None:
+                FLAGS.cudnn_home = '/usr/local/cudnn-{}/cuda'.format(version)
 
-            if FLAGS.cuda_version is None:
-                FLAGS.cuda_version = version
-            elif FLAGS.cuda_version != version:
-                print("warning: --cuda-version does not match CUDA_PATH envvar")
+        if FLAGS.cuda_home is None:
+            FLAGS.cuda_home = '/usr/local/cuda'
 
-            if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
-                print("error: windows build requires --cuda-version and --cuda-home")
+        if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
+            print("error: linux build requires --cudnn-home and --cuda-home")
 
-            if FLAGS.tensorrt_home is None:
-                FLAGS.tensorrt_home = '/tensorrt'
-        else:
-            if 'CUDNN_VERSION'in os.environ:
-                version = None
-                m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
-                if m:
-                    version = m.group(1)
-                if FLAGS.cudnn_home is None:
-                    FLAGS.cudnn_home = '/usr/local/cudnn-{}/cuda'.format(version)
-
-            if FLAGS.cuda_home is None:
-                FLAGS.cuda_home = '/usr/local/cuda'
-
-            if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
-                print("error: linux build requires --cudnn-home and --cuda-home")
-
-            if FLAGS.tensorrt_home is None:
-                FLAGS.tensorrt_home = '/usr/src/tensorrt'
+        if FLAGS.tensorrt_home is None:
+            FLAGS.tensorrt_home = '/usr/src/tensorrt'
 
 
 if __name__ == '__main__':
@@ -494,7 +493,8 @@ if __name__ == '__main__':
                         help='Home directory for TensorRT.')
 
     FLAGS = parser.parse_args()
-    preprocess_gpu_flags()
+    if FLAGS.enable_gpu:
+        preprocess_gpu_flags()
 
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
