@@ -63,37 +63,8 @@ def dockerfile_for_linux(output_file):
     df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
-
 # The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
-
-# Install dependencies from
-# onnxruntime/dockerfiles/scripts/install_common_deps.sh. We don't run
-# that script directly because we don't want cmake installed from that
-# file. 
-'''
-    dependencies = [
-        "wget",
-        "zip",
-        "ca-certificates",
-        "build-essential",
-        "cmake",
-        "curl",
-        "libcurl4-openssl-dev",
-        "libssl-dev", 
-        "patchelf", 
-        "python3-dev", 
-        "python3-pip",
-        "git", 
-        "gnupg", 
-        "gnupg1"]
-    df += '''
-# Ensure apt-get won't prompt for selecting options
-ENV DEBIAN_FRONTEND=noninteractive
-
-# The Onnx Runtime dockerfile is the collection of steps in
-# https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
-
 # Install dependencies from
 # onnxruntime/dockerfiles/scripts/install_common_deps.sh.
 # Dependencies: cmake. ORT requires min version 3.18. Currently ORT uses 3.21 so keeping the version in sync.
@@ -101,7 +72,6 @@ Run wget --quiet https://github.com/Kitware/CMake/releases/download/v3.21.0/cmak
     tar zxf cmake-3.21.0-linux-x86_64.tar.gz && \
     rm -rf cmake-3.21.0-linux-x86_64.tar.gz
 ENV PATH /workspace/cmake-3.21.0-linux-x86_64/bin:${PATH}
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         zip \
@@ -112,7 +82,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl-dev \
         patchelf \
         python3-dev \
-        python3-pip
+        python3-pip \
+        git \
+        gnupg \ 
+        gnupg1
+
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh \
          -O ~/miniconda.sh --no-check-certificate && \
     /bin/bash ~/miniconda.sh -b -p /opt/miniconda && \
@@ -358,8 +332,8 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
             ep_flags += ' --use_tensorrt'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
-        if FLAGS.ort_openvino is not None:
-            ep_flags += ' --use_openvino CPU_FP32'
+    if FLAGS.ort_openvino is not None:
+        ep_flags += ' --use_openvino CPU_FP32'
 
     df += '''
 WORKDIR /workspace/onnxruntime
@@ -478,13 +452,8 @@ if __name__ == '__main__':
                         required=False,
                         help='Home directory for TensorRT.')
     
-    parser.add_argument('--common-repo-path',
-                        type=str,
-                        required=True,
-                        help='Path for add_dependencies.py.')
-
     FLAGS = parser.parse_args()
-    
+
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
         if FLAGS.ort_openvino is not None:
