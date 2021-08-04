@@ -32,6 +32,12 @@ import re
 
 FLAGS = None
 
+## TEMPORARY: Using the master commit id until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
+# For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
+# use this commit from master branch instead of using rel-1.8.1
+# From ORT 1.9 onwards we will switch back to using rel-* branches
+ONNXRuntime_MasterCommitId = "d14b08d09cee43b42fa9ac361a78d1cbdbceddef"
+
 
 def target_platform():
     if FLAGS.target_platform is not None:
@@ -43,8 +49,9 @@ def dockerfile_common():
     df = '''
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
+ARG ONNXRUNTIME_MASTERCOMMIT={}
 ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
-'''.format(FLAGS.triton_container, FLAGS.ort_version)
+'''.format(FLAGS.triton_container, FLAGS.ort_version, ONNXRuntime_MasterCommitId)
 
     if FLAGS.ort_openvino is not None:
         df += '''
@@ -68,15 +75,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 # https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
 
 # Install dependencies from
-# onnxruntime/dockerfiles/scripts/install_common_deps.sh. We don't run
-# that script directly because we don't want cmake installed from that
-# file.
+# onnxruntime/dockerfiles/scripts/install_common_deps.sh.
+# Dependencies: cmake. ORT requires min version 3.18. Currently ORT uses 3.21 so keeping the version in sync.
+Run wget --quiet https://github.com/Kitware/CMake/releases/download/v3.21.0/cmake-3.21.0-linux-x86_64.tar.gz && \
+    tar zxf cmake-3.21.0-linux-x86_64.tar.gz && \
+    rm -rf cmake-3.21.0-linux-x86_64.tar.gz
+ENV PATH /workspace/cmake-3.21.0-linux-x86_64/bin:${PATH}
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         zip \
         ca-certificates \
         build-essential \
-        cmake \
         curl \
         libcurl4-openssl-dev \
         libssl-dev \
@@ -125,18 +135,32 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
     dpkg -i *.deb && rm -rf *.deb
 '''
+    if FLAGS.ort_version == "1.8.1":
+        df += '''
+    #
+    # ONNX Runtime build
+    #
+    ARG ONNXRUNTIME_VERSION
+    ARG ONNXRUNTIME_REPO
+    ARG ONNXRUNTIME_MASTERCOMMIT
 
-    df += '''
-#
-# ONNX Runtime build
-#
-ARG ONNXRUNTIME_VERSION
-ARG ONNXRUNTIME_REPO
+    RUN git clone -b master --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+        (cd onnxruntime && git reset --hard ${ONNXRUNTIME_MASTERCOMMIT}) && \
+        (cd onnxruntime && git submodule update --init --recursive)
 
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-    (cd onnxruntime && git submodule update --init --recursive)
+       '''
+    else:
+        df += '''
+    #
+    # ONNX Runtime build
+    #
+    ARG ONNXRUNTIME_VERSION
+    ARG ONNXRUNTIME_REPO
 
-'''
+    RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+        (cd onnxruntime && git submodule update --init --recursive)
+
+    '''
 
     ep_flags = '--use_cuda'
     if FLAGS.cuda_version is not None:
@@ -175,8 +199,6 @@ RUN mkdir -p /opt/onnxruntime/include && \
     cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h \
        /opt/onnxruntime/include && \
     cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h \
-       /opt/onnxruntime/include && \
-    cp /workspace/onnxruntime/include/onnxruntime/core/providers/cuda/cuda_provider_factory.h \
        /opt/onnxruntime/include
 
 RUN mkdir -p /opt/onnxruntime/lib && \
@@ -260,7 +282,22 @@ RUN mkdir -p /opt/onnxruntime/test && \
 
 def dockerfile_for_windows(output_file):
     df = dockerfile_common()
-    df += '''
+    if FLAGS.ort_version == "1.8.1":
+        df += '''
+SHELL ["cmd", "/S", "/C"]
+
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_MASTERCOMMIT
+RUN git clone -b master --recursive %ONNXRUNTIME_REPO% onnxruntime && \
+    (cd onnxruntime && git reset --hard %ONNXRUNTIME_MASTERCOMMIT%) && \
+    (cd onnxruntime && git submodule update --init --recursive)
+'''
+    else:
+        df += '''
 SHELL ["cmd", "/S", "/C"]
 
 #
@@ -306,7 +343,6 @@ WORKDIR /opt/onnxruntime/include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_c_api.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\cuda_provider_factory.h \\opt\\onnxruntime\\include
 
 WORKDIR /opt/onnxruntime/bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
