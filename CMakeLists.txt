@@ -324,7 +324,6 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   set(ENABLE_GPU_EXTRA_ARGS "")
   if(${TRITON_ENABLE_GPU})
     set(ENABLE_GPU_EXTRA_ARGS "--enable-gpu")
-    message(STATUS "Using GPU")
   endif() # TRITON_ENABLE_GPU
 
   if (WIN32)

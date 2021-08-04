@@ -355,29 +355,22 @@ WORKDIR /opt/onnxruntime/include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_c_api.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
-'''
-    if FLAGS.enable_gpu:
-        df += '''
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\cuda_provider_factory.h \\opt\\onnxruntime\\include
-'''
-    df += '''
 WORKDIR /opt/onnxruntime/bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
-'''
-    if FLAGS.enable_gpu:
-        df += '''
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
-'''
-    df += '''
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
     if FLAGS.enable_gpu:
         df += '''
+WORKDIR /opt/onnxruntime/include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\cuda_provider_factory.h \\opt\\onnxruntime\\include
+WORKDIR /opt/onnxruntime/bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
+WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
 '''
 
@@ -395,6 +388,54 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.li
 '''
     with open(output_file, "w") as dfile:
         dfile.write(df)
+
+
+def preprocess_gpu_flags():
+    if FLAGS.enable_gpu:
+        if target_platform() == 'windows': 
+            # Default to CUDA based on CUDA_PATH envvar and TensorRT in
+            # C:/tensorrt
+            if 'CUDA_PATH'in os.environ:
+                if FLAGS.cuda_home is None:
+                    FLAGS.cuda_home = os.environ['CUDA_PATH']
+                elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
+                    print("warning: --cuda-home does not match CUDA_PATH envvar")
+
+            if FLAGS.cudnn_home is None:
+                FLAGS.cudnn_home = FLAGS.cuda_home
+
+            version = None
+            m = re.match(r'.*v([1-9]?[0-9]+\.[0-9]+)$', FLAGS.cuda_home)
+            if m:
+                version = m.group(1)
+
+            if FLAGS.cuda_version is None:
+                FLAGS.cuda_version = version
+            elif FLAGS.cuda_version != version:
+                print("warning: --cuda-version does not match CUDA_PATH envvar")
+
+            if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
+                print("error: windows build requires --cuda-version and --cuda-home")
+
+            if FLAGS.tensorrt_home is None:
+                FLAGS.tensorrt_home = '/tensorrt'
+        else:
+            if 'CUDNN_VERSION'in os.environ:
+                version = None
+                m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
+                if m:
+                    version = m.group(1)
+                if FLAGS.cudnn_home is None:
+                    FLAGS.cudnn_home = '/usr/local/cudnn-{}/cuda'.format(version)
+
+            if FLAGS.cuda_home is None:
+                FLAGS.cuda_home = '/usr/local/cuda'
+
+            if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
+                print("error: linux build requires --cudnn-home and --cuda-home")
+
+            if FLAGS.tensorrt_home is None:
+                FLAGS.tensorrt_home = '/usr/src/tensorrt'
 
 
 if __name__ == '__main__':
@@ -451,62 +492,15 @@ if __name__ == '__main__':
                         type=str,
                         required=False,
                         help='Home directory for TensorRT.')
-    
+
     FLAGS = parser.parse_args()
+    preprocess_gpu_flags()
 
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
         if FLAGS.ort_openvino is not None:
             print("warning: OpenVINO not supported for windows, ignoring")
             FLAGS.ort_openvino = None
-
-        if FLAGS.enable_gpu:
-            # Default to CUDA based on CUDA_PATH envvar and TensorRT in
-            # C:/tensorrt
-            if 'CUDA_PATH'in os.environ:
-                if FLAGS.cuda_home is None:
-                    FLAGS.cuda_home = os.environ['CUDA_PATH']
-                elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
-                    print("warning: --cuda-home does not match CUDA_PATH envvar")
-
-            if FLAGS.cudnn_home is None:
-                FLAGS.cudnn_home = FLAGS.cuda_home
-
-            version = None
-            m = re.match(r'.*v([1-9]?[0-9]+\.[0-9]+)$', FLAGS.cuda_home)
-            if m:
-                version = m.group(1)
-
-            if FLAGS.cuda_version is None:
-                FLAGS.cuda_version = version
-            elif FLAGS.cuda_version != version:
-                print("warning: --cuda-version does not match CUDA_PATH envvar")
-
-            if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
-                print("error: windows build requires --cuda-version and --cuda-home")
-
-            if FLAGS.tensorrt_home is None:
-                FLAGS.tensorrt_home = '/tensorrt'
-
         dockerfile_for_windows(FLAGS.output)
-
     else:
-        if FLAGS.enable_gpu:
-            if 'CUDNN_VERSION'in os.environ:
-                version = None
-                m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
-                if m:
-                    version = m.group(1)
-                if FLAGS.cudnn_home is None:
-                    FLAGS.cudnn_home = '/usr/local/cudnn-{}/cuda'.format(version)
-
-            if FLAGS.cuda_home is None:
-                FLAGS.cuda_home = '/usr/local/cuda'
-
-            if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
-                print("error: linux build requires --cudnn-home and --cuda-home")
-
-            if FLAGS.tensorrt_home is None:
-                FLAGS.tensorrt_home = '/usr/src/tensorrt'
-
         dockerfile_for_linux(FLAGS.output)
