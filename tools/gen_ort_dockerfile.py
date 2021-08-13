@@ -42,9 +42,8 @@ def dockerfile_common():
     df = '''
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
-ARG ONNXRUNTIME_MASTERCOMMIT={}
 ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
-'''.format(FLAGS.triton_container, FLAGS.ort_version, ONNXRuntime_MasterCommitId)
+'''.format(FLAGS.triton_container, FLAGS.ort_version)
 
     if FLAGS.ort_openvino is not None:
         df += '''
@@ -130,7 +129,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 '''
    ## TEMPORARY: Using the tensorrt-8.0 brnach until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
    # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
-   # use this commit from master branch instead of using rel-1.8.1
+   # use tensorrt-8.0 branch instead of using rel-1.8.1
    # From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
         df += '''
@@ -280,7 +279,7 @@ def dockerfile_for_windows(output_file):
 
     ## TEMPORARY: Using the tensorrt-8.0 brnach until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
     # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
-    # use this commit from master branch instead of using rel-1.8.1
+    # use tensorrt-8.0 branch instead of using rel-1.8.1
     # From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
         df += '''
