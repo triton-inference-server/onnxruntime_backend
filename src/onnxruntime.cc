@@ -832,8 +832,8 @@ ModelInstanceState::ValidateBooleanSequenceControl(
   std::string tensor_datatype;
   RETURN_IF_ERROR(GetBooleanSequenceControlProperties(
       sequence_batching, model_state_->Name(), control_kind, required,
-      &tensor_name, &tensor_datatype, nullptr, nullptr, nullptr, nullptr,
-      nullptr, nullptr));
+      &tensor_name, &tensor_datatype, nullptr, nullptr, nullptr, nullptr));
+
   *have_control = !tensor_name.empty();
   if (*have_control) {
     OnnxTensorInfoMap input_tensor_infos;
