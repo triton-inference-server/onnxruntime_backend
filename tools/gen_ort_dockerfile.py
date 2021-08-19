@@ -32,13 +32,6 @@ import re
 
 FLAGS = None
 
-## TEMPORARY: Using the master commit id until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
-# For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
-# use this commit from master branch instead of using rel-1.8.1
-# From ORT 1.9 onwards we will switch back to using rel-* branches
-ONNXRuntime_MasterCommitId = "d14b08d09cee43b42fa9ac361a78d1cbdbceddef"
-
-
 def target_platform():
     if FLAGS.target_platform is not None:
         return FLAGS.target_platform
@@ -49,9 +42,8 @@ def dockerfile_common():
     df = '''
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
-ARG ONNXRUNTIME_MASTERCOMMIT={}
 ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
-'''.format(FLAGS.triton_container, FLAGS.ort_version, ONNXRuntime_MasterCommitId)
+'''.format(FLAGS.triton_container, FLAGS.ort_version)
 
     if FLAGS.ort_openvino is not None:
         df += '''
@@ -135,6 +127,10 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
     dpkg -i *.deb && rm -rf *.deb
 '''
+   ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
+   # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
+   # use tensorrt-8.0 branch instead of using rel-1.8.1
+   # From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
         df += '''
     #
@@ -142,10 +138,8 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     #
     ARG ONNXRUNTIME_VERSION
     ARG ONNXRUNTIME_REPO
-    ARG ONNXRUNTIME_MASTERCOMMIT
 
-    RUN git clone -b master --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git reset --hard ${ONNXRUNTIME_MASTERCOMMIT}) && \
+    RUN git clone -b tensorrt-8.0 --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
 
        '''
@@ -178,7 +172,10 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 
     df += '''
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --use_openmp --build_dir /workspace/build"
+ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
+'''
+
+    df += '''
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 '''.format(ep_flags)
 
@@ -282,6 +279,11 @@ RUN mkdir -p /opt/onnxruntime/test && \
 
 def dockerfile_for_windows(output_file):
     df = dockerfile_common()
+
+   ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
+   # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
+   # use tensorrt-8.0 branch instead of using rel-1.8.1
+   # From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
         df += '''
 SHELL ["cmd", "/S", "/C"]
@@ -291,9 +293,7 @@ SHELL ["cmd", "/S", "/C"]
 #
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
-ARG ONNXRUNTIME_MASTERCOMMIT
-RUN git clone -b master --recursive %ONNXRUNTIME_REPO% onnxruntime && \
-    (cd onnxruntime && git reset --hard %ONNXRUNTIME_MASTERCOMMIT%) && \
+RUN git clone -b tensorrt-8.0 --recursive %ONNXRUNTIME_REPO% onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
 '''
     else:
@@ -327,7 +327,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\BuildTools\Common7\Tools\VsDevCmd.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --skip_submodule_sync --build_shared_lib --use_openmp --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --skip_submodule_sync --build_shared_lib --use_openmp --update --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' --build --build_dir /workspace/build {}
 '''.format(ep_flags)
 
     df += '''
