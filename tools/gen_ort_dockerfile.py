@@ -127,7 +127,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
     dpkg -i *.deb && rm -rf *.deb
 '''
-   ## TEMPORARY: Using the tensorrt-8.0 brnach until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
+   ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
    # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
    # use tensorrt-8.0 branch instead of using rel-1.8.1
    # From ORT 1.9 onwards we will switch back to using rel-* branches
@@ -172,7 +172,10 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 
     df += '''
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --use_openmp --build_dir /workspace/build"
+ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
+'''
+
+    df += '''
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 '''.format(ep_flags)
 
@@ -277,7 +280,7 @@ RUN mkdir -p /opt/onnxruntime/test && \
 def dockerfile_for_windows(output_file):
     df = dockerfile_common()
 
-    ## TEMPORARY: Using the tensorrt-8.0 brnach until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
+    ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
     # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
     # use tensorrt-8.0 branch instead of using rel-1.8.1
     # From ORT 1.9 onwards we will switch back to using rel-* branches
@@ -325,7 +328,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\BuildTools\Common7\Tools\VsDevCmd.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --skip_submodule_sync --build_shared_lib --use_openmp --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --skip_submodule_sync --build_shared_lib --use_openmp --update --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' --build --build_dir /workspace/build {}
 '''.format(ep_flags)
 
     df += '''
