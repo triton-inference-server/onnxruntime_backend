@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -59,12 +59,13 @@ WORKDIR /workspace
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
-
     df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
+
 # The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
+
 # Install dependencies from
 # onnxruntime/dockerfiles/scripts/install_common_deps.sh.
 # Dependencies: cmake. ORT requires min version 3.18. Currently ORT uses 3.21 so keeping the version in sync.
@@ -72,6 +73,7 @@ Run wget --quiet https://github.com/Kitware/CMake/releases/download/v3.21.0/cmak
     tar zxf cmake-3.21.0-linux-x86_64.tar.gz && \
     rm -rf cmake-3.21.0-linux-x86_64.tar.gz
 ENV PATH /workspace/cmake-3.21.0-linux-x86_64/bin:${PATH}
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         zip \
@@ -154,6 +156,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     #
     ARG ONNXRUNTIME_VERSION
     ARG ONNXRUNTIME_REPO
+
     RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
     '''
@@ -200,7 +203,7 @@ RUN mkdir -p /opt/onnxruntime/include && \
     cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h \
        /opt/onnxruntime/include && \
     cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h \
-       /opt/onnxruntime/include 
+       /opt/onnxruntime/include
 
 RUN mkdir -p /opt/onnxruntime/lib && \
     cp /workspace/build/Release/libonnxruntime_providers_shared.so \
@@ -219,9 +222,7 @@ RUN mkdir -p /opt/onnxruntime/bin && \
 '''
     if FLAGS.enable_gpu:
         df += '''
-RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/cuda/cuda_provider_factory.h \
-       /opt/onnxruntime/include && \
-    cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
+RUN cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
        /opt/onnxruntime/lib    
 '''
 
@@ -355,19 +356,19 @@ WORKDIR /opt/onnxruntime/include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_c_api.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
+
 WORKDIR /opt/onnxruntime/bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
 RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
+
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
     if FLAGS.enable_gpu:
         df += '''
-WORKDIR /opt/onnxruntime/include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cuda\\cuda_provider_factory.h \\opt\\onnxruntime\\include
 WORKDIR /opt/onnxruntime/bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
 WORKDIR /opt/onnxruntime/lib
