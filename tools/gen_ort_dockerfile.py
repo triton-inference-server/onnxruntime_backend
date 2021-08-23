@@ -66,14 +66,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
 
-# Install dependencies from
-# onnxruntime/dockerfiles/scripts/install_common_deps.sh.
-# Dependencies: cmake. ORT requires min version 3.18. Currently ORT uses 3.21 so keeping the version in sync.
-Run wget --quiet https://github.com/Kitware/CMake/releases/download/v3.21.0/cmake-3.21.0-linux-x86_64.tar.gz && \
-    tar zxf cmake-3.21.0-linux-x86_64.tar.gz && \
-    rm -rf cmake-3.21.0-linux-x86_64.tar.gz
-ENV PATH /workspace/cmake-3.21.0-linux-x86_64/bin:${PATH}
-
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         zip \
@@ -88,6 +80,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
         gnupg \ 
         gnupg1
+
+# Install dependencies from
+# onnxruntime/dockerfiles/scripts/install_common_deps.sh.
+# Dependencies: cmake. ORT requires min version 3.18. Currently ORT uses 3.21 so keeping the version in sync.
+Run wget --quiet https://github.com/Kitware/CMake/releases/download/v3.21.0/cmake-3.21.0-linux-x86_64.tar.gz && \
+    tar zxf cmake-3.21.0-linux-x86_64.tar.gz && \
+    rm -rf cmake-3.21.0-linux-x86_64.tar.gz
+ENV PATH /workspace/cmake-3.21.0-linux-x86_64/bin:${PATH}
 
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh \
          -O ~/miniconda.sh --no-check-certificate && \
@@ -453,7 +453,7 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='File to write Dockerfile to.')
-    parser.add_argument('--enable_gpu',
+    parser.add_argument('--enable-gpu',
                         action="store_true",
                         required=False,
                         help='If true, enable GPU support ORT.')
