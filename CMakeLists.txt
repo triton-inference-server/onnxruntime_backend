@@ -67,7 +67,7 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #     version that is compatible with the specified version of ONNX
 #     Runtime.
 #
-#   - If you want to diable GPU usage, set TRITON_ENABLE_GPU=OFF. 
+#   - If you want to disable GPU usage, set TRITON_ENABLE_GPU=OFF. 
 #    This will make builds with CUDA and TensorRT flags to fail. 
 #
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
@@ -100,7 +100,7 @@ endif() # WIN32
 
 if (NOT TRITON_ENABLE_GPU)
   if (TRITON_ENABLE_ONNXRUNTIME_TENSORRT)
-    message(FATAL_ERROR "TRITON_ENABLE_GPU=OFF not compatible with TRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON")
+    message(FATAL_ERROR "TRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON requires TRITON_ENABLE_GPU=ON")
   endif() # TRITON_ENABLE_ONNXRUNTIME_TENSORRT
 endif() # NOT TRITON_ENABLE_GPU
 

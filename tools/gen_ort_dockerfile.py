@@ -94,16 +94,17 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86
     /bin/bash ~/miniconda.sh -b -p /opt/miniconda && \
     rm ~/miniconda.sh && \
     /opt/miniconda/bin/conda clean -ya
+
 '''
     if FLAGS.enable_gpu:
         df += '''
-    # Allow configure to pick up cuDNN where it expects it.
-    # (Note: $CUDNN_VERSION is defined by base image)
-    RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
-        mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
-        ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
-        mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
-        ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
+# Allow configure to pick up cuDNN where it expects it.
+# (Note: $CUDNN_VERSION is defined by base image)
+RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
+    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
+    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 '''
 
     if FLAGS.ort_openvino is not None:
@@ -159,7 +160,8 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 
     RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
-    '''
+
+        '''
 
     ep_flags = ''
     if FLAGS.enable_gpu:
@@ -367,12 +369,13 @@ WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
+
     if FLAGS.enable_gpu:
         df += '''
-WORKDIR /opt/onnxruntime/bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
+WORKDIR /opt/onnxruntime/bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
 '''
 
     if FLAGS.ort_tensorrt:
@@ -456,7 +459,7 @@ if __name__ == '__main__':
     parser.add_argument('--enable-gpu',
                         action="store_true",
                         required=False,
-                        help='If true, enable GPU support ORT.')
+                        help='Enable GPU support')
     parser.add_argument(
         '--target-platform',
         required=False,
