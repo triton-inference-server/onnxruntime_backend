@@ -128,13 +128,15 @@ ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/in
 ENV InferenceEngine_DIR=$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/share
 ENV ngraph_DIR=$INTEL_OPENVINO_DIR/deployment_tools/ngraph/cmake
 
+# From 2021.3 onwards, install_openvino_dependencies defaults to enabling interactive mode.
+# We use -y to force non-interactive mode.
 RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
     apt-key add GPG-PUB-KEY-INTEL-OPENVINO-2021 && rm GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
     cd /etc/apt/sources.list.d && \
     echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
     apt update && \
     apt install -y intel-openvino-dev-ubuntu20-${ONNXRUNTIME_OPENVINO_VERSION} && \
-    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh
+    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh -y
 
 ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
 RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
