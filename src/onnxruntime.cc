@@ -268,7 +268,7 @@ ModelState::LoadModel(
                         trt_options.trt_fp16_enable = 1;
                       } else if (value_string == "INT8") {
                         trt_options.trt_int8_enable = 1;
-                        trt_options.trt_int8_calibration_table_name = &int8_calibration_table_name;
+                        trt_options.trt_int8_calibration_table_name = int8_calibration_table_name.c_str();
                       } else if (value_string != "FP32") {
                         RETURN_ERROR_IF_FALSE(
                             false, TRITONSERVER_ERROR_INVALID_ARG,
@@ -286,7 +286,7 @@ ModelState::LoadModel(
                     } else if (param_key == "int8_calibration_table_name") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &int8_calibration_table_name));
-                      trt_options.trt_int8_calibration_table_name = &int8_calibration_table_name;
+                      trt_options.trt_int8_calibration_table_name = int8_calibration_table_name.c_str();
                     } else if (param_key == "int8_use_native_calibration_table") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
@@ -304,7 +304,7 @@ ModelState::LoadModel(
                     } else if (param_key == "trt_engine_cache_path") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &trt_engine_cache_path));
-                      trt_options.engine_cache_path = &trt_engine_cache_path;
+                      trt_options.trt_engine_cache_path = trt_engine_cache_path.c_str();
                     } else {
                       return TRITONSERVER_ErrorNew(
                           TRITONSERVER_ERROR_INVALID_ARG,
