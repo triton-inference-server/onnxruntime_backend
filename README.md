@@ -86,8 +86,12 @@ $ make install
 TensorRT can be used in conjunction with an ONNX model to further optimize the performance. To enable TensorRT optimization you must set the model configuration appropriately. There are several optimizations available for TensorRT, like selection of the compute precision and workspace size. The optimization parameters and their description are as follows.
 
 
-* `precision_mode`: The precision used for optimization. Allowed values are "FP32" and "FP16". Default value is "FP32".
+* `precision_mode`: The precision used for optimization. Allowed values are "FP32", "FP16" and "INT8". Default value is "FP32".
 * `max_workspace_size_bytes`: The maximum GPU memory the model can use temporarily during execution. Default value is 1GB.
+* `int8_calibration_table_name`: Specify INT8 calibration table name. Default is “INT8_calibration_table”. Applicable when precision_mode=="INT8".
+* `int8_use_native_calibration_table`: Calibration table to use. Allowed values are 1 (use native TensorRT generated calibration table) and 0 (use ORT generated calibration table). Default is 0. **Note: Latest calibration table file needs to be copied to trt_engine_cache_path before inference. Calibration table is specific to models and calibration data sets. Whenever new calibration table is generated, old file in the path should be cleaned up or be replaced.
+* `trt_engine_cache_enable`: Enable engine caching.
+* `trt_engine_cache_path`: Specify engine cache path.
 
 The section of model config file specifying these parameters will look like:
 
