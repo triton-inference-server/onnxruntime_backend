@@ -340,7 +340,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 
     df += '''
 WORKDIR /workspace/onnxruntime
-ARG VS_DEVCMD_BAT="\BuildTools\Common7\Tools\VsDevCmd.bat"
+ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
 RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=52;60;61;70;75;80;86" --skip_submodule_sync --build_shared_lib --update --build --build_dir /workspace/build {}
 '''.format(ep_flags)
