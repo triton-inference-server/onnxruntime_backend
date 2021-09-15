@@ -67,6 +67,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common \
         wget \
         zip \
         ca-certificates \
@@ -83,11 +84,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install dependencies from
 # onnxruntime/dockerfiles/scripts/install_common_deps.sh.
-# Dependencies: cmake. ORT requires min version 3.18. Currently ORT uses 3.21 so keeping the version in sync.
-Run wget --quiet https://github.com/Kitware/CMake/releases/download/v3.21.0/cmake-3.21.0-linux-x86_64.tar.gz && \
-    tar zxf cmake-3.21.0-linux-x86_64.tar.gz && \
-    rm -rf cmake-3.21.0-linux-x86_64.tar.gz
-ENV PATH /workspace/cmake-3.21.0-linux-x86_64/bin:${PATH}
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
+      gpg --dearmor - |  \
+      tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      cmake-data=3.21.1-0kitware1ubuntu20.04.1 cmake=3.21.1-0kitware1ubuntu20.04.1 && \
+    cmake --version
 
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh \
          -O ~/miniconda.sh --no-check-certificate && \
