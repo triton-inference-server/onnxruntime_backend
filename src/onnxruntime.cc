@@ -133,8 +133,6 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->CreateSessionOptions(&soptions));
   session_options_.reset(soptions);
 
-  THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->SetIntraOpNumThreads(soptions, 1));
-
   GraphOptimizationLevel optimization_level =
       GraphOptimizationLevel::ORT_ENABLE_ALL;
   {
