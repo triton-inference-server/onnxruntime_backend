@@ -93,12 +93,6 @@ RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/nul
       cmake-data=3.21.1-0kitware1ubuntu20.04.1 cmake=3.21.1-0kitware1ubuntu20.04.1 && \
     cmake --version
 
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh \
-         -O ~/miniconda.sh --no-check-certificate && \
-    /bin/bash ~/miniconda.sh -b -p /opt/miniconda && \
-    rm ~/miniconda.sh && \
-    /opt/miniconda/bin/conda clean -ya
-
 '''
     if FLAGS.enable_gpu:
         df += '''
