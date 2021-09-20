@@ -88,6 +88,9 @@ set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
 
+# Repos directory path
+set(TRITON_REPOS_DIRECTORY "" CACHE PATH "Path to directory with local copies of repos")
+
 if (WIN32)
   if(TRITON_ENABLE_ONNXRUNTIME_OPENVINO)
     message(FATAL_ERROR
@@ -150,21 +153,15 @@ include(FetchContent)
 
 FetchContent_Declare(
   repo-common
-  GIT_REPOSITORY https://github.com/triton-inference-server/common.git
-  GIT_TAG ${TRITON_COMMON_REPO_TAG}
-  GIT_SHALLOW ON
+  URL ${TRITON_REPOS_DIRECTORY}/common
 )
 FetchContent_Declare(
   repo-core
-  GIT_REPOSITORY https://github.com/triton-inference-server/core.git
-  GIT_TAG ${TRITON_CORE_REPO_TAG}
-  GIT_SHALLOW ON
+  URL ${TRITON_REPOS_DIRECTORY}/core
 )
 FetchContent_Declare(
   repo-backend
-  GIT_REPOSITORY https://github.com/triton-inference-server/backend.git
-  GIT_TAG ${TRITON_BACKEND_REPO_TAG}
-  GIT_SHALLOW ON
+  URL ${TRITON_REPOS_DIRECTORY}/backend
 )
 FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 
