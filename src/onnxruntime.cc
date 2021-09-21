@@ -651,7 +651,7 @@ class ModelInstanceState : public BackendModelInstance {
       const std::string& control_kind, bool required, bool* have_control);
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   TRITONSERVER_Error* ValidateOutputs();
-  void OrtRun(
+  TRITONSERVER_Error* OrtRun(
       std::vector<TRITONBACKEND_Response*>* responses,
       const uint32_t response_count,
       const std::vector<const char*>& input_names,
@@ -1295,7 +1295,8 @@ ModelInstanceState::ProcessRequests(
   SET_TIMESTAMP(compute_start_ns);
 
   // Run...
-  OrtRun(&responses, request_count, input_names, output_names);
+  RESPOND_ALL_AND_RETURN_IF_ERROR(
+    &responses, request_count, OrtRun(&responses, request_count, input_names, output_names));
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
@@ -1342,25 +1343,14 @@ ModelInstanceState::ProcessRequests(
       "failed reporting batch request statistics");
 }
 
-void
+TRITONSERVER_Error*
 ModelInstanceState::OrtRun(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count, const std::vector<const char*>& input_names,
     const std::vector<const char*>& output_names)
 {
-  OrtStatus* status = nullptr;
-  status = ort_api->RunWithBinding(session_, runOptions_, io_binding_);
-  if (status != nullptr) {
-    OrtErrorCode code = ort_api->GetErrorCode(status);
-    std::string msg = ort_api->GetErrorMessage(status);
-    SendErrorForResponses(
-        responses, response_count,
-        TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL,
-            (std::string("onnxruntime execute failure ") +
-             std::to_string(code) + ": " + msg)
-                .c_str()));
-  }
+  RETURN_IF_ORT_ERROR(ort_api->RunWithBinding(session_, runOptions_, io_binding_));
+  return nullptr;
 }
 
 void
