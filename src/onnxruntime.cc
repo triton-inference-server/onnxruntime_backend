@@ -1294,10 +1294,17 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  // Run...
-  RESPOND_ALL_AND_RETURN_IF_ERROR(
-    &responses, request_count, OrtRun(&responses, request_count, input_names, output_names));
-
+  auto err = OrtRun(&responses, request_count, input_names, output_names);
+  if (err != nullptr) {
+    SendErrorForResponses(&responses, request_count, err);
+    // If certain OrtRun fails, release every request and return early
+    for (uint32_t r = 0; r < request_count; ++r) {
+      LOG_IF_ERROR(
+          TRITONBACKEND_RequestRelease(requests[r], TRITONSERVER_REQUEST_RELEASE_ALL),
+          "failed releasing request");
+    }
+    return;
+  }
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
 
