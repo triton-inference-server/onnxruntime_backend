@@ -37,23 +37,23 @@ namespace triton { namespace backend { namespace onnxruntime {
 
 extern const OrtApi* ort_api;
 
-#define RESPOND_ALL_AND_RETURN_IF_ERROR(                                       \
-    REQUESTS, REQUEST_COUNT, RESPONSES, S)                                     \
-  do {                                                                         \
-    TRITONSERVER_Error* raarie_err__ = (S);                                    \
-    if (raarie_err__ != nullptr) {                                             \
-      SendErrorForResponses(RESPONSES, REQUEST_COUNT, raarie_err__);           \
-      for (uint32_t r = 0; r < REQUEST_COUNT; ++r) {                           \
-        if (RESPONSES[r] != nullptr) {                                         \
-        LOG_IF_ERROR(                                                          \
-            TRITONBACKEND_RequestRelease(                                      \
-                REQUESTS[r], TRITONSERVER_REQUEST_RELEASE_ALL),                \
-            "failed releasing request");                                       \
-        REQUESTS[r] = nullptr;                                                 \
-        }                                                                      \
-      }                                                                        \
-      return;                                                                  \
-    }                                                                          \
+#define RESPOND_ALL_AND_RETURN_IF_ERROR(                            \
+    REQUESTS, REQUEST_COUNT, RESPONSES, S)                          \
+  do {                                                              \
+    TRITONSERVER_Error* raarie_err__ = (S);                         \
+    if (raarie_err__ != nullptr) {                                  \
+      SendErrorForResponses(RESPONSES, REQUEST_COUNT, raarie_err__);\
+      for (uint32_t r = 0; r < REQUEST_COUNT; ++r) {                \
+        if (RESPONSES[r] != nullptr) {                              \
+        LOG_IF_ERROR(                                               \
+            TRITONBACKEND_RequestRelease(                           \
+                REQUESTS[r], TRITONSERVER_REQUEST_RELEASE_ALL),     \
+            "failed releasing request");                            \
+        REQUESTS[r] = nullptr;                                      \
+        }                                                           \
+      }                                                             \
+      return;                                                       \
+    }                                                               \
   } while (false) 
 
 #define RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(                               \
