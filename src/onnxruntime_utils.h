@@ -37,13 +37,50 @@ namespace triton { namespace backend { namespace onnxruntime {
 
 extern const OrtApi* ort_api;
 
-#define RESPOND_ALL_AND_RETURN_IF_ERROR(RESPONSES, RESPONSES_COUNT, X) \
-  do {                                                                 \
-    TRITONSERVER_Error* raarie_err__ = (X);                            \
-    if (raarie_err__ != nullptr) {                                     \
-      SendErrorForResponses(RESPONSES, RESPONSES_COUNT, raarie_err__); \
-      return;                                                          \
-    }                                                                  \
+#define RESPOND_ALL_AND_RETURN_IF_ERROR(                                       \
+    REQUESTS, REQUEST_COUNT, RESPONSES, S)                                     \
+  do {                                                                         \
+    TRITONSERVER_Error* raarie_err__ = (S);                                    \
+    if (raarie_err__ != nullptr) {                                             \
+      SendErrorForResponses(RESPONSES, REQUEST_COUNT, raarie_err__);           \
+      for (uint32_t r = 0; r < REQUEST_COUNT; ++r) {                           \
+        if (RESPONSES[r] != nullptr) {                                         \
+        LOG_IF_ERROR(                                                          \
+            TRITONBACKEND_RequestRelease(                                      \
+                REQUESTS[r], TRITONSERVER_REQUEST_RELEASE_ALL),                \
+            "failed releasing request");                                       \
+        REQUESTS[r] = nullptr;                                                 \
+        }                                                                      \
+      }                                                                        \
+      return;                                                                  \
+    }                                                                          \
+  } while (false) 
+
+#define RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(                               \
+    REQUESTS, REQUEST_COUNT, RESPONSES, S)                                 \
+  do {                                                                     \
+    OrtStatus* status__ = (S);                                             \
+    if (status__ != nullptr) {                                             \
+      OrtErrorCode code = ort_api->GetErrorCode(status__);                 \
+      std::string msg = std::string(ort_api->GetErrorMessage(status__));   \
+      ort_api->ReleaseStatus(status__);                                    \
+      auto err__ = TRITONSERVER_ErrorNew(                                  \
+              TRITONSERVER_ERROR_INTERNAL,                                 \
+              (std::string("onnx runtime error ") + std::to_string(code) + \
+               ": " + msg)                                                 \
+                  .c_str());                                               \
+      SendErrorForResponses(RESPONSES, REQUEST_COUNT, err__);              \
+      for (uint32_t r = 0; r < REQUEST_COUNT; ++r) {                       \
+        if (RESPONSES[r] != nullptr) {                                     \
+        LOG_IF_ERROR(                                                      \
+            TRITONBACKEND_RequestRelease(                                  \
+                REQUESTS[r], TRITONSERVER_REQUEST_RELEASE_ALL),            \
+            "failed releasing request");                                   \
+        REQUESTS[r] = nullptr;                                             \
+        }                                                                  \
+      }                                                                    \
+      return;                                                              \
+    }                                                                      \
   } while (false)
 
 #define RETURN_IF_ORT_ERROR(S)                                               \
@@ -58,25 +95,7 @@ extern const OrtApi* ort_api;
                                         std::to_string(code) + ": " + msg)   \
                                            .c_str());                        \
     }                                                                        \
-  } while (false)
-
-#define RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(R, C, S)                       \
-  do {                                                                     \
-    OrtStatus* status__ = (S);                                             \
-    if (status__ != nullptr) {                                             \
-      OrtErrorCode code = ort_api->GetErrorCode(status__);                 \
-      std::string msg = std::string(ort_api->GetErrorMessage(status__));   \
-      ort_api->ReleaseStatus(status__);                                    \
-      SendErrorForResponses(                                               \
-          R, C,                                                            \
-          TRITONSERVER_ErrorNew(                                           \
-              TRITONSERVER_ERROR_INTERNAL,                                 \
-              (std::string("onnx runtime error ") + std::to_string(code) + \
-               ": " + msg)                                                 \
-                  .c_str()));                                              \
-      return;                                                              \
-    }                                                                      \
-  } while (false)
+  } while (false)                    
 
 #define THROW_IF_BACKEND_MODEL_ORT_ERROR(S)                                  \
   do {                                                                       \
