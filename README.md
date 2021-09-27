@@ -110,3 +110,44 @@ optimization { execution_accelerators {
 .
 
 ```
+
+## ONNX Runtime with CUDA Execution Provider optimization
+When GPU is enabled for ORT, CUDA execution provider is enabled. If TensorRT is also enabled then CUDA EP is treated as a fallback option (only comes into picture for nodes which TensorRT cannot execute). If TensorRT is not enabled then CUDA EP is the primary EP which executes the models. ORT enabled configuring options for CUDA EP to further optimize based on the specific model and user scenarios. To enable CUDA EP optimization you must set the model configuration appropriately. There are several optimizations available, like selection of max mem, cudnn conv algorithm etc... The optimization parameters and their description are as follows.
+
+* `cudnn_conv_algo_search`: CUDA Convolution algorithm search configuration. Available options are 0 - EXHAUSTIVE (expensive exhaustive benchmarking using cudnnFindConvolutionForwardAlgorithmEx). This is also the default option, 1 - HEURISTIC (lightweight heuristic based search using cudnnGetConvolutionForwardAlgorithm_v7), 2 - DEFAULT (default algorithm using CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM)
+
+* `gpu_mem_limit`: CUDA memory limit. To use all possible memory pass in maximum size_t. Defaults to SIZE_MAX.
+
+* `arena_extend_strategy`: Strategy used to grow the memory arena. Available options are: 0 = kNextPowerOfTwo, 1 = kSameAsRequested. Defaults to 0.
+
+* `do_copy_in_default_stream`: Flag indicating if copying needs to take place on the same stream as the compute stream in the CUDA EP. Available options are: 0 = Use separate streams for copying and compute, 1 = Use the same stream for copying and compute. Defaults to 1.
+
+The section of model config file specifying these parameters will look like:
+
+```
+.
+.
+.
+parameters { key: "cudnn_conv_algo_search" string_value: "0" }
+parameters { key: "gpu_mem_limit" string_value: "4294967200" }
+.
+.
+.
+
+```
+
+## Other Optimziation Options with ONNX Runtime
+
+* `intra_op_thread_count`: Default 0 refers to number of cores.
+
+* `level`: Refers to the graph optimization level. By default all optimizations are enabled. Allowed values are -1 and 1. -1 refers to BASIC optimizations and 1 refers to basic plus extended optimizations like fusions. Please find the details [here](https://onnxruntime.ai/docs/performance/graph-optimizations.html)
+
+```
+optimization {
+  graph : {
+    level : 1
+}}
+
+parameters { key: "intra_op_thread_count" string_value: "0" }
+
+```

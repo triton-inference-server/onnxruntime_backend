@@ -31,6 +31,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 
 namespace triton { namespace backend { namespace onnxruntime {
@@ -158,4 +159,34 @@ TRITONSERVER_Error* CompareDimsSupported(
     const std::vector<int64_t>& model_shape, const std::vector<int64_t>& dims,
     const int max_batch_size, const bool compare_exact);
 
+/// Parse the string as unsigned long integer.
+///
+/// \param value The string.
+/// \param parse_value The unsigned long integral value of the string.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* ParseUnsignedLongValue(
+    const std::string& value, unsigned long* parsed_value);
+
+/// Try to parse the requested parameter.
+///
+/// \param params The param in model config
+/// \param value The parsed string value.
+/// \param mkey Key in the model config.
+/// \return a TRITONSERVER_Error indicating success or failure. Ignores
+/// TRITONSERVER_ERROR_NOT_FOUND
+TRITONSERVER_Error* TryParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    std::string* value);
+
+TRITONSERVER_Error* TryParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    int* value);
+
+TRITONSERVER_Error* TryParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    bool* value);
+
+TRITONSERVER_Error* TryParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    size_t* value);
 }}}  // namespace triton::backend::onnxruntime

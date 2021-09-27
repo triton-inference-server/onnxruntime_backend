@@ -26,8 +26,6 @@
 
 #include "onnxruntime_utils.h"
 
-#include "triton/backend/backend_common.h"
-
 namespace triton { namespace backend { namespace onnxruntime {
 
 const OrtApi* ort_api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
@@ -495,4 +493,101 @@ CompareDimsSupported(
   return nullptr;  // success
 }
 
+TRITONSERVER_Error*
+ParseUnsignedLongValue(const std::string& value, unsigned long* parsed_value)
+{
+  try {
+    *parsed_value = std::stoul(value);
+  }
+  catch (const std::invalid_argument& ia) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("failed to convert '") + value +
+         "' to unsigned long long integral number")
+            .c_str());
+  }
+
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+TryParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    std::string* value)
+{
+  auto err = GetParameterValue(params, mkey, value);
+  if (err != nullptr) {
+    if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+      return err;
+    } else {
+      TRITONSERVER_ErrorDelete(err);
+      return nullptr;  // These are optional parameters. Not Found is
+                       // acceptable.
+    }
+  }
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+TryParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    int* value)
+{
+  std::string string_value;
+  auto err = GetParameterValue(params, mkey, &string_value);
+  if (err != nullptr) {
+    if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+      return err;
+    } else {
+      TRITONSERVER_ErrorDelete(err);
+      return nullptr;  // These are optional parameters. Not Found is
+                       // acceptable.
+    }
+
+  } else {
+    return ParseIntValue(string_value, value);
+  }
+}
+
+TRITONSERVER_Error*
+TryParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    bool* value)
+{
+  std::string string_value;
+  auto err = GetParameterValue(params, mkey, &string_value);
+  if (err != nullptr) {
+    if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+      return err;
+    } else {
+      TRITONSERVER_ErrorDelete(err);
+      return nullptr;  // These are optional parameters. Not Found is
+                       // acceptable.
+    }
+
+  } else {
+    return ParseBoolValue(string_value, value);
+  }
+}
+
+TRITONSERVER_Error*
+TryParseParameter(
+    triton::common::TritonJson::Value& params, const std::string& mkey,
+    size_t* value)
+{
+  std::string string_value;
+  auto err = GetParameterValue(params, mkey, &string_value);
+  if (err != nullptr) {
+    if (TRITONSERVER_ErrorCode(err) != TRITONSERVER_ERROR_NOT_FOUND) {
+      return err;
+    } else {
+      TRITONSERVER_ErrorDelete(err);
+      return nullptr;  // These are optional parameters. Not Found is
+                       // acceptable.
+    }
+
+  } else {
+    return ParseUnsignedLongValue(string_value, value);
+  }
+}
 }}}  // namespace triton::backend::onnxruntime
