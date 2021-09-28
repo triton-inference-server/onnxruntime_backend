@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights
+// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights
 // reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -158,7 +158,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     triton::common::TritonJson::Value params;
     if (ModelConfig().Find("parameters", &params)) {
       THROW_IF_BACKEND_MODEL_ERROR(TryParseParameter(
-          params, "intra_op_thread_count", &intra_op_thread_count));
+          params, "intra_op_thread_count", &intra_op_thread_count, 0));
     }
     if (intra_op_thread_count > 0) {
       THROW_IF_BACKEND_MODEL_ORT_ERROR(
@@ -243,8 +243,7 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
               if (name == kTensorRTExecutionAccelerator) {
                 // create tensorrt options with default values
-                std::string int8_calibration_table_name =
-                    "INT8_calibration_table";
+                std::string int8_calibration_table_name;
                 std::string trt_engine_cache_path;
                 OrtTensorRTProviderOptions trt_options{
                     instance_group_device_id,
@@ -280,8 +279,6 @@ ModelState::LoadModel(
                         trt_options.trt_fp16_enable = 1;
                       } else if (value_string == "INT8") {
                         trt_options.trt_int8_enable = 1;
-                        trt_options.trt_int8_calibration_table_name =
-                            int8_calibration_table_name.c_str();
                       } else if (value_string != "FP32") {
                         RETURN_ERROR_IF_FALSE(
                             false, TRITONSERVER_ERROR_INVALID_ARG,
@@ -291,11 +288,11 @@ ModelState::LoadModel(
                     } else if (param_key == "max_workspace_size_bytes") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
-                      int64_t max_workspace_size_bytes;
-                      RETURN_IF_ERROR(ParseLongLongValue(
+                      size_t max_workspace_size_bytes;
+                      RETURN_IF_ERROR(ParseUnsignedLongLongValue(
                           value_string, &max_workspace_size_bytes));
                       trt_options.trt_max_workspace_size =
-                          static_cast<size_t>(max_workspace_size_bytes);
+                          max_workspace_size_bytes;
                     } else if (param_key == "int8_calibration_table_name") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &int8_calibration_table_name));
@@ -362,10 +359,6 @@ ModelState::LoadModel(
       // stream
       OrtCUDAProviderOptions cuda_options;
       cuda_options.device_id = instance_group_device_id;
-      cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearch::EXHAUSTIVE;
-      cuda_options.gpu_mem_limit = std::numeric_limits<size_t>::max();
-      cuda_options.arena_extend_strategy = 0;
-      cuda_options.do_copy_in_default_stream = true;
       cuda_options.has_user_compute_stream = stream != nullptr ? 1 : 0;
       cuda_options.user_compute_stream =
           stream != nullptr ? (void*)stream : nullptr,
@@ -377,20 +370,20 @@ ModelState::LoadModel(
         if (model_config_.Find("parameters", &params)) {
           int cudnn_conv_algo_search = 0;
           RETURN_IF_ERROR(TryParseParameter(
-              params, "cudnn_conv_algo_search", &cudnn_conv_algo_search));
+              params, "cudnn_conv_algo_search", &cudnn_conv_algo_search, 0));
           cuda_options.cudnn_conv_algo_search =
               static_cast<OrtCudnnConvAlgoSearch>(cudnn_conv_algo_search);
 
           RETURN_IF_ERROR(TryParseParameter(
-              params, "gpu_mem_limit", &cuda_options.gpu_mem_limit));
+              params, "gpu_mem_limit", &cuda_options.gpu_mem_limit, std::numeric_limits<size_t>::max()));
 
           RETURN_IF_ERROR(TryParseParameter(
               params, "arena_extend_strategy",
-              &cuda_options.arena_extend_strategy));
+              &cuda_options.arena_extend_strategy, 0));
 
           RETURN_IF_ERROR(TryParseParameter(
               params, "do_copy_in_default_stream",
-              &cuda_options.do_copy_in_default_stream));
+              &cuda_options.do_copy_in_default_stream, true));
         }
       }
 
