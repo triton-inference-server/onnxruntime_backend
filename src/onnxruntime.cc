@@ -1,5 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights
-// reserved.
+// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -157,7 +156,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     int intra_op_thread_count = 0;
     triton::common::TritonJson::Value params;
     if (ModelConfig().Find("parameters", &params)) {
-      THROW_IF_BACKEND_MODEL_ERROR(TryParseParameter(
+      THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
           params, "intra_op_thread_count", &intra_op_thread_count, 0));
     }
     if (intra_op_thread_count > 0) {
@@ -369,19 +368,19 @@ ModelState::LoadModel(
         triton::common::TritonJson::Value params;
         if (model_config_.Find("parameters", &params)) {
           int cudnn_conv_algo_search = 0;
-          RETURN_IF_ERROR(TryParseParameter(
+          RETURN_IF_ERROR(TryParseModelStringParameter(
               params, "cudnn_conv_algo_search", &cudnn_conv_algo_search, 0));
           cuda_options.cudnn_conv_algo_search =
               static_cast<OrtCudnnConvAlgoSearch>(cudnn_conv_algo_search);
 
-          RETURN_IF_ERROR(TryParseParameter(
+          RETURN_IF_ERROR(TryParseModelStringParameter(
               params, "gpu_mem_limit", &cuda_options.gpu_mem_limit, std::numeric_limits<size_t>::max()));
 
-          RETURN_IF_ERROR(TryParseParameter(
+          RETURN_IF_ERROR(TryParseModelStringParameter(
               params, "arena_extend_strategy",
               &cuda_options.arena_extend_strategy, 0));
 
-          RETURN_IF_ERROR(TryParseParameter(
+          RETURN_IF_ERROR(TryParseModelStringParameter(
               params, "do_copy_in_default_stream",
               &cuda_options.do_copy_in_default_stream, true));
         }
