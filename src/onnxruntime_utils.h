@@ -50,6 +50,7 @@ extern const OrtApi* ort_api;
                   response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, \
                   raarie_err__),                                  \
               "failed to send ONNXRuntime backend response");     \
+          response = nullptr;                                     \
         }                                                         \
         LOG_IF_ERROR(                                             \
             TRITONBACKEND_RequestRelease(                         \
