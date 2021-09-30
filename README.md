@@ -103,12 +103,12 @@ optimization { execution_accelerators {
   gpu_execution_accelerator : [ {
     name : "tensorrt"
     parameters { key: "precision_mode" value: "FP16" }
-    parameters { key: "max_workspace_size_bytes" value: "1073741824" }}]
+    parameters { key: "max_workspace_size_bytes" value: "1073741824" }}
+  ]
 }}
 .
 .
 .
-
 ```
 
 ## ONNX Runtime with CUDA Execution Provider optimization
@@ -134,6 +134,28 @@ parameters { key: "gpu_mem_limit" string_value: "4294967200" }
 .
 .
 
+```
+
+
+## ONNX Runtime with OpenVINO optimization
+
+[OpenVINO](https://docs.openvinotoolkit.org/latest/index.html) can be
+used in conjunction with an ONNX model to further optimize
+performance. To enable OpenVINO optimization you must set the model
+configuration as shown below.
+
+```
+.
+.
+.
+optimization { execution_accelerators {
+  cpu_execution_accelerator : [ {
+    name : "openvino"
+  ]
+}}
+.
+.
+.
 ```
 
 ## Other Optimziation Options with ONNX Runtime
