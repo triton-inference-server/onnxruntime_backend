@@ -29,6 +29,11 @@ import argparse
 import os
 import platform
 import re
+from enum import Enum
+
+class Env(Enum):
+    WINDOWS = 1
+    LINUX = 2
 
 FLAGS = None
 
@@ -38,7 +43,7 @@ def target_platform():
     return platform.system().lower()
 
 
-def dockerfile_common():
+def dockerfile_common(env):
     df = '''
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
@@ -54,12 +59,8 @@ ARG ONNXRUNTIME_OPENVINO_VERSION={}
 FROM ${BASE_IMAGE}
 WORKDIR /workspace
 '''
-    return df
-
-
-def dockerfile_for_linux(output_file):
-    df = dockerfile_common()
-    df += '''
+    if env == Env.LINUX:
+        df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -94,8 +95,9 @@ RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/nul
     cmake --version
 
 '''
-    if FLAGS.enable_gpu:
-        df += '''
+
+        if FLAGS.enable_gpu:
+            df += '''
 # Allow configure to pick up cuDNN where it expects it.
 # (Note: $CUDNN_VERSION is defined by base image)
 RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
@@ -105,8 +107,9 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
     ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 '''
 
-    if FLAGS.ort_openvino is not None:
-        df += '''
+
+        if FLAGS.ort_openvino is not None:
+            df += '''
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
 ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
@@ -132,34 +135,37 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
     dpkg -i *.deb && rm -rf *.deb
 '''
-   ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
-   # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
-   # use tensorrt-8.0 branch instead of using rel-1.8.1
-   # From ORT 1.9 onwards we will switch back to using rel-* branches
+
+    # Build ONNXRuntime
+    ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
+    # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
+    # use tensorrt-8.0 branch instead of using rel-1.8.1
+    # From ORT 1.9 onwards we will switch back to using rel-* branches
+
+    df += '''
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+    '''
+
+    if env == Env.LINUX:
+        ort_repo_str = "${ONNXRUNTIME_REPO}"
+    elif env == Env.WINDOWS:
+        df += 'SHELL ["cmd", "/S", "/C"]\n'
+        ort_repo_str = "%ONNXRUNTIME_REPO%"
+
     if FLAGS.ort_version == "1.8.1":
-        df += '''
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
-
-    RUN git clone -b tensorrt-8.0 --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
-
-       '''
+        df += "RUN git clone -b tensorrt-8.0 --recursive {0} onnxruntime ".format(ort_repo_str)
     else:
-        df += '''
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
+        df += "RUN git clone -b rel-{0} --recursive {0} onnxruntime ".format(ort_repo_str)
+    df += "&& cd onnxruntime && git submodule update --init --recursive\n"
+    return df
 
-    RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
 
-        '''
+def dockerfile_for_linux(output_file):
+    df = dockerfile_common(Env.LINUX)
 
     ep_flags = ''
     if FLAGS.enable_gpu:
@@ -289,37 +295,8 @@ RUN mkdir -p /opt/onnxruntime/test && \
 
 
 def dockerfile_for_windows(output_file):
-    df = dockerfile_common()
+    df = dockerfile_common(Env.WINDOWS)
 
-    ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
-    # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
-    # use tensorrt-8.0 branch instead of using rel-1.8.1
-    # From ORT 1.9 onwards we will switch back to using rel-* branches
-    if FLAGS.ort_version == "1.8.1":
-        df += '''
-SHELL ["cmd", "/S", "/C"]
-
-#
-# ONNX Runtime build
-#
-ARG ONNXRUNTIME_VERSION
-ARG ONNXRUNTIME_REPO
-
-RUN git clone -b tensorrt-8.0 --recursive %ONNXRUNTIME_REPO% onnxruntime && \
-    (cd onnxruntime && git submodule update --init --recursive)
-'''
-    else:
-        df += '''
-SHELL ["cmd", "/S", "/C"]
-
-#
-# ONNX Runtime build
-#
-ARG ONNXRUNTIME_VERSION
-ARG ONNXRUNTIME_REPO
-RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
-    (cd onnxruntime && git submodule update --init --recursive)
-'''
     ep_flags = ''
     if FLAGS.enable_gpu:
         ep_flags = '--use_cuda'
