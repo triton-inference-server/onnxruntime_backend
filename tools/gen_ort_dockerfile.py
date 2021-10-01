@@ -42,8 +42,7 @@ def target_platform():
         return FLAGS.target_platform
     return platform.system().lower()
 
-
-def dockerfile_common(env):
+def dockerfile_common(output_file, env):
     df = '''
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
@@ -59,82 +58,8 @@ ARG ONNXRUNTIME_OPENVINO_VERSION={}
 FROM ${BASE_IMAGE}
 WORKDIR /workspace
 '''
-    if env == Env.LINUX:
-        df += '''
-# Ensure apt-get won't prompt for selecting options
-ENV DEBIAN_FRONTEND=noninteractive
 
-# The Onnx Runtime dockerfile is the collection of steps in
-# https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        software-properties-common \
-        wget \
-        zip \
-        ca-certificates \
-        build-essential \
-        curl \
-        libcurl4-openssl-dev \
-        libssl-dev \
-        patchelf \
-        python3-dev \
-        python3-pip \
-        git \
-        gnupg \ 
-        gnupg1
-
-# Install dependencies from
-# onnxruntime/dockerfiles/scripts/install_common_deps.sh.
-RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
-      gpg --dearmor - |  \
-      tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
-    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-      cmake-data=3.21.1-0kitware1ubuntu20.04.1 cmake=3.21.1-0kitware1ubuntu20.04.1 && \
-    cmake --version
-
-'''
-
-        if FLAGS.enable_gpu:
-            df += '''
-# Allow configure to pick up cuDNN where it expects it.
-# (Note: $CUDNN_VERSION is defined by base image)
-RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
-    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
-    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
-'''
-
-
-        if FLAGS.ort_openvino is not None:
-            df += '''
-# Install OpenVINO
-ARG ONNXRUNTIME_OPENVINO_VERSION
-ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
-ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64:$INTEL_OPENVINO_DIR/deployment_tools/ngraph/lib:$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/external/tbb/lib:/usr/local/openblas/lib:$LD_LIBRARY_PATH
-ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
-ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64
-ENV InferenceEngine_DIR=$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/share
-ENV ngraph_DIR=$INTEL_OPENVINO_DIR/deployment_tools/ngraph/cmake
-
-RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
-    apt-key add GPG-PUB-KEY-INTEL-OPENVINO-2021 && rm GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
-    cd /etc/apt/sources.list.d && \
-    echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
-    apt update && \
-    apt install -y intel-openvino-dev-ubuntu20-${ONNXRUNTIME_OPENVINO_VERSION} && \
-    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh
-
-ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
-RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-core_1.0.2597_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-opencl_1.0.2597_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-opencl_19.41.14441_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
-    dpkg -i *.deb && rm -rf *.deb
-'''
+    df += dockerfile_for_linux_before()
 
     # Build ONNXRuntime
     ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
@@ -188,41 +113,6 @@ ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 '''.format(ep_flags)
 
-        df += '''
-#
-# Copy all artifacts needed by the backend to /opt/onnxruntime
-#
-WORKDIR /opt/onnxruntime
-
-RUN mkdir -p /opt/onnxruntime && \
-    cp /workspace/onnxruntime/LICENSE /opt/onnxruntime && \
-    cat /workspace/onnxruntime/cmake/external/onnx/VERSION_NUMBER > /opt/onnxruntime/ort_onnx_version.txt
-
-# ONNX Runtime headers, libraries and binaries
-RUN mkdir -p /opt/onnxruntime/include && \
-    cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_c_api.h \
-       /opt/onnxruntime/include && \
-    cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h \
-       /opt/onnxruntime/include && \
-    cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h \
-       /opt/onnxruntime/include
-
-RUN mkdir -p /opt/onnxruntime/lib && \
-    cp /workspace/build/Release/libonnxruntime_providers_shared.so \
-       /opt/onnxruntime/lib && \
-    cp /workspace/build/Release/libonnxruntime.so.${ONNXRUNTIME_VERSION} \
-       /opt/onnxruntime/lib && \
-    (cd /opt/onnxruntime/lib && \
-     ln -sf libonnxruntime.so.${ONNXRUNTIME_VERSION} libonnxruntime.so)
-
-RUN mkdir -p /opt/onnxruntime/bin && \
-    cp /workspace/build/Release/onnxruntime_perf_test \
-       /opt/onnxruntime/bin && \
-    cp /workspace/build/Release/onnx_test_runner \
-       /opt/onnxruntime/bin && \
-    (cd /opt/onnxruntime/bin && chmod a+x *)
-'''
-
 
     elif env == Env.WINDOWS:
         df += '''
@@ -231,43 +121,129 @@ RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Conten
 RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=52;60;61;70;75;80;86" --skip_submodule_sync --build_shared_lib --update --build --build_dir /workspace/build {}
 '''.format(ep_flags)
 
-        df += '''
+    df += '''
 #
 # Copy all artifacts needed by the backend to /opt/onnxruntime
 #
 WORKDIR /opt/onnxruntime
-RUN copy \\workspace\\onnxruntime\\LICENSE \\opt\\onnxruntime
-RUN copy \\workspace\\onnxruntime\\cmake\\external\\onnx\\VERSION_NUMBER \\opt\\onnxruntime\\ort_onnx_version.txt
+
+RUN cp {0}workspace{0}onnxruntime{0}LICENSE {0}opt{0}onnxruntime
+RUN cp {0}workspace{0}onnxruntime{0}cmake{0}external{0}onnx{0}VERSION_NUMBER {0}opt{0}onnxruntime{0}ort_onnx_version.txt
 
 # ONNX Runtime headers, libraries and binaries
 WORKDIR /opt/onnxruntime/include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_c_api.h \\opt\\onnxruntime\\include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
+RUN cp {0}workspace{0}onnxruntime{0}include{0}onnxruntime{0}core{0}session{0}onnxruntime_c_api.h {0}opt{0}onnxruntime{0}include
+RUN cp {0}workspace{0}onnxruntime{0}include{0}onnxruntime{0}core{0}session{0}onnxruntime_session_options_config_keys.h {0}opt{0}onnxruntime{0}include
+RUN cp {0}workspace{0}onnxruntime{0}include{0}onnxruntime{0}core{0}providers{0}cpu{0}cpu_provider_factory.h {0}opt{0}onnxruntime{0}include
 
 WORKDIR /opt/onnxruntime/bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
+'''.format(separator)
 
-WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
-'''
+    if env == Env.LINUX:
+        df += dockerfile_for_linux_after()
+    elif env == Env.WINDOWS:
+        df += dockerfile_for_windows_after()
+
+    with open(output_file, "w") as dfile:
+        dfile.write(df)
 
     return df
 
+def dockerfile_for_linux_before():
+    df = '''
+# Ensure apt-get won't prompt for selecting options
+ENV DEBIAN_FRONTEND=noninteractive
 
-def dockerfile_for_linux(output_file):
-    df = dockerfile_common(Env.LINUX)
+# The Onnx Runtime dockerfile is the collection of steps in
+# https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common \
+        wget \
+        zip \
+        ca-certificates \
+        build-essential \
+        curl \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        patchelf \
+        python3-dev \
+        python3-pip \
+        git \
+        gnupg \ 
+        gnupg1
+
+# Install dependencies from
+# onnxruntime/dockerfiles/scripts/install_common_deps.sh.
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
+      gpg --dearmor - |  \
+      tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+      cmake-data=3.21.1-0kitware1ubuntu20.04.1 cmake=3.21.1-0kitware1ubuntu20.04.1 && \
+    cmake --version
+
+'''
+
+    if FLAGS.enable_gpu:
+        df += '''
+# Allow configure to pick up cuDNN where it expects it.
+# (Note: $CUDNN_VERSION is defined by base image)
+RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
+    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
+    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
+'''
+
+    if FLAGS.ort_openvino is not None:
+        df += '''
+# Install OpenVINO
+ARG ONNXRUNTIME_OPENVINO_VERSION
+ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
+ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64:$INTEL_OPENVINO_DIR/deployment_tools/ngraph/lib:$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/external/tbb/lib:/usr/local/openblas/lib:$LD_LIBRARY_PATH
+ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
+ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/deployment_tools/inference_engine/lib/intel64
+ENV InferenceEngine_DIR=$INTEL_OPENVINO_DIR/deployment_tools/inference_engine/share
+ENV ngraph_DIR=$INTEL_OPENVINO_DIR/deployment_tools/ngraph/cmake
+
+RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
+    apt-key add GPG-PUB-KEY-INTEL-OPENVINO-2021 && rm GPG-PUB-KEY-INTEL-OPENVINO-2021 && \
+    cd /etc/apt/sources.list.d && \
+    echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
+    apt update && \
+    apt install -y intel-openvino-dev-ubuntu20-${ONNXRUNTIME_OPENVINO_VERSION} && \
+    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh
+
+ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
+RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
+    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-core_1.0.2597_amd64.deb && \
+    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-opencl_1.0.2597_amd64.deb && \
+    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-opencl_19.41.14441_amd64.deb && \
+    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
+    dpkg -i *.deb && rm -rf *.deb
+'''
+    return df
+
+def dockerfile_for_linux_after():
+    df = '''
+WORKDIR /opt/onnxruntime/lib
+RUN cp /workspace/build/Release/libonnxruntime_providers_shared.so /opt/onnxruntime/lib
+RUN cp /workspace/build/Release/libonnxruntime.so.${ONNXRUNTIME_VERSION} /opt/onnxruntime/lib
+RUN cd /opt/onnxruntime/lib && ln -sf libonnxruntime.so.${ONNXRUNTIME_VERSION} libonnxruntime.so
+
+WORKDIR /opt/onnxruntime/bin
+RUN cp /workspace/build/Release/onnxruntime_perf_test /opt/onnxruntime/bin
+RUN cp /workspace/build/Release/onnx_test_runner /opt/onnxruntime/bin
+RUN cd /opt/onnxruntime/bin && chmod a+x *
+'''
 
     if FLAGS.enable_gpu:
         df += '''
 RUN cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
        /opt/onnxruntime/lib    
 '''
-
 
     if FLAGS.ort_tensorrt:
         df += '''
@@ -326,12 +302,20 @@ RUN mkdir -p /opt/onnxruntime/test && \
        /opt/onnxruntime/test
 '''
 
-    with open(output_file, "w") as dfile:
-        dfile.write(df)
+    return df
 
+def dockerfile_for_windows_after():
+    df = '''
+WORKDIR /opt/onnxruntime/bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
 
-def dockerfile_for_windows(output_file):
-    df = dockerfile_common(Env.WINDOWS)
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
+'''
 
     if FLAGS.enable_gpu:
         df += '''
@@ -353,9 +337,7 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dl
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
 '''
-    with open(output_file, "w") as dfile:
-        dfile.write(df)
-
+    return df
 
 def preprocess_gpu_flags():
     if target_platform() == 'windows': 
@@ -468,6 +450,6 @@ if __name__ == '__main__':
         if FLAGS.ort_openvino is not None:
             print("warning: OpenVINO not supported for windows, ignoring")
             FLAGS.ort_openvino = None
-        dockerfile_for_windows(FLAGS.output)
+        dockerfile_common(FLAGS.output, Env.WINDOWS)
     else:
-        dockerfile_for_linux(FLAGS.output)
+        dockerfile_common(FLAGS.output, Env.LINUX)
