@@ -151,9 +151,11 @@ ARG ONNXRUNTIME_REPO
     '''
 
     if env == Env.LINUX:
+        separator = "/"
         ort_repo_str = "${ONNXRUNTIME_REPO}"
     elif env == Env.WINDOWS:
         df += 'SHELL ["cmd", "/S", "/C"]\n'
+        separator = "\\"
         ort_repo_str = "%ONNXRUNTIME_REPO%"
 
     if FLAGS.ort_version == "1.8.1":
@@ -161,11 +163,6 @@ ARG ONNXRUNTIME_REPO
     else:
         df += "RUN git clone -b rel-{0} --recursive {0} onnxruntime ".format(ort_repo_str)
     df += "&& cd onnxruntime && git submodule update --init --recursive\n"
-    return df
-
-
-def dockerfile_for_linux(output_file):
-    df = dockerfile_common(Env.LINUX)
 
     ep_flags = ''
     if FLAGS.enable_gpu:
@@ -183,16 +180,15 @@ def dockerfile_for_linux(output_file):
     if FLAGS.ort_openvino is not None:
         ep_flags += ' --use_openvino CPU_FP32'
 
-    df += '''
-WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
-'''
+    df += "WORKDIR /workspace/onnxruntime \n"
 
-    df += '''
+    if env == Env.LINUX:
+        df += '''
+ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 '''.format(ep_flags)
 
-    df += '''
+        df += '''
 #
 # Copy all artifacts needed by the backend to /opt/onnxruntime
 #
@@ -226,6 +222,46 @@ RUN mkdir -p /opt/onnxruntime/bin && \
        /opt/onnxruntime/bin && \
     (cd /opt/onnxruntime/bin && chmod a+x *)
 '''
+
+
+    elif env == Env.WINDOWS:
+        df += '''
+ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
+RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=52;60;61;70;75;80;86" --skip_submodule_sync --build_shared_lib --update --build --build_dir /workspace/build {}
+'''.format(ep_flags)
+
+        df += '''
+#
+# Copy all artifacts needed by the backend to /opt/onnxruntime
+#
+WORKDIR /opt/onnxruntime
+RUN copy \\workspace\\onnxruntime\\LICENSE \\opt\\onnxruntime
+RUN copy \\workspace\\onnxruntime\\cmake\\external\\onnx\\VERSION_NUMBER \\opt\\onnxruntime\\ort_onnx_version.txt
+
+# ONNX Runtime headers, libraries and binaries
+WORKDIR /opt/onnxruntime/include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_c_api.h \\opt\\onnxruntime\\include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
+
+WORKDIR /opt/onnxruntime/bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
+RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
+
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
+'''
+
+    return df
+
+
+def dockerfile_for_linux(output_file):
+    df = dockerfile_common(Env.LINUX)
+
     if FLAGS.enable_gpu:
         df += '''
 RUN cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
@@ -296,54 +332,6 @@ RUN mkdir -p /opt/onnxruntime/test && \
 
 def dockerfile_for_windows(output_file):
     df = dockerfile_common(Env.WINDOWS)
-
-    ep_flags = ''
-    if FLAGS.enable_gpu:
-        ep_flags = '--use_cuda'
-        if FLAGS.cuda_version is not None:
-            ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
-        if FLAGS.cuda_home is not None:
-            ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
-        if FLAGS.cudnn_home is not None:
-            ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
-        if FLAGS.ort_tensorrt:
-            ep_flags += ' --use_tensorrt'
-            if FLAGS.tensorrt_home is not None:
-                ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
-    if FLAGS.ort_openvino is not None:
-        ep_flags += ' --use_openvino CPU_FP32'
-
-    df += '''
-WORKDIR /workspace/onnxruntime
-ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=52;60;61;70;75;80;86" --skip_submodule_sync --build_shared_lib --update --build --build_dir /workspace/build {}
-'''.format(ep_flags)
-
-    df += '''
-#
-# Copy all artifacts needed by the backend to /opt/onnxruntime
-#
-WORKDIR /opt/onnxruntime
-RUN copy \\workspace\\onnxruntime\\LICENSE \\opt\\onnxruntime
-RUN copy \\workspace\\onnxruntime\\cmake\\external\\onnx\\VERSION_NUMBER \\opt\\onnxruntime\\ort_onnx_version.txt
-
-# ONNX Runtime headers, libraries and binaries
-WORKDIR /opt/onnxruntime/include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_c_api.h \\opt\\onnxruntime\\include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\session\\onnxruntime_session_options_config_keys.h \\opt\\onnxruntime\\include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\cpu\\cpu_provider_factory.h \\opt\\onnxruntime\\include
-
-WORKDIR /opt/onnxruntime/bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
-
-WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
-'''
 
     if FLAGS.enable_gpu:
         df += '''
