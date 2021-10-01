@@ -26,8 +26,6 @@
 
 #include "onnxruntime_utils.h"
 
-#include "triton/backend/backend_common.h"
-
 namespace triton { namespace backend { namespace onnxruntime {
 
 const OrtApi* ort_api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
@@ -494,5 +492,6 @@ CompareDimsSupported(
 
   return nullptr;  // success
 }
+
 
 }}}  // namespace triton::backend::onnxruntime

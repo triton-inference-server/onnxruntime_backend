@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -152,6 +152,18 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   }
   THROW_IF_BACKEND_MODEL_ORT_ERROR(
       ort_api->SetSessionGraphOptimizationLevel(soptions, optimization_level));
+  {
+    int intra_op_thread_count = 0;
+    triton::common::TritonJson::Value params;
+    if (ModelConfig().Find("parameters", &params)) {
+      THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
+          params, "intra_op_thread_count", &intra_op_thread_count, 0));
+    }
+    if (intra_op_thread_count > 0) {
+      THROW_IF_BACKEND_MODEL_ORT_ERROR(
+          ort_api->SetIntraOpNumThreads(soptions, intra_op_thread_count));
+    }
+  }
 
   // FIXME. Is it possible to share a single OrtSession across
   // multiple instances? If so then should move loading and validation
@@ -230,7 +242,7 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
               if (name == kTensorRTExecutionAccelerator) {
                 // create tensorrt options with default values
-                std::string int8_calibration_table_name = "INT8_calibration_table";
+                std::string int8_calibration_table_name;
                 std::string trt_engine_cache_path;
                 OrtTensorRTProviderOptions trt_options{
                     instance_group_device_id,
@@ -266,7 +278,6 @@ ModelState::LoadModel(
                         trt_options.trt_fp16_enable = 1;
                       } else if (value_string == "INT8") {
                         trt_options.trt_int8_enable = 1;
-                        trt_options.trt_int8_calibration_table_name = int8_calibration_table_name.c_str();
                       } else if (value_string != "FP32") {
                         RETURN_ERROR_IF_FALSE(
                             false, TRITONSERVER_ERROR_INVALID_ARG,
@@ -276,33 +287,37 @@ ModelState::LoadModel(
                     } else if (param_key == "max_workspace_size_bytes") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
-                      int64_t max_workspace_size_bytes;
-                      RETURN_IF_ERROR(ParseLongLongValue(
+                      size_t max_workspace_size_bytes;
+                      RETURN_IF_ERROR(ParseUnsignedLongLongValue(
                           value_string, &max_workspace_size_bytes));
                       trt_options.trt_max_workspace_size =
-                          static_cast<size_t>(max_workspace_size_bytes);
+                          max_workspace_size_bytes;
                     } else if (param_key == "int8_calibration_table_name") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &int8_calibration_table_name));
-                      trt_options.trt_int8_calibration_table_name = int8_calibration_table_name.c_str();
-                    } else if (param_key == "int8_use_native_calibration_table") {
+                      trt_options.trt_int8_calibration_table_name =
+                          int8_calibration_table_name.c_str();
+                    } else if (
+                        param_key == "int8_use_native_calibration_table") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
                       int use_native_calibration_table;
                       RETURN_IF_ERROR(ParseIntValue(
                           value_string, &use_native_calibration_table));
-                      trt_options.trt_int8_use_native_calibration_table = use_native_calibration_table;
+                      trt_options.trt_int8_use_native_calibration_table =
+                          use_native_calibration_table;
                     } else if (param_key == "trt_engine_cache_enable") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
                       bool enable_cache;
-                      RETURN_IF_ERROR(ParseBoolValue(
-                          value_string, &enable_cache));
+                      RETURN_IF_ERROR(
+                          ParseBoolValue(value_string, &enable_cache));
                       trt_options.trt_engine_cache_enable = enable_cache;
                     } else if (param_key == "trt_engine_cache_path") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &trt_engine_cache_path));
-                      trt_options.trt_engine_cache_path = trt_engine_cache_path.c_str();
+                      trt_options.trt_engine_cache_path =
+                          trt_engine_cache_path.c_str();
                     } else {
                       return TRITONSERVER_ErrorNew(
                           TRITONSERVER_ERROR_INVALID_ARG,
@@ -339,17 +354,38 @@ ModelState::LoadModel(
       }
 
       // Default GPU execution provider.
-      // Using default values for evrything other than device id and cuda stream
-      OrtCUDAProviderOptions cuda_options{
-          instance_group_device_id,
-          OrtCudnnConvAlgoSearch::EXHAUSTIVE,  // cudnn_conv_algo_search
-          std::numeric_limits<size_t>::max(),  // gpu_mem_limit
-          0,                                   // arena_extend_strategy
-          true,                                // do_copy_in_default_stream
-          stream != nullptr ? 1 : 0,
+      // Using default values for everything other than device id and cuda
+      // stream
+      OrtCUDAProviderOptions cuda_options;
+      cuda_options.device_id = instance_group_device_id;
+      cuda_options.has_user_compute_stream = stream != nullptr ? 1 : 0;
+      cuda_options.user_compute_stream =
           stream != nullptr ? (void*)stream : nullptr,
-          nullptr  // default_memory_arena_cfg
-      };
+      cuda_options.default_memory_arena_cfg = nullptr;
+
+      {
+        // Parse CUDA EP configurations
+        triton::common::TritonJson::Value params;
+        if (model_config_.Find("parameters", &params)) {
+          int cudnn_conv_algo_search = 0;
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "cudnn_conv_algo_search", &cudnn_conv_algo_search, 0));
+          cuda_options.cudnn_conv_algo_search =
+              static_cast<OrtCudnnConvAlgoSearch>(cudnn_conv_algo_search);
+
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "gpu_mem_limit", &cuda_options.gpu_mem_limit, std::numeric_limits<size_t>::max()));
+
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "arena_extend_strategy",
+              &cuda_options.arena_extend_strategy, 0));
+
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "do_copy_in_default_stream",
+              &cuda_options.do_copy_in_default_stream, true));
+        }
+      }
+
       RETURN_IF_ORT_ERROR(ort_api->SessionOptionsAppendExecutionProvider_CUDA(
           soptions, &cuda_options));
       LOG_MESSAGE(
