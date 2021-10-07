@@ -128,8 +128,8 @@ The section of model config file specifying these parameters will look like:
 .
 .
 .
-parameters { key: "cudnn_conv_algo_search" string_value: "0" }
-parameters { key: "gpu_mem_limit" string_value: "4294967200" }
+parameters { key: "cudnn_conv_algo_search" value: { string_value: "0" } }
+parameters { key: "gpu_mem_limit" value: { string_value: "4294967200" } }
 .
 .
 .
@@ -158,7 +158,7 @@ optimization { execution_accelerators {
 .
 ```
 
-## Other Optimziation Options with ONNX Runtime
+## Other Optimization Options with ONNX Runtime
 
 * `intra_op_thread_count`: Default 0 refers to number of cores.
 
@@ -170,6 +170,6 @@ optimization {
     level : 1
 }}
 
-parameters { key: "intra_op_thread_count" string_value: "0" }
+parameters { key: "intra_op_thread_count" value: { string_value: "0" } }
 
 ```
