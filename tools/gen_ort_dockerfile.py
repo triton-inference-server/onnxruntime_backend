@@ -29,11 +29,6 @@ import argparse
 import os
 import platform
 import re
-from enum import Enum
-
-class Env(Enum):
-    WINDOWS = 1
-    LINUX = 2
 
 FLAGS = None
 
@@ -42,7 +37,7 @@ def target_platform():
         return FLAGS.target_platform
     return platform.system().lower()
 
-def dockerfile_common(output_file, env):
+def dockerfile_arguments():
     df = '''
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
@@ -58,14 +53,15 @@ ARG ONNXRUNTIME_OPENVINO_VERSION={}
 FROM ${BASE_IMAGE}
 WORKDIR /workspace
 '''
+    return df
 
-    df += dockerfile_for_linux_before()
-
+def dockerfile_git_clone_ort(is_windows, ort_repo_str):
     # Build ONNXRuntime
     ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
     # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
     # use tensorrt-8.0 branch instead of using rel-1.8.1
     # From ORT 1.9 onwards we will switch back to using rel-* branches
+    df = 'SHELL ["cmd", "/S", "/C"]\n' if is_windows else ''
 
     df += '''
 #
@@ -73,22 +69,16 @@ WORKDIR /workspace
 #
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
-    '''
-
-    if env == Env.LINUX:
-        separator = "/"
-        ort_repo_str = "${ONNXRUNTIME_REPO}"
-    elif env == Env.WINDOWS:
-        df += 'SHELL ["cmd", "/S", "/C"]\n'
-        separator = "\\"
-        ort_repo_str = "%ONNXRUNTIME_REPO%"
+'''
 
     if FLAGS.ort_version == "1.8.1":
-        df += "RUN git clone -b tensorrt-8.0 --recursive {0} onnxruntime ".format(ort_repo_str)
+        df += "RUN git clone -b tensorrt-8.0 --recursive {} onnxruntime ".format(ort_repo_str)
     else:
-        df += "RUN git clone -b rel-{0} --recursive {0} onnxruntime ".format(ort_repo_str)
+        df += "RUN git clone -b rel-{} --recursive {} onnxruntime ".format(FLAGS.ort_version, ort_repo_str)
     df += "&& cd onnxruntime && git submodule update --init --recursive\n"
+    return df
 
+def dockerfile_ep_flags():
     ep_flags = ''
     if FLAGS.enable_gpu:
         ep_flags = '--use_cuda'
@@ -105,23 +95,11 @@ ARG ONNXRUNTIME_REPO
     if FLAGS.ort_openvino is not None:
         ep_flags += ' --use_openvino CPU_FP32'
 
-    df += "WORKDIR /workspace/onnxruntime \n"
-
-    if env == Env.LINUX:
-        df += '''
-ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
-RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
-'''.format(ep_flags)
+    return ep_flags
 
 
-    elif env == Env.WINDOWS:
-        df += '''
-ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
-RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=52;60;61;70;75;80;86" --skip_submodule_sync --build_shared_lib --update --build --build_dir /workspace/build {}
-'''.format(ep_flags)
-
-    df += '''
+def dockerfile_ort_headers(separator):
+    df = '''
 #
 # Copy all artifacts needed by the backend to /opt/onnxruntime
 #
@@ -135,22 +113,14 @@ WORKDIR /opt/onnxruntime/include
 RUN cp {0}workspace{0}onnxruntime{0}include{0}onnxruntime{0}core{0}session{0}onnxruntime_c_api.h {0}opt{0}onnxruntime{0}include
 RUN cp {0}workspace{0}onnxruntime{0}include{0}onnxruntime{0}core{0}session{0}onnxruntime_session_options_config_keys.h {0}opt{0}onnxruntime{0}include
 RUN cp {0}workspace{0}onnxruntime{0}include{0}onnxruntime{0}core{0}providers{0}cpu{0}cpu_provider_factory.h {0}opt{0}onnxruntime{0}include
-
-WORKDIR /opt/onnxruntime/bin
 '''.format(separator)
-
-    if env == Env.LINUX:
-        df += dockerfile_for_linux_after()
-    elif env == Env.WINDOWS:
-        df += dockerfile_for_windows_after()
-
-    with open(output_file, "w") as dfile:
-        dfile.write(df)
-
     return df
 
-def dockerfile_for_linux_before():
-    df = '''
+def dockerfile_for_linux():
+    df = dockerfile_arguments()
+
+    # Install Linux dependencies
+    df += '''
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -190,11 +160,13 @@ RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/nul
         df += '''
 # Allow configure to pick up cuDNN where it expects it.
 # (Note: $CUDNN_VERSION is defined by base image)
-RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
-    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
-    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
+RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2)
+
+WORKDIR /usr/local/cudnn-$_CUDNN_VERSION/cuda/include
+RUN ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h
+
+WORKDIR /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 
+RUN ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 '''
 
     if FLAGS.ort_openvino is not None:
@@ -224,10 +196,19 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
     dpkg -i *.deb && rm -rf *.deb
 '''
-    return df
+    df += dockerfile_git_clone_ort(False, '${ONNXRUNTIME_REPO}')
+    ep_flags = dockerfile_ep_flags()
 
-def dockerfile_for_linux_after():
-    df = '''
+    df += '''
+WORKDIR /workspace/onnxruntime
+ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
+RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
+'''.format(ep_flags)
+
+    df += dockerfile_ort_headers("/")
+
+    # Copy files from library and binary
+    df += '''
 WORKDIR /opt/onnxruntime/lib
 RUN cp /workspace/build/Release/libonnxruntime_providers_shared.so /opt/onnxruntime/lib
 RUN cp /workspace/build/Release/libonnxruntime.so.${ONNXRUNTIME_VERSION} /opt/onnxruntime/lib
@@ -295,47 +276,59 @@ RUN cd /opt/onnxruntime/lib && \
     done
 
 # For testing copy ONNX custom op library and model
-RUN mkdir -p /opt/onnxruntime/test && \
-    cp /workspace/build/Release/libcustom_op_library.so \
-       /opt/onnxruntime/test && \
-    cp /workspace/build/Release/testdata/custom_op_library/custom_op_test.onnx \
-       /opt/onnxruntime/test
+WORKDIR /opt/onnxruntime/test
+RUN cp /workspace/build/Release/libcustom_op_library.so /opt/onnxruntime/test
+RUN cp /workspace/build/Release/testdata/custom_op_library/custom_op_test.onnx /opt/onnxruntime/test
 '''
 
     return df
 
-def dockerfile_for_windows_after():
-    df = '''
+def dockerfile_for_windows():
+    df = dockerfile_arguments()
+    df += dockerfile_git_clone_ort(True, '%ONNXRUNTIME_REPO%')
+    ep_flags = dockerfile_ep_flags()
+
+    df += '''
+WORKDIR /workspace/onnxruntime
+ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
+RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=52;60;61;70;75;80;86" --skip_submodule_sync --build_shared_lib --update --build --build_dir /workspace/build {}
+'''.format(ep_flags)
+
+    df += dockerfile_ort_headers("\\")
+
+    # Copy files from library and binary
+    df += '''
 WORKDIR /opt/onnxruntime/bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
-RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime.dll \\opt\\onnxruntime\\bin
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.dll \\opt\\onnxruntime\\bin
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime_perf_test.exe \\opt\\onnxruntime\\bin
+RUN cp \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxruntime\\bin
 
 WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
 '''
 
     if FLAGS.enable_gpu:
         df += '''
 WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
 WORKDIR /opt/onnxruntime/bin
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
 '''
 
     if FLAGS.ort_tensorrt:
         df += '''
 # TensorRT specific headers and libraries
 WORKDIR /opt/onnxruntime/include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\tensorrt\\tensorrt_provider_factory.h \\opt\\onnxruntime\\include
+RUN cp \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\tensorrt\\tensorrt_provider_factory.h \\opt\\onnxruntime\\include
 
 WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dll \\opt\\onnxruntime\\bin
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dll \\opt\\onnxruntime\\bin
 
 WORKDIR /opt/onnxruntime/lib
-RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
+RUN cp \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
 '''
     return df
 
@@ -384,7 +377,6 @@ def preprocess_gpu_flags():
 
         if FLAGS.tensorrt_home is None:
             FLAGS.tensorrt_home = '/usr/src/tensorrt'
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -450,6 +442,9 @@ if __name__ == '__main__':
         if FLAGS.ort_openvino is not None:
             print("warning: OpenVINO not supported for windows, ignoring")
             FLAGS.ort_openvino = None
-        dockerfile_common(FLAGS.output, Env.WINDOWS)
+        df = dockerfile_for_windows()
     else:
-        dockerfile_common(FLAGS.output, Env.LINUX)
+        df = dockerfile_for_linux()
+
+    with open(FLAGS.output, "w") as dfile:
+        dfile.write(df)
