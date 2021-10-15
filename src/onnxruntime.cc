@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -152,6 +152,18 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   }
   THROW_IF_BACKEND_MODEL_ORT_ERROR(
       ort_api->SetSessionGraphOptimizationLevel(soptions, optimization_level));
+  {
+    int intra_op_thread_count = 0;
+    triton::common::TritonJson::Value params;
+    if (ModelConfig().Find("parameters", &params)) {
+      THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
+          params, "intra_op_thread_count", &intra_op_thread_count, 0));
+    }
+    if (intra_op_thread_count > 0) {
+      THROW_IF_BACKEND_MODEL_ORT_ERROR(
+          ort_api->SetIntraOpNumThreads(soptions, intra_op_thread_count));
+    }
+  }
 
   // FIXME. Is it possible to share a single OrtSession across
   // multiple instances? If so then should move loading and validation
@@ -230,7 +242,7 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
               if (name == kTensorRTExecutionAccelerator) {
                 // create tensorrt options with default values
-                std::string int8_calibration_table_name = "INT8_calibration_table";
+                std::string int8_calibration_table_name;
                 std::string trt_engine_cache_path;
                 OrtTensorRTProviderOptions trt_options{
                     instance_group_device_id,
@@ -266,7 +278,6 @@ ModelState::LoadModel(
                         trt_options.trt_fp16_enable = 1;
                       } else if (value_string == "INT8") {
                         trt_options.trt_int8_enable = 1;
-                        trt_options.trt_int8_calibration_table_name = int8_calibration_table_name.c_str();
                       } else if (value_string != "FP32") {
                         RETURN_ERROR_IF_FALSE(
                             false, TRITONSERVER_ERROR_INVALID_ARG,
@@ -276,33 +287,37 @@ ModelState::LoadModel(
                     } else if (param_key == "max_workspace_size_bytes") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
-                      int64_t max_workspace_size_bytes;
-                      RETURN_IF_ERROR(ParseLongLongValue(
+                      size_t max_workspace_size_bytes;
+                      RETURN_IF_ERROR(ParseUnsignedLongLongValue(
                           value_string, &max_workspace_size_bytes));
                       trt_options.trt_max_workspace_size =
-                          static_cast<size_t>(max_workspace_size_bytes);
+                          max_workspace_size_bytes;
                     } else if (param_key == "int8_calibration_table_name") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &int8_calibration_table_name));
-                      trt_options.trt_int8_calibration_table_name = int8_calibration_table_name.c_str();
-                    } else if (param_key == "int8_use_native_calibration_table") {
+                      trt_options.trt_int8_calibration_table_name =
+                          int8_calibration_table_name.c_str();
+                    } else if (
+                        param_key == "int8_use_native_calibration_table") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
                       int use_native_calibration_table;
                       RETURN_IF_ERROR(ParseIntValue(
                           value_string, &use_native_calibration_table));
-                      trt_options.trt_int8_use_native_calibration_table = use_native_calibration_table;
+                      trt_options.trt_int8_use_native_calibration_table =
+                          use_native_calibration_table;
                     } else if (param_key == "trt_engine_cache_enable") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &value_string));
                       bool enable_cache;
-                      RETURN_IF_ERROR(ParseBoolValue(
-                          value_string, &enable_cache));
+                      RETURN_IF_ERROR(
+                          ParseBoolValue(value_string, &enable_cache));
                       trt_options.trt_engine_cache_enable = enable_cache;
                     } else if (param_key == "trt_engine_cache_path") {
                       RETURN_IF_ERROR(params.MemberAsString(
                           param_key.c_str(), &trt_engine_cache_path));
-                      trt_options.trt_engine_cache_path = trt_engine_cache_path.c_str();
+                      trt_options.trt_engine_cache_path =
+                          trt_engine_cache_path.c_str();
                     } else {
                       return TRITONSERVER_ErrorNew(
                           TRITONSERVER_ERROR_INVALID_ARG,
@@ -339,17 +354,38 @@ ModelState::LoadModel(
       }
 
       // Default GPU execution provider.
-      // Using default values for evrything other than device id and cuda stream
-      OrtCUDAProviderOptions cuda_options{
-          instance_group_device_id,
-          OrtCudnnConvAlgoSearch::EXHAUSTIVE,  // cudnn_conv_algo_search
-          std::numeric_limits<size_t>::max(),  // gpu_mem_limit
-          0,                                   // arena_extend_strategy
-          true,                                // do_copy_in_default_stream
-          stream != nullptr ? 1 : 0,
+      // Using default values for everything other than device id and cuda
+      // stream
+      OrtCUDAProviderOptions cuda_options;
+      cuda_options.device_id = instance_group_device_id;
+      cuda_options.has_user_compute_stream = stream != nullptr ? 1 : 0;
+      cuda_options.user_compute_stream =
           stream != nullptr ? (void*)stream : nullptr,
-          nullptr  // default_memory_arena_cfg
-      };
+      cuda_options.default_memory_arena_cfg = nullptr;
+
+      {
+        // Parse CUDA EP configurations
+        triton::common::TritonJson::Value params;
+        if (model_config_.Find("parameters", &params)) {
+          int cudnn_conv_algo_search = 0;
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "cudnn_conv_algo_search", &cudnn_conv_algo_search, 0));
+          cuda_options.cudnn_conv_algo_search =
+              static_cast<OrtCudnnConvAlgoSearch>(cudnn_conv_algo_search);
+
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "gpu_mem_limit", &cuda_options.gpu_mem_limit, std::numeric_limits<size_t>::max()));
+
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "arena_extend_strategy",
+              &cuda_options.arena_extend_strategy, 0));
+
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "do_copy_in_default_stream",
+              &cuda_options.do_copy_in_default_stream, true));
+        }
+      }
+
       RETURN_IF_ORT_ERROR(ort_api->SessionOptionsAppendExecutionProvider_CUDA(
           soptions, &cuda_options));
       LOG_MESSAGE(
@@ -651,18 +687,18 @@ class ModelInstanceState : public BackendModelInstance {
       const std::string& control_kind, bool required, bool* have_control);
   TRITONSERVER_Error* ValidateInputs(const size_t expected_input_cnt);
   TRITONSERVER_Error* ValidateOutputs();
-  void OrtRun(
+  TRITONSERVER_Error* OrtRun(
       std::vector<TRITONBACKEND_Response*>* responses,
       const uint32_t response_count,
       const std::vector<const char*>& input_names,
       const std::vector<const char*>& output_names);
-  void SetInputTensors(
+  TRITONSERVER_Error* SetInputTensors(
       size_t total_batch_size, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses,
       BackendInputCollector* collector, std::vector<const char*>* input_names,
       bool* cuda_copy);
-  void SetStringInputTensor(
+  TRITONSERVER_Error* SetStringInputTensor(
       TRITONBACKEND_Request** requests, const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses, const char* input_name,
       std::vector<const char*>* string_ptrs, bool* cuda_copy);
@@ -672,7 +708,7 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<TRITONBACKEND_Response*>* responses, char* input_buffer,
       std::vector<const char*>* string_ptrs);
   void FillStringData(std::vector<const char*>* string_ptrs, size_t cnt);
-  void ReadOutputTensors(
+  TRITONSERVER_Error* ReadOutputTensors(
       size_t total_batch_size, const std::vector<const char*>& output_names,
       TRITONBACKEND_Request** requests, const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
@@ -1238,9 +1274,9 @@ ModelInstanceState::ProcessRequests(
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
       model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
       HostPolicyName().c_str());
-  SetInputTensors(
+  RESPOND_ALL_AND_RETURN_IF_ERROR(requests, request_count, &responses, SetInputTensors(
       total_batch_size, requests, request_count, &responses, &collector,
-      &input_names, &cuda_copy);
+      &input_names, &cuda_copy));
 
   // Request to retrieve all model outputs. 'output_names' and
   // 'output_tensors_' are parallel vectors and so must be kept in
@@ -1271,16 +1307,15 @@ ModelInstanceState::ProcessRequests(
         output_names.emplace_back(io_name);
         output_tensors_.emplace_back(nullptr);
 
-        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-            &responses, request_count,
-            ort_api->BindOutputToDevice(
+        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(requests, request_count, &responses,
+          ort_api->BindOutputToDevice(
                 io_binding_, io_name, cpu_allocator_info_));
       }
     }
 
     if (err != nullptr) {
-      SendErrorForResponses(&responses, request_count, err);
       output_names.clear();
+      RESPOND_ALL_AND_RETURN_IF_ERROR(requests, request_count, &responses, err);
     }
   }
 
@@ -1294,14 +1329,15 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  // Run...
-  OrtRun(&responses, request_count, input_names, output_names);
+  RESPOND_ALL_AND_RETURN_IF_ERROR(requests, request_count, &responses,
+      OrtRun(&responses, request_count, input_names, output_names)
+  );
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
 
-  ReadOutputTensors(
-      total_batch_size, output_names, requests, request_count, &responses);
+  RESPOND_ALL_AND_RETURN_IF_ERROR(requests, request_count, &responses, ReadOutputTensors(
+      total_batch_size, output_names, requests, request_count, &responses));
 
   uint64_t exec_end_ns = 0;
   SET_TIMESTAMP(exec_end_ns);
@@ -1342,28 +1378,17 @@ ModelInstanceState::ProcessRequests(
       "failed reporting batch request statistics");
 }
 
-void
+TRITONSERVER_Error*
 ModelInstanceState::OrtRun(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count, const std::vector<const char*>& input_names,
     const std::vector<const char*>& output_names)
 {
-  OrtStatus* status = nullptr;
-  status = ort_api->RunWithBinding(session_, runOptions_, io_binding_);
-  if (status != nullptr) {
-    OrtErrorCode code = ort_api->GetErrorCode(status);
-    std::string msg = ort_api->GetErrorMessage(status);
-    SendErrorForResponses(
-        responses, response_count,
-        TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL,
-            (std::string("onnxruntime execute failure ") +
-             std::to_string(code) + ": " + msg)
-                .c_str()));
-  }
+  RETURN_IF_ORT_ERROR(ort_api->RunWithBinding(session_, runOptions_, io_binding_));
+  return nullptr;
 }
 
-void
+TRITONSERVER_Error*
 ModelInstanceState::SetInputTensors(
     size_t total_batch_size, TRITONBACKEND_Request** requests,
     const uint32_t request_count,
@@ -1376,22 +1401,19 @@ ModelInstanceState::SetInputTensors(
   // All requests must have equally-sized input tensors so use any
   // request as the representative for the input tensors.
   uint32_t input_count;
-  RESPOND_ALL_AND_RETURN_IF_ERROR(
-      responses, request_count,
+  RETURN_IF_ERROR(
       TRITONBACKEND_RequestInputCount(requests[0], &input_count));
 
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
-    RESPOND_ALL_AND_RETURN_IF_ERROR(
-        responses, request_count,
+    RETURN_IF_ERROR(
         TRITONBACKEND_RequestInputByIndex(requests[0], input_idx, &input));
 
     const char* input_name;
     TRITONSERVER_DataType input_datatype;
     const int64_t* input_shape;
     uint32_t input_dims_count;
-    RESPOND_ALL_AND_RETURN_IF_ERROR(
-        responses, request_count,
+    RETURN_IF_ERROR(
         TRITONBACKEND_InputProperties(
             input, &input_name, &input_datatype, &input_shape,
             &input_dims_count, nullptr, nullptr));
@@ -1447,23 +1469,20 @@ ModelInstanceState::SetInputTensors(
                                {TRITONSERVER_MEMORY_CPU, 0}};
       }
 
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          responses, request_count,
+      RETURN_IF_ERROR(
           collector->ProcessTensor(
               input_name, nullptr, 0, allowed_input_types, &input_buffer,
               &batchn_byte_size, &memory_type, &memory_type_id));
 
       // Create ORT Tensor
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->CreateTensorWithDataAsOrtValue(
               memory_type == TRITONSERVER_MEMORY_GPU ? cuda_allocator_info_
                                                      : cpu_allocator_info_,
               (void*)input_buffer, batchn_byte_size, batchn_shape.data(),
               batchn_shape.size(), ConvertToOnnxDataType(input_datatype),
               &input_tensors_.back()));
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->BindInput(io_binding_, input_name, input_tensors_.back()));
     } else {
       // For BYTES input, we need to convert the serialized string
@@ -1480,17 +1499,14 @@ ModelInstanceState::SetInputTensors(
           requests, request_count, responses, input_name, &string_ptrs,
           cuda_copy);
 
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->CreateTensorAsOrtValue(
               default_allocator_, batchn_shape.data(), batchn_shape.size(),
               ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING, &input_tensors_.back()));
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->FillStringTensor(
               input_tensors_.back(), string_ptrs.data(), string_ptrs.size()));
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->BindInput(io_binding_, input_name, input_tensors_.back()));
     }
   }
@@ -1518,16 +1534,14 @@ ModelInstanceState::SetInputTensors(
               &dst_memory_type_id));
 
       // Create ORT Tensor
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, responses->size(),
+      RETURN_IF_ORT_ERROR(
           ort_api->CreateTensorWithDataAsOrtValue(
               cpu_allocator_info_, (void*)dst_buffer, dst_buffer_byte_size,
               shape.data(), shape.size(),
               ConvertToOnnxDataType(batch_input.DataType()),
               &input_tensors_.back()));
 
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, responses->size(),
+      RETURN_IF_ORT_ERROR(
           ort_api->BindInput(
               io_binding_, input_name.c_str(), input_tensors_.back()));
     }
@@ -1535,9 +1549,10 @@ ModelInstanceState::SetInputTensors(
 
   // Finalize...
   *cuda_copy |= collector->Finalize();
+  return nullptr;
 }
 
-void
+TRITONSERVER_Error*
 ModelInstanceState::SetStringInputTensor(
     TRITONBACKEND_Request** requests, const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses, const char* input_name,
@@ -1557,8 +1572,7 @@ ModelInstanceState::SetStringInputTensor(
     const int64_t* input_shape;
     uint32_t input_dims_count;
     uint64_t input_byte_size;
-    RESPOND_ALL_AND_RETURN_IF_ERROR(
-        responses, request_count,
+    RETURN_IF_ERROR(
         TRITONBACKEND_InputProperties(
             in, nullptr, nullptr, &input_shape, &input_dims_count,
             &input_byte_size, nullptr));
@@ -1581,8 +1595,7 @@ ModelInstanceState::SetStringInputTensor(
   // Reserve one more byte at the end of input_buffer to ensure last
   // element of String data can become valid C string.
   BackendMemory* input_memory;
-  RESPOND_ALL_AND_RETURN_IF_ERROR(
-      responses, request_count,
+  RETURN_IF_ERROR(
       BackendMemory::Create(
           model_state_->TritonMemoryManager(),
           {BackendMemory::AllocationType::CPU_PINNED_POOL,
@@ -1600,8 +1613,7 @@ ModelInstanceState::SetStringInputTensor(
         TRITONBACKEND_RequestInput(requests[ridx], input_name, &in);
     if ((err == nullptr) && ((*responses)[ridx] != nullptr)) {
       uint32_t input_buffer_count;
-      RESPOND_ALL_AND_RETURN_IF_ERROR(
-          responses, request_count,
+      RETURN_IF_ERROR(
           TRITONBACKEND_InputPropertiesForHostPolicy(
               in, HostPolicyName().c_str(), nullptr, nullptr, nullptr, nullptr,
               nullptr, &input_buffer_count));
@@ -1666,6 +1678,7 @@ ModelInstanceState::SetStringInputTensor(
       input_name, expected_byte_sizes, expected_element_cnts, responses,
       input_buffer, string_ptrs);
   input_buffer[total_byte_size] = 0;
+  return nullptr;
 }
 
 void
@@ -1742,7 +1755,7 @@ ModelInstanceState::FillStringData(
   }
 }
 
-void
+TRITONSERVER_Error*
 ModelInstanceState::ReadOutputTensors(
     size_t total_batch_size, const std::vector<const char*>& output_names,
     TRITONBACKEND_Request** requests, const uint32_t request_count,
@@ -1759,13 +1772,11 @@ ModelInstanceState::ReadOutputTensors(
       TRITONSERVER_MEMORY_CPU, 0};
 
   size_t output_count = 0;
-  RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-      responses, request_count,
+  RETURN_IF_ORT_ERROR(
       ort_api->GetBoundOutputValues(
           io_binding_, default_allocator_, &output_buffer_, &output_count));
   if (output_count != output_names.size()) {
-    RESPOND_ALL_AND_RETURN_IF_ERROR(
-        responses, request_count,
+    RETURN_IF_ERROR(
         TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
             ("Retrieved output count is not equal to expected count.")));
@@ -1778,8 +1789,7 @@ ModelInstanceState::ReadOutputTensors(
     const BatchOutput* batch_output = StateForModel()->FindBatchOutput(name);
     if (batch_output == nullptr) {
       if (output_tensor == nullptr) {
-        RESPOND_ALL_AND_RETURN_IF_ERROR(
-            responses, request_count,
+        RETURN_IF_ERROR(
             TRITONSERVER_ErrorNew(
                 TRITONSERVER_ERROR_INTERNAL,
                 (std::string("output tensor '") + name + "' is not found")
@@ -1788,44 +1798,37 @@ ModelInstanceState::ReadOutputTensors(
 
       // Get output type and shape
       OrtTypeInfo* typeinfo;
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->GetTypeInfo(output_tensor, &typeinfo));
       std::unique_ptr<OrtTypeInfo, TypeInfoDeleter> typeinfo_wrapper(typeinfo);
 
       const OrtTensorTypeAndShapeInfo* type_and_shape;
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->CastTypeInfoToTensorInfo(typeinfo, &type_and_shape));
 
       size_t num_dims;
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->GetDimensionsCount(type_and_shape, &num_dims));
 
       std::vector<int64_t> batchn_shape(num_dims);
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->GetDimensions(
               type_and_shape, batchn_shape.data(), batchn_shape.size()));
 
       ONNXTensorElementDataType type;
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->GetTensorElementType(type_and_shape, &type));
 
       if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
         const size_t element_count = GetElementCount(batchn_shape);
         size_t total_length = 0;
-        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-            responses, request_count,
+        RETURN_IF_ORT_ERROR(
             ort_api->GetStringTensorDataLength(output_tensor, &total_length));
 
         string_buffers.emplace_back(std::vector<char>(total_length));
         auto content = string_buffers.back().data();
         std::vector<size_t> offsets(element_count + 1);
-        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-            responses, request_count,
+        RETURN_IF_ORT_ERROR(
             ort_api->GetStringTensorContent(
                 output_tensor, content, total_length, offsets.data(),
                 element_count));
@@ -1838,8 +1841,7 @@ ModelInstanceState::ReadOutputTensors(
       } else {
         // Fixed size data type...
         char* output_buffer = nullptr;
-        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-            responses, request_count,
+        RETURN_IF_ORT_ERROR(
             ort_api->GetTensorMutableData(
                 output_tensor, (void**)&output_buffer));
 
@@ -1849,8 +1851,7 @@ ModelInstanceState::ReadOutputTensors(
       }
     } else {
       char* output_buffer = nullptr;
-      RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-          responses, request_count,
+      RETURN_IF_ORT_ERROR(
           ort_api->GetTensorMutableData(output_tensor, (void**)&output_buffer));
       responder.ProcessBatchOutput(
           name, *batch_output, output_buffer, alloc_perference.first,
@@ -1866,6 +1867,7 @@ ModelInstanceState::ReadOutputTensors(
     cudaStreamSynchronize(stream_);
   }
 #endif  // TRITON_ENABLE_GPU
+  return nullptr;
 }
 
 bool
