@@ -162,10 +162,10 @@ RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/nul
 # (Note: $CUDNN_VERSION is defined by base image)
 RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2)
 
-WORKDIR /usr/local/cudnn-$_CUDNN_VERSION/cuda/include
+RUN mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include
 RUN ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h
 
-WORKDIR /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 
+RUN mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 
 RUN ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 '''
 
