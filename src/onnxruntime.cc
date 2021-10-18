@@ -78,6 +78,11 @@ class ModelState : public BackendModel {
       OrtSession** session, OrtAllocator** default_allocator,
       cudaStream_t stream);
 
+  const std::map<std::string, std::pair<int64_t, int64_t>>& ModelOutputs()
+  {
+    return model_outputs_;
+  }
+
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
   TRITONSERVER_Error* AutoCompleteConfig();
@@ -89,6 +94,13 @@ class ModelState : public BackendModel {
 
   // Session options used when creating a ORT session.
   std::unique_ptr<OrtSessionOptions, SessionOptionsDeleter> session_options_;
+
+  // model_outputs is a map that contains unique outputs that the model must
+  // provide. In the model configuration, the output in the state configuration
+  // can have intersection with the outputs section of the model. If an output
+  // is specified both in the output section and state section, it indicates
+  // that the backend must return the output state to the client too.
+  std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
 };
 
 TRITONSERVER_Error*
@@ -119,6 +131,47 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
         &message, json_buffer.Base(), json_buffer.Size()));
     RETURN_IF_ERROR(TRITONBACKEND_ModelSetConfig(
         triton_model, 1 /* config_version */, message));
+  }
+
+  auto& model_outputs = (*state)->model_outputs_;
+
+  // Parse the output states in the model configuration
+  triton::common::TritonJson::Value sequence_batching;
+  if ((*state)->ModelConfig().Find("sequence_batching", &sequence_batching)) {
+    triton::common::TritonJson::Value states;
+    if (sequence_batching.Find("state", &states)) {
+      for (size_t i = 0; i < states.ArraySize(); i++) {
+        triton::common::TritonJson::Value state;
+        RETURN_IF_ERROR(states.IndexAsObject(i, &state));
+        std::string output_state_name;
+        RETURN_IF_ERROR(
+            state.MemberAsString("output_name", &output_state_name));
+        auto it = model_outputs.find(output_state_name);
+        if (it == model_outputs.end()) {
+          model_outputs.insert({output_state_name, std::make_pair(-1, i)});
+        } else {
+          it->second.second = i;
+        }
+      }
+    }
+  }
+
+  // Parse the output names in the model configuration
+  triton::common::TritonJson::Value outputs;
+  RETURN_IF_ERROR((*state)->ModelConfig().MemberAsArray("output", &outputs));
+  for (size_t i = 0; i < outputs.ArraySize(); i++) {
+    triton::common::TritonJson::Value output;
+    RETURN_IF_ERROR(outputs.IndexAsObject(i, &output));
+
+    std::string output_name_str;
+
+    RETURN_IF_ERROR(output.MemberAsString("name", &output_name_str));
+    auto it = model_outputs.find(output_name_str);
+    if (it == model_outputs.end()) {
+      model_outputs.insert({output_name_str, {i, -1}});
+    } else {
+      it->second.first = i;
+    }
   }
 
   return nullptr;  // success
@@ -374,7 +427,8 @@ ModelState::LoadModel(
               static_cast<OrtCudnnConvAlgoSearch>(cudnn_conv_algo_search);
 
           RETURN_IF_ERROR(TryParseModelStringParameter(
-              params, "gpu_mem_limit", &cuda_options.gpu_mem_limit, std::numeric_limits<size_t>::max()));
+              params, "gpu_mem_limit", &cuda_options.gpu_mem_limit,
+              std::numeric_limits<size_t>::max()));
 
           RETURN_IF_ERROR(TryParseModelStringParameter(
               params, "arena_extend_strategy",
@@ -587,7 +641,8 @@ ModelState::AutoCompleteMaxBatch(
       LOG_MESSAGE(
           TRITONSERVER_LOG_WARN,
           (std::string("autofilled max_batch_size to 1 for model '") + Name() +
-           "' since batching is supporrted but no max_batch_size is specified "
+           "' since batching is supporrted but no max_batch_size is "
+           "specified "
            "in model configuration. Must specify max_batch_size to utilize "
            "autofill with a larger max batch size")
               .c_str());
@@ -689,9 +744,7 @@ class ModelInstanceState : public BackendModelInstance {
   TRITONSERVER_Error* ValidateOutputs();
   TRITONSERVER_Error* OrtRun(
       std::vector<TRITONBACKEND_Response*>* responses,
-      const uint32_t response_count,
-      const std::vector<const char*>& input_names,
-      const std::vector<const char*>& output_names);
+      const uint32_t response_count);
   TRITONSERVER_Error* SetInputTensors(
       size_t total_batch_size, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
@@ -709,14 +762,30 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<const char*>* string_ptrs);
   void FillStringData(std::vector<const char*>* string_ptrs, size_t cnt);
   TRITONSERVER_Error* ReadOutputTensors(
-      size_t total_batch_size, const std::vector<const char*>& output_names,
-      TRITONBACKEND_Request** requests, const uint32_t request_count,
+      size_t total_batch_size, TRITONBACKEND_Request** requests,
+      const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
+
+  TRITONSERVER_Error* ReadOutputTensor(
+      std::vector<int64_t>& batchn_shape, TRITONSERVER_DataType& dtype,
+      OrtValue* output_tensor, void** output_buffer,
+      std::vector<std::vector<char>>& string_buffers,
+      std::vector<size_t>& offsets);
   bool SetStringOutputBuffer(
       const std::string& name, const char* content, const size_t* offsets,
       std::vector<int64_t>* batchn_shape, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
+  bool SetStringStateBuffer(
+      const std::string& name, const char* content, const size_t* offsets,
+      std::vector<int64_t>* batchn_shape, TRITONBACKEND_Request** requests,
+      const uint32_t request_count,
+      std::vector<TRITONBACKEND_Response*>* responses);
+  bool SetStringBuffer(
+      const std::string& name, const char* content, const size_t* offsets,
+      std::vector<int64_t>* batchn_shape, TRITONBACKEND_Request** requests,
+      const uint32_t request_count,
+      std::vector<TRITONBACKEND_Response*>* responses, bool state);
 
   ModelState* model_state_;
 
@@ -827,6 +896,12 @@ ModelInstanceState::ModelInstanceState(
     if (have_corrid) {
       expected_input_cnt += 1;
     }
+
+    // Add the state inputs to the expected count
+    triton::common::TritonJson::Value states;
+    if (sequence_batching.Find("state", &states)) {
+      expected_input_cnt += states.ArraySize();
+    }
   }
 
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateInputs(expected_input_cnt));
@@ -842,7 +917,8 @@ ModelInstanceState::~ModelInstanceState()
   if (session_ != nullptr) {
     OnnxLoader::UnloadSession(session_);
   }
-  // 'default_allocator_' is default allocator which is managed by ONNX Runtime
+  // 'default_allocator_' is default allocator which is managed by ONNX
+  // Runtime
 }
 
 void
@@ -1149,6 +1225,48 @@ ModelInstanceState::ValidateOutputs()
     }
   }
 
+  triton::common::TritonJson::Value sequence_batching;
+  if (model_state_->ModelConfig().Find(
+          "sequence_batching", &sequence_batching)) {
+    triton::common::TritonJson::Value states;
+    if (sequence_batching.MemberAsArray("state", &states)) {
+      for (size_t i = 0; i < states.ArraySize(); i++) {
+        triton::common::TritonJson::Value state;
+        RETURN_IF_ERROR(states.IndexAsObject(i, &state));
+        std::string state_name;
+        RETURN_IF_ERROR(state.MemberAsString("name", &state_name));
+        std::string state_dtype;
+        RETURN_IF_ERROR(state.MemberAsString("data_type", &state_dtype));
+        std::vector<int64_t> dims;
+        RETURN_IF_ERROR(ParseShape(state, "dims", &dims));
+
+        auto iit = output_tensor_infos.find(state_name);
+        if (iit == output_tensor_infos.end()) {
+          RETURN_IF_ERROR(CheckAllowedModelOutput(state, output_tensor_names));
+        }
+
+        auto onnx_data_type = ModelConfigDataTypeToOnnxDataType(state_dtype);
+        if (onnx_data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED) {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INTERNAL,
+              (std::string("unsupported datatype ") + state_dtype +
+               " for output state '" + state_name + "' for model '" +
+               model_state_->Name() + "'")
+                  .c_str());
+        } else if (onnx_data_type != iit->second.type_) {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              (std::string("unable to load model '") + model_state_->Name() +
+               "', configuration expects datatype " + state_dtype +
+               " for output state '" + state_name + "', model provides TYPE_" +
+               TRITONSERVER_DataTypeString(
+                   ConvertFromOnnxDataType(iit->second.type_)))
+                  .c_str());
+        }
+      }
+    }
+  }
+
   return nullptr;  // success
 }
 
@@ -1274,49 +1392,23 @@ ModelInstanceState::ProcessRequests(
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
       model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
       HostPolicyName().c_str());
-  RESPOND_ALL_AND_RETURN_IF_ERROR(requests, request_count, &responses, SetInputTensors(
-      total_batch_size, requests, request_count, &responses, &collector,
-      &input_names, &cuda_copy));
+  RESPOND_ALL_AND_RETURN_IF_ERROR(
+      requests, request_count, &responses,
+      SetInputTensors(
+          total_batch_size, requests, request_count, &responses, &collector,
+          &input_names, &cuda_copy));
 
   // Request to retrieve all model outputs. 'output_names' and
   // 'output_tensors_' are parallel vectors and so must be kept in
   // sync. [TODO] should collect only the outputs needed by some
   // request.
-  std::vector<const char*> output_names;
-  {
-    triton::common::TritonJson::Value ios;
-    TRITONSERVER_Error* err =
-        model_state_->ModelConfig().MemberAsArray("output", &ios);
-    if (err == nullptr) {
-      for (size_t i = 0; i < ios.ArraySize(); i++) {
-        triton::common::TritonJson::Value io;
-        err = ios.IndexAsObject(i, &io);
-        if (err != nullptr) {
-          break;
-        }
+  for (auto& output_name : StateForModel()->ModelOutputs()) {
+    output_tensors_.emplace_back(nullptr);
 
-        // Use names from ModelConfig by reference since the model
-        // config will persist longer than this inference execution.
-        const char* io_name;
-        size_t io_name_len;
-        err = io.MemberAsString("name", &io_name, &io_name_len);
-        if (err != nullptr) {
-          break;
-        }
-
-        output_names.emplace_back(io_name);
-        output_tensors_.emplace_back(nullptr);
-
-        RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(requests, request_count, &responses,
-          ort_api->BindOutputToDevice(
-                io_binding_, io_name, cpu_allocator_info_));
-      }
-    }
-
-    if (err != nullptr) {
-      output_names.clear();
-      RESPOND_ALL_AND_RETURN_IF_ERROR(requests, request_count, &responses, err);
-    }
+    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
+        requests, request_count, &responses,
+        ort_api->BindOutputToDevice(
+            io_binding_, output_name.first.c_str(), cpu_allocator_info_));
   }
 
   // Wait for any in-flight input tensor copies to complete.
@@ -1329,15 +1421,15 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  RESPOND_ALL_AND_RETURN_IF_ERROR(requests, request_count, &responses,
-      OrtRun(&responses, request_count, input_names, output_names)
-  );
+  RESPOND_ALL_AND_RETURN_IF_ERROR(
+      requests, request_count, &responses, OrtRun(&responses, request_count));
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
 
-  RESPOND_ALL_AND_RETURN_IF_ERROR(requests, request_count, &responses, ReadOutputTensors(
-      total_batch_size, output_names, requests, request_count, &responses));
+  RESPOND_ALL_AND_RETURN_IF_ERROR(
+      requests, request_count, &responses,
+      ReadOutputTensors(total_batch_size, requests, request_count, &responses));
 
   uint64_t exec_end_ns = 0;
   SET_TIMESTAMP(exec_end_ns);
@@ -1381,10 +1473,10 @@ ModelInstanceState::ProcessRequests(
 TRITONSERVER_Error*
 ModelInstanceState::OrtRun(
     std::vector<TRITONBACKEND_Response*>* responses,
-    const uint32_t response_count, const std::vector<const char*>& input_names,
-    const std::vector<const char*>& output_names)
+    const uint32_t response_count)
 {
-  RETURN_IF_ORT_ERROR(ort_api->RunWithBinding(session_, runOptions_, io_binding_));
+  RETURN_IF_ORT_ERROR(
+      ort_api->RunWithBinding(session_, runOptions_, io_binding_));
   return nullptr;
 }
 
@@ -1401,8 +1493,7 @@ ModelInstanceState::SetInputTensors(
   // All requests must have equally-sized input tensors so use any
   // request as the representative for the input tensors.
   uint32_t input_count;
-  RETURN_IF_ERROR(
-      TRITONBACKEND_RequestInputCount(requests[0], &input_count));
+  RETURN_IF_ERROR(TRITONBACKEND_RequestInputCount(requests[0], &input_count));
 
   for (uint32_t input_idx = 0; input_idx < input_count; input_idx++) {
     TRITONBACKEND_Input* input;
@@ -1413,10 +1504,9 @@ ModelInstanceState::SetInputTensors(
     TRITONSERVER_DataType input_datatype;
     const int64_t* input_shape;
     uint32_t input_dims_count;
-    RETURN_IF_ERROR(
-        TRITONBACKEND_InputProperties(
-            input, &input_name, &input_datatype, &input_shape,
-            &input_dims_count, nullptr, nullptr));
+    RETURN_IF_ERROR(TRITONBACKEND_InputProperties(
+        input, &input_name, &input_datatype, &input_shape, &input_dims_count,
+        nullptr, nullptr));
 
     input_names->emplace_back(input_name);
     input_tensors_.emplace_back(nullptr);
@@ -1452,8 +1542,8 @@ ModelInstanceState::SetInputTensors(
 
     if (input_datatype != TRITONSERVER_TYPE_BYTES) {
       // The input must be in contiguous CPU memory. Use appropriate
-      // allocator info to bind inputs to the right device. .i.e bind inputs to
-      // GPU if they are being provided on GPU.
+      // allocator info to bind inputs to the right device. .i.e bind inputs
+      // to GPU if they are being provided on GPU.
       const char* input_buffer;
       size_t batchn_byte_size;
       TRITONSERVER_MemoryType memory_type;
@@ -1469,19 +1559,17 @@ ModelInstanceState::SetInputTensors(
                                {TRITONSERVER_MEMORY_CPU, 0}};
       }
 
-      RETURN_IF_ERROR(
-          collector->ProcessTensor(
-              input_name, nullptr, 0, allowed_input_types, &input_buffer,
-              &batchn_byte_size, &memory_type, &memory_type_id));
+      RETURN_IF_ERROR(collector->ProcessTensor(
+          input_name, nullptr, 0, allowed_input_types, &input_buffer,
+          &batchn_byte_size, &memory_type, &memory_type_id));
 
       // Create ORT Tensor
-      RETURN_IF_ORT_ERROR(
-          ort_api->CreateTensorWithDataAsOrtValue(
-              memory_type == TRITONSERVER_MEMORY_GPU ? cuda_allocator_info_
-                                                     : cpu_allocator_info_,
-              (void*)input_buffer, batchn_byte_size, batchn_shape.data(),
-              batchn_shape.size(), ConvertToOnnxDataType(input_datatype),
-              &input_tensors_.back()));
+      RETURN_IF_ORT_ERROR(ort_api->CreateTensorWithDataAsOrtValue(
+          memory_type == TRITONSERVER_MEMORY_GPU ? cuda_allocator_info_
+                                                 : cpu_allocator_info_,
+          (void*)input_buffer, batchn_byte_size, batchn_shape.data(),
+          batchn_shape.size(), ConvertToOnnxDataType(input_datatype),
+          &input_tensors_.back()));
       RETURN_IF_ORT_ERROR(
           ort_api->BindInput(io_binding_, input_name, input_tensors_.back()));
     } else {
@@ -1499,13 +1587,11 @@ ModelInstanceState::SetInputTensors(
           requests, request_count, responses, input_name, &string_ptrs,
           cuda_copy);
 
-      RETURN_IF_ORT_ERROR(
-          ort_api->CreateTensorAsOrtValue(
-              default_allocator_, batchn_shape.data(), batchn_shape.size(),
-              ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING, &input_tensors_.back()));
-      RETURN_IF_ORT_ERROR(
-          ort_api->FillStringTensor(
-              input_tensors_.back(), string_ptrs.data(), string_ptrs.size()));
+      RETURN_IF_ORT_ERROR(ort_api->CreateTensorAsOrtValue(
+          default_allocator_, batchn_shape.data(), batchn_shape.size(),
+          ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING, &input_tensors_.back()));
+      RETURN_IF_ORT_ERROR(ort_api->FillStringTensor(
+          input_tensors_.back(), string_ptrs.data(), string_ptrs.size()));
       RETURN_IF_ORT_ERROR(
           ort_api->BindInput(io_binding_, input_name, input_tensors_.back()));
     }
@@ -1534,16 +1620,14 @@ ModelInstanceState::SetInputTensors(
               &dst_memory_type_id));
 
       // Create ORT Tensor
-      RETURN_IF_ORT_ERROR(
-          ort_api->CreateTensorWithDataAsOrtValue(
-              cpu_allocator_info_, (void*)dst_buffer, dst_buffer_byte_size,
-              shape.data(), shape.size(),
-              ConvertToOnnxDataType(batch_input.DataType()),
-              &input_tensors_.back()));
+      RETURN_IF_ORT_ERROR(ort_api->CreateTensorWithDataAsOrtValue(
+          cpu_allocator_info_, (void*)dst_buffer, dst_buffer_byte_size,
+          shape.data(), shape.size(),
+          ConvertToOnnxDataType(batch_input.DataType()),
+          &input_tensors_.back()));
 
-      RETURN_IF_ORT_ERROR(
-          ort_api->BindInput(
-              io_binding_, input_name.c_str(), input_tensors_.back()));
+      RETURN_IF_ORT_ERROR(ort_api->BindInput(
+          io_binding_, input_name.c_str(), input_tensors_.back()));
     }
   }
 
@@ -1572,10 +1656,9 @@ ModelInstanceState::SetStringInputTensor(
     const int64_t* input_shape;
     uint32_t input_dims_count;
     uint64_t input_byte_size;
-    RETURN_IF_ERROR(
-        TRITONBACKEND_InputProperties(
-            in, nullptr, nullptr, &input_shape, &input_dims_count,
-            &input_byte_size, nullptr));
+    RETURN_IF_ERROR(TRITONBACKEND_InputProperties(
+        in, nullptr, nullptr, &input_shape, &input_dims_count, &input_byte_size,
+        nullptr));
 
     // Skip input in this request if error response has already been sent.
     if ((*responses)[ridx] == nullptr) {
@@ -1595,12 +1678,11 @@ ModelInstanceState::SetStringInputTensor(
   // Reserve one more byte at the end of input_buffer to ensure last
   // element of String data can become valid C string.
   BackendMemory* input_memory;
-  RETURN_IF_ERROR(
-      BackendMemory::Create(
-          model_state_->TritonMemoryManager(),
-          {BackendMemory::AllocationType::CPU_PINNED_POOL,
-           BackendMemory::AllocationType::CPU},
-          0 /* memory_type_id */, total_byte_size + 1, &input_memory));
+  RETURN_IF_ERROR(BackendMemory::Create(
+      model_state_->TritonMemoryManager(),
+      {BackendMemory::AllocationType::CPU_PINNED_POOL,
+       BackendMemory::AllocationType::CPU},
+      0 /* memory_type_id */, total_byte_size + 1, &input_memory));
   input_tensor_memories_.push_back(input_memory);
 
   const TRITONSERVER_MemoryType mem_type = input_memory->MemoryType();
@@ -1613,10 +1695,9 @@ ModelInstanceState::SetStringInputTensor(
         TRITONBACKEND_RequestInput(requests[ridx], input_name, &in);
     if ((err == nullptr) && ((*responses)[ridx] != nullptr)) {
       uint32_t input_buffer_count;
-      RETURN_IF_ERROR(
-          TRITONBACKEND_InputPropertiesForHostPolicy(
-              in, HostPolicyName().c_str(), nullptr, nullptr, nullptr, nullptr,
-              nullptr, &input_buffer_count));
+      RETURN_IF_ERROR(TRITONBACKEND_InputPropertiesForHostPolicy(
+          in, HostPolicyName().c_str(), nullptr, nullptr, nullptr, nullptr,
+          nullptr, &input_buffer_count));
 
       size_t input_offset = 0;
       for (size_t idx = 0; idx < input_buffer_count; ++idx) {
@@ -1756,9 +1837,58 @@ ModelInstanceState::FillStringData(
 }
 
 TRITONSERVER_Error*
+ModelInstanceState::ReadOutputTensor(
+    std::vector<int64_t>& batchn_shape, TRITONSERVER_DataType& dtype,
+    OrtValue* output_tensor, void** output_buffer,
+    std::vector<std::vector<char>>& string_buffers,
+    std::vector<size_t>& offsets)
+{
+  // Get output type and shape
+  OrtTypeInfo* typeinfo;
+  RETURN_IF_ORT_ERROR(ort_api->GetTypeInfo(output_tensor, &typeinfo));
+  std::unique_ptr<OrtTypeInfo, TypeInfoDeleter> typeinfo_wrapper(typeinfo);
+
+  const OrtTensorTypeAndShapeInfo* type_and_shape;
+  RETURN_IF_ORT_ERROR(
+      ort_api->CastTypeInfoToTensorInfo(typeinfo, &type_and_shape));
+
+  size_t num_dims;
+  RETURN_IF_ORT_ERROR(ort_api->GetDimensionsCount(type_and_shape, &num_dims));
+  batchn_shape.resize(num_dims);
+  RETURN_IF_ORT_ERROR(ort_api->GetDimensions(
+      type_and_shape, batchn_shape.data(), batchn_shape.size()));
+
+  ONNXTensorElementDataType type;
+  RETURN_IF_ORT_ERROR(ort_api->GetTensorElementType(type_and_shape, &type));
+  if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
+    const size_t element_count = GetElementCount(batchn_shape);
+    size_t total_length = 0;
+    RETURN_IF_ORT_ERROR(
+        ort_api->GetStringTensorDataLength(output_tensor, &total_length));
+
+    string_buffers.emplace_back(std::vector<char>(total_length));
+    auto content = string_buffers.back().data();
+    offsets.reserve(element_count + 1);
+    RETURN_IF_ORT_ERROR(ort_api->GetStringTensorContent(
+        output_tensor, content, total_length, offsets.data(), element_count));
+    // Mark "passed end byte offset"
+    offsets[element_count] = total_length;
+
+  } else {
+    // Fixed size data type...
+    RETURN_IF_ORT_ERROR(
+        ort_api->GetTensorMutableData(output_tensor, output_buffer));
+  }
+
+  dtype = ConvertFromOnnxDataType(type);
+
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
 ModelInstanceState::ReadOutputTensors(
-    size_t total_batch_size, const std::vector<const char*>& output_names,
-    TRITONBACKEND_Request** requests, const uint32_t request_count,
+    size_t total_batch_size, TRITONBACKEND_Request** requests,
+    const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses)
 {
   BackendOutputResponder responder(
@@ -1770,85 +1900,76 @@ ModelInstanceState::ReadOutputTensors(
   bool cuda_copy = false;
   std::pair<TRITONSERVER_MemoryType, int64_t> alloc_perference = {
       TRITONSERVER_MEMORY_CPU, 0};
+  auto& model_outputs = StateForModel()->ModelOutputs();
 
   size_t output_count = 0;
-  RETURN_IF_ORT_ERROR(
-      ort_api->GetBoundOutputValues(
-          io_binding_, default_allocator_, &output_buffer_, &output_count));
-  if (output_count != output_names.size()) {
-    RETURN_IF_ERROR(
-        TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL,
-            ("Retrieved output count is not equal to expected count.")));
+  RETURN_IF_ORT_ERROR(ort_api->GetBoundOutputValues(
+      io_binding_, default_allocator_, &output_buffer_, &output_count));
+  if (output_count != model_outputs.size()) {
+    RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        ("Retrieved output count is not equal to expected count.")));
   }
+
   std::vector<std::vector<char>> string_buffers;
-  for (size_t idx = 0; idx < output_names.size(); idx++) {
+  auto model_outputs_it = model_outputs.begin();
+  for (size_t idx = 0; idx < model_outputs.size(); idx++, model_outputs_it++) {
     OrtValue* output_tensor = output_tensors_[idx] = output_buffer_[idx];
-    std::string name = output_names[idx];
+    const std::string& name = model_outputs_it->first;
+    auto& output_tensor_pair = model_outputs_it->second;
 
     const BatchOutput* batch_output = StateForModel()->FindBatchOutput(name);
     if (batch_output == nullptr) {
       if (output_tensor == nullptr) {
-        RETURN_IF_ERROR(
-            TRITONSERVER_ErrorNew(
-                TRITONSERVER_ERROR_INTERNAL,
-                (std::string("output tensor '") + name + "' is not found")
-                    .c_str()));
+        RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL,
+            (std::string("output tensor '") + name + "' is not found")
+                .c_str()));
       }
 
-      // Get output type and shape
-      OrtTypeInfo* typeinfo;
-      RETURN_IF_ORT_ERROR(
-          ort_api->GetTypeInfo(output_tensor, &typeinfo));
-      std::unique_ptr<OrtTypeInfo, TypeInfoDeleter> typeinfo_wrapper(typeinfo);
+      std::vector<int64_t> batchn_shape;
+      TRITONSERVER_DataType dtype;
+      void* output_buffer;
+      std::vector<std::vector<char>> string_buffers;
+      std::vector<size_t> offsets;
 
-      const OrtTensorTypeAndShapeInfo* type_and_shape;
-      RETURN_IF_ORT_ERROR(
-          ort_api->CastTypeInfoToTensorInfo(typeinfo, &type_and_shape));
+      RETURN_IF_ERROR(ReadOutputTensor(
+          batchn_shape, dtype, output_tensor, &output_buffer, string_buffers,
+          offsets));
 
-      size_t num_dims;
-      RETURN_IF_ORT_ERROR(
-          ort_api->GetDimensionsCount(type_and_shape, &num_dims));
-
-      std::vector<int64_t> batchn_shape(num_dims);
-      RETURN_IF_ORT_ERROR(
-          ort_api->GetDimensions(
-              type_and_shape, batchn_shape.data(), batchn_shape.size()));
-
-      ONNXTensorElementDataType type;
-      RETURN_IF_ORT_ERROR(
-          ort_api->GetTensorElementType(type_and_shape, &type));
-
-      if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
-        const size_t element_count = GetElementCount(batchn_shape);
-        size_t total_length = 0;
-        RETURN_IF_ORT_ERROR(
-            ort_api->GetStringTensorDataLength(output_tensor, &total_length));
-
-        string_buffers.emplace_back(std::vector<char>(total_length));
-        auto content = string_buffers.back().data();
-        std::vector<size_t> offsets(element_count + 1);
-        RETURN_IF_ORT_ERROR(
-            ort_api->GetStringTensorContent(
-                output_tensor, content, total_length, offsets.data(),
-                element_count));
-        // Mark "passed end byte offset"
-        offsets[element_count] = total_length;
-
-        cuda_copy |= SetStringOutputBuffer(
-            name, content, offsets.data(), &batchn_shape, requests,
-            request_count, responses);
-      } else {
-        // Fixed size data type...
-        char* output_buffer = nullptr;
-        RETURN_IF_ORT_ERROR(
-            ort_api->GetTensorMutableData(
-                output_tensor, (void**)&output_buffer));
-
-        responder.ProcessTensor(
-            name, ConvertFromOnnxDataType(type), batchn_shape, output_buffer,
-            alloc_perference.first, alloc_perference.second);
+      if (output_tensor_pair.first != -1) {
+        if (dtype == TRITONSERVER_TYPE_BYTES) {
+          auto content = string_buffers.back().data();
+          cuda_copy |= SetStringOutputBuffer(
+              name, content, offsets.data(), &batchn_shape, requests,
+              request_count, responses);
+        } else {
+          responder.ProcessTensor(
+              name, dtype, batchn_shape, reinterpret_cast<char*>(output_buffer),
+              alloc_perference.first, alloc_perference.second);
+        }
       }
+
+      if (output_tensor_pair.second != -1) {
+        std::vector<TRITONBACKEND_State*> states;
+        if (dtype == TRITONSERVER_TYPE_BYTES) {
+          auto content = string_buffers.back().data();
+          cuda_copy |= SetStringStateBuffer(
+              name, content, offsets.data(), &batchn_shape, requests,
+              request_count, responses);
+        } else {
+          states = responder.ProcessStateTensor(
+              name, dtype, batchn_shape, reinterpret_cast<char*>(output_buffer),
+              alloc_perference.first, alloc_perference.second);
+        }
+
+        // Update the states
+        for (auto& state : states) {
+          RETURN_IF_ERROR(TRITONBACKEND_StateUpdate(state));
+        }
+      }
+
+
     } else {
       char* output_buffer = nullptr;
       RETURN_IF_ORT_ERROR(
@@ -1871,11 +1992,34 @@ ModelInstanceState::ReadOutputTensors(
 }
 
 bool
+ModelInstanceState::SetStringStateBuffer(
+    const std::string& name, const char* content, const size_t* offsets,
+    std::vector<int64_t>* batchn_shape, TRITONBACKEND_Request** requests,
+    const uint32_t request_count,
+    std::vector<TRITONBACKEND_Response*>* responses)
+{
+  return SetStringBuffer(
+      name, content, offsets, batchn_shape, requests, request_count, responses,
+      true /* state */);
+}
+
+bool
 ModelInstanceState::SetStringOutputBuffer(
     const std::string& name, const char* content, const size_t* offsets,
     std::vector<int64_t>* batchn_shape, TRITONBACKEND_Request** requests,
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses)
+{
+  return SetStringBuffer(
+      name, content, offsets, batchn_shape, requests, request_count, responses,
+      false /* state */);
+}
+bool
+ModelInstanceState::SetStringBuffer(
+    const std::string& name, const char* content, const size_t* offsets,
+    std::vector<int64_t>* batchn_shape, TRITONBACKEND_Request** requests,
+    const uint32_t request_count,
+    std::vector<TRITONBACKEND_Response*>* responses, bool state)
 {
   size_t element_idx = 0;
   bool cuda_copy = false;
@@ -1920,10 +2064,18 @@ ModelInstanceState::SetStringOutputBuffer(
     }
 
     if (need_output) {
+      TRITONSERVER_Error* err;
       TRITONBACKEND_Output* response_output;
-      TRITONSERVER_Error* err = TRITONBACKEND_ResponseOutput(
-          response, &response_output, name.c_str(), TRITONSERVER_TYPE_BYTES,
-          batchn_shape->data(), batchn_shape->size());
+      TRITONBACKEND_State* response_state;
+      if (!state) {
+        err = TRITONBACKEND_ResponseOutput(
+            response, &response_output, name.c_str(), TRITONSERVER_TYPE_BYTES,
+            batchn_shape->data(), batchn_shape->size());
+      } else {
+        err = TRITONBACKEND_StateNew(
+            &response_state, request, name.c_str(), TRITONSERVER_TYPE_BYTES,
+            batchn_shape->data(), batchn_shape->size());
+      }
       if (err == nullptr) {
         // Calculate expected byte size in advance using string offsets
         const size_t data_byte_size =
@@ -1935,9 +2087,15 @@ ModelInstanceState::SetStringOutputBuffer(
             TRITONSERVER_MEMORY_CPU_PINNED;
         int64_t actual_memory_type_id = 0;
         void* buffer;
-        err = TRITONBACKEND_OutputBuffer(
-            response_output, &buffer, expected_byte_size, &actual_memory_type,
-            &actual_memory_type_id);
+        if (!state) {
+          err = TRITONBACKEND_OutputBuffer(
+              response_output, &buffer, expected_byte_size, &actual_memory_type,
+              &actual_memory_type_id);
+        } else {
+          err = TRITONBACKEND_StateBuffer(
+              response_state, &buffer, expected_byte_size, &actual_memory_type,
+              &actual_memory_type_id);
+        }
         if (err == nullptr) {
           bool cuda_used = false;
           size_t copied_byte_size = 0;
@@ -2182,5 +2340,4 @@ TRITONBACKEND_ModelInstanceExecute(
 }
 
 }  // extern "C"
-
 }}}  // namespace triton::backend::onnxruntime
