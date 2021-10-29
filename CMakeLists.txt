@@ -60,6 +60,11 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #   - If you want TensorRT support set
 #     TRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON and set
 #     TRITON_BUILD_TENSORRT_HOME.
+#     Optionally set TRITON_ONNX_TENSORRT_REPO_TAG to branch in https://github.com/onnx/onnx-tensorrt repo
+#     example:
+#         TRITON_ONNX_TENSORRT_REPO_TAG=master
+#     This enables using a version of tensorrt which is not yet supported in ONNXRuntime release branch.
+#     By default we pick the default branch which comes with the requested version of onnxruntime.
 #
 #   - If you want OpenVINO support set
 #     TRITON_ENABLE_ONNXRUNTIME_OPENVINO=ON and set
@@ -85,6 +90,7 @@ set(TRITON_BUILD_CUDA_HOME "" CACHE PATH "Path to CUDA install")
 set(TRITON_BUILD_CUDNN_HOME "" CACHE PATH "Path to CUDNN install")
 set(TRITON_BUILD_TENSORRT_HOME "" CACHE PATH "Path to TensorRT install")
 set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "" CACHE PATH "Paths to ONNXRuntime includes")
+set(TRITON_ONNX_TENSORRT_REPO_TAG "" CACHE STRING "Tag for onnx-tensorrt repo")
 set(TRITON_ONNXRUNTIME_LIB_PATHS "" CACHE PATH "Paths to ONNXRuntime libraries")
 
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
@@ -331,7 +337,7 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
     add_custom_command(
       OUTPUT
         onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
-      COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="${TRITON_BUILD_CONTAINER}" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" ${_GEN_FLAGS} --output=Dockerfile.ort ${ENABLE_GPU_EXTRA_ARGS}
+      COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="${TRITON_BUILD_CONTAINER}" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" --onnx-tensorrt-tag="${TRITON_ONNX_TENSORRT_REPO_TAG}" ${_GEN_FLAGS} --output=Dockerfile.ort ${ENABLE_GPU_EXTRA_ARGS}
       COMMAND docker build --memory ${TRITON_ONNXRUNTIME_DOCKER_MEMORY} --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE} --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE}_cache1 -t ${TRITON_ONNXRUNTIME_DOCKER_IMAGE} -f ./Dockerfile.ort ${CMAKE_CURRENT_SOURCE_DIR}
       COMMAND powershell.exe -noprofile -c "docker rm onnxruntime_backend_ort > $null 2>&1; if ($LASTEXITCODE) { 'error ignored...' }; exit 0"
       COMMAND docker create --name onnxruntime_backend_ort ${TRITON_ONNXRUNTIME_DOCKER_IMAGE}
@@ -344,7 +350,7 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
     add_custom_command(
       OUTPUT
         onnxruntime/lib/${ONNXRUNTIME_LIBRARY}
-      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="${TRITON_BUILD_CONTAINER}" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" --ort-build-config="${CMAKE_BUILD_TYPE}" ${_GEN_FLAGS} --output=Dockerfile.ort ${ENABLE_GPU_EXTRA_ARGS}
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_ort_dockerfile.py --triton-container="${TRITON_BUILD_CONTAINER}" --ort-version="${TRITON_BUILD_ONNXRUNTIME_VERSION}" --ort-build-config="${CMAKE_BUILD_TYPE}" --onnx-tensorrt-tag="${TRITON_ONNX_TENSORRT_REPO_TAG}" ${_GEN_FLAGS} --output=Dockerfile.ort ${ENABLE_GPU_EXTRA_ARGS}
       COMMAND docker build --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE} --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE}_cache0 --cache-from=${TRITON_ONNXRUNTIME_DOCKER_IMAGE}_cache1 -t ${TRITON_ONNXRUNTIME_DOCKER_IMAGE} -f ./Dockerfile.ort ${CMAKE_CURRENT_SOURCE_DIR}
       COMMAND docker rm onnxruntime_backend_ort || echo 'error ignored...' || true
       COMMAND docker create --name onnxruntime_backend_ort ${TRITON_ONNXRUNTIME_DOCKER_IMAGE}

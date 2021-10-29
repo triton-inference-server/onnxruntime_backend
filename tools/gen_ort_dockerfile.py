@@ -32,6 +32,13 @@ import re
 
 FLAGS = None
 
+ORT_TO_TRTPARSER_VERSION_MAP = {
+    '1.9.1': (
+        '21.12',         # Triton container version
+        'release/8.2-EA' # ONNX-Tensorrt parser version
+    )
+}
+
 def target_platform():
     if FLAGS.target_platform is not None:
         return FLAGS.target_platform
@@ -163,6 +170,11 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
         (cd onnxruntime && git submodule update --init --recursive)
 
         '''
+
+    if FLAGS.onnx_tensorrt_tag != "":
+        df += '''
+    RUN (cd /workspace/onnxruntime/cmake/external/onnx-tensorrt && git fetch origin {}:ortrefbranch && git checkout ortrefbranch)
+    '''.format(FLAGS.onnx_tensorrt_tag)
 
     ep_flags = ''
     if FLAGS.enable_gpu:
@@ -329,6 +341,12 @@ ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
 '''
+
+    if FLAGS.onnx_tensorrt_tag != "":
+        df += '''
+    RUN (cd \\workspace\\onnxruntime\\cmake\\external\\onnx-tensorrt && git fetch origin {}:ortrefbranch && git checkout ortrefbranch)
+    '''.format(FLAGS.onnx_tensorrt_tag)
+
     ep_flags = ''
     if FLAGS.enable_gpu:
         ep_flags = '--use_cuda'
@@ -459,6 +477,10 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='ORT version.')
+    parser.add_argument('--onnx-tensorrt-tag',
+                        type=str,
+                        default="",
+                        help='onnx-tensorrt repo tag.')
     parser.add_argument('--output',
                         type=str,
                         required=True,
@@ -511,6 +533,16 @@ if __name__ == '__main__':
     FLAGS = parser.parse_args()
     if FLAGS.enable_gpu:
         preprocess_gpu_flags()
+
+    # if a tag is provided by the user, then simply use it
+    # if the tag is empty - check whether there is an entry in the ORT_TO_TRTPARSER_VERSION_MAP
+    # map cprresponding to ort version + triton container version combo. If yes then use it
+    # otherwise we leave it empty and use the defaults from ort
+    if FLAGS.onnx_tensorrt_tag == "" and FLAGS.ort_version in ORT_TO_TRTPARSER_VERSION_MAP.keys(): 
+        container_version = re.search('nvcr.io/nvidia/tritonserver:(.+?)-py3-min', FLAGS.triton_container)
+        if container_version and container_version.group(1) == ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][0]:
+            FLAGS.onnx_tensorrt_tag = ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][1]
+
 
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
