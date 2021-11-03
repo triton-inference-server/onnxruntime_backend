@@ -43,7 +43,8 @@ def dockerfile_common():
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
 ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
-'''.format(FLAGS.triton_container, FLAGS.ort_version)
+ARG ONNXRUNTIME_BUILD_CONFIG={}
+'''.format(FLAGS.triton_container, FLAGS.ort_version, FLAGS.ort_build_config)
 
     if FLAGS.ort_openvino is not None:
         df += '''
@@ -143,6 +144,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     #
     ARG ONNXRUNTIME_VERSION
     ARG ONNXRUNTIME_REPO
+    ARG ONNXRUNTIME_BUILD_CONFIG
 
     RUN git clone -b tensorrt-8.0 --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
@@ -155,6 +157,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     #
     ARG ONNXRUNTIME_VERSION
     ARG ONNXRUNTIME_REPO
+    ARG ONNXRUNTIME_BUILD_CONFIG
 
     RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
@@ -179,7 +182,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 
     df += '''
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config Release --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
+ARG COMMON_BUILD_ARGS="--config ${ONNXRUNTIME_BUILD_CONFIG} --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
 '''
 
     df += '''
@@ -206,23 +209,23 @@ RUN mkdir -p /opt/onnxruntime/include && \
        /opt/onnxruntime/include
 
 RUN mkdir -p /opt/onnxruntime/lib && \
-    cp /workspace/build/Release/libonnxruntime_providers_shared.so \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so \
        /opt/onnxruntime/lib && \
-    cp /workspace/build/Release/libonnxruntime.so.${ONNXRUNTIME_VERSION} \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so.${ONNXRUNTIME_VERSION} \
        /opt/onnxruntime/lib && \
     (cd /opt/onnxruntime/lib && \
      ln -sf libonnxruntime.so.${ONNXRUNTIME_VERSION} libonnxruntime.so)
 
 RUN mkdir -p /opt/onnxruntime/bin && \
-    cp /workspace/build/Release/onnxruntime_perf_test \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnxruntime_perf_test \
        /opt/onnxruntime/bin && \
-    cp /workspace/build/Release/onnx_test_runner \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnx_test_runner \
        /opt/onnxruntime/bin && \
     (cd /opt/onnxruntime/bin && chmod a+x *)
 '''
     if FLAGS.enable_gpu:
         df += '''
-RUN cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
+RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_cuda.so \
        /opt/onnxruntime/lib    
 '''
 
@@ -232,7 +235,7 @@ RUN cp /workspace/build/Release/libonnxruntime_providers_cuda.so \
 # TensorRT specific headers and libraries
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensorrt_provider_factory.h \
        /opt/onnxruntime/include && \
-    cp /workspace/build/Release/libonnxruntime_providers_tensorrt.so \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_tensorrt.so \
        /opt/onnxruntime/lib
 '''
 
@@ -245,7 +248,7 @@ RUN cp -r /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/licensing \
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
-RUN cp /workspace/build/Release/libonnxruntime_providers_openvino.so \
+RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
     cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine.so \
        /opt/onnxruntime/lib && \
@@ -278,9 +281,9 @@ RUN cd /opt/onnxruntime/lib && \
 
 # For testing copy ONNX custom op library and model
 RUN mkdir -p /opt/onnxruntime/test && \
-    cp /workspace/build/Release/libcustom_op_library.so \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libcustom_op_library.so \
        /opt/onnxruntime/test && \
-    cp /workspace/build/Release/testdata/custom_op_library/custom_op_test.onnx \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/testdata/custom_op_library/custom_op_test.onnx \
        /opt/onnxruntime/test
 '''
 
@@ -458,6 +461,11 @@ if __name__ == '__main__':
                         action="store_true",
                         required=False,
                         help='Enable GPU support')
+    parser.add_argument('--ort-build-config',
+                        type=str,
+                        default ="Release",
+                        choices=["Debug", "Release", "RelWithDebInfo"],
+                        help='ORT build configuration.')
     parser.add_argument(
         '--target-platform',
         required=False,
