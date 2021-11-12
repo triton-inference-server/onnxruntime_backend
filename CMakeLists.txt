@@ -60,7 +60,7 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #   - If you want TensorRT support set
 #     TRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON and set
 #     TRITON_BUILD_TENSORRT_HOME.
-#     Optionally set TRITON_ONNX_TENSORRT_REPO_TAG to branch in https://github.com/onnx/onnx-tensorrt repo
+#     Optionally set TRITON_ONNX_TENSORRT_REPO_TAG to specify a branch in https://github.com/onnx/onnx-tensorrt repo
 #     example:
 #         TRITON_ONNX_TENSORRT_REPO_TAG=master
 #     This enables using a version of tensorrt which is not yet supported in ONNXRuntime release branch.

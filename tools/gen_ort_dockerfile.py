@@ -536,7 +536,7 @@ if __name__ == '__main__':
 
     # if a tag is provided by the user, then simply use it
     # if the tag is empty - check whether there is an entry in the ORT_TO_TRTPARSER_VERSION_MAP
-    # map cprresponding to ort version + triton container version combo. If yes then use it
+    # map corresponding to ort version + triton container version combo. If yes then use it
     # otherwise we leave it empty and use the defaults from ort
     if FLAGS.onnx_tensorrt_tag == "" and FLAGS.ort_version in ORT_TO_TRTPARSER_VERSION_MAP.keys(): 
         container_version = re.search('nvcr.io/nvidia/tritonserver:(.+?)-py3-min', FLAGS.triton_container)
