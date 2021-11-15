@@ -34,7 +34,7 @@ FLAGS = None
 
 ORT_TO_TRTPARSER_VERSION_MAP = {
     '1.9.1': (
-        '21.12',         # Triton container version
+        '8.2',         # TensorRT version
         'release/8.2-EA' # ONNX-Tensorrt parser version
     )
 }
@@ -477,10 +477,6 @@ if __name__ == '__main__':
                         type=str,
                         required=True,
                         help='ORT version.')
-    parser.add_argument('--onnx-tensorrt-tag',
-                        type=str,
-                        default="",
-                        help='onnx-tensorrt repo tag.')
     parser.add_argument('--output',
                         type=str,
                         required=True,
@@ -514,13 +510,10 @@ if __name__ == '__main__':
                         type=str,
                         required=False,
                         help='Home directory for CUDNN.')
-
-    parser.add_argument(
-        '--ort-openvino',
-        type=str,
-        required=False,
-        help=
-        'Enable OpenVino execution provider using specified OpenVINO version.')
+    parser.add_argument('--ort-openvino',
+                        type=str,
+                        required=False,
+                        help='Enable OpenVino execution provider using specified OpenVINO version.')
     parser.add_argument('--ort-tensorrt',
                         action="store_true",
                         required=False,
@@ -529,6 +522,14 @@ if __name__ == '__main__':
                         type=str,
                         required=False,
                         help='Home directory for TensorRT.')
+    parser.add_argument('--onnx-tensorrt-tag',
+                        type=str,
+                        default="",
+                        help='onnx-tensorrt repo tag.')
+    parser.add_argument('--trt-version',
+                        type=str,
+                        default="",
+                        help='TRT version.')
 
     FLAGS = parser.parse_args()
     if FLAGS.enable_gpu:
@@ -536,12 +537,14 @@ if __name__ == '__main__':
 
     # if a tag is provided by the user, then simply use it
     # if the tag is empty - check whether there is an entry in the ORT_TO_TRTPARSER_VERSION_MAP
-    # map corresponding to ort version + triton container version combo. If yes then use it
+    # map corresponding to ort version + trt version combo. If yes then use it
     # otherwise we leave it empty and use the defaults from ort
     if FLAGS.onnx_tensorrt_tag == "" and FLAGS.ort_version in ORT_TO_TRTPARSER_VERSION_MAP.keys(): 
-        container_version = re.search('nvcr.io/nvidia/tritonserver:(.+?)-py3-min', FLAGS.triton_container)
-        if container_version and container_version.group(1) == ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][0]:
+        if FLAGS.trt_version == ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][0]:
             FLAGS.onnx_tensorrt_tag = ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][1]
+
+    print("*********************************************************************************")
+    print(FLAGS.onnx_tensorrt_tag)
 
 
     if target_platform() == 'windows':
