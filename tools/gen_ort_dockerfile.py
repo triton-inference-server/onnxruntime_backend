@@ -543,9 +543,6 @@ if __name__ == '__main__':
         if FLAGS.trt_version == ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][0]:
             FLAGS.onnx_tensorrt_tag = ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][1]
 
-    print("*********************************************************************************")
-    print(FLAGS.onnx_tensorrt_tag)
-
 
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
