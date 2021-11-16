@@ -222,8 +222,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
       throw BackendModelException(TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string(
-               "Invalid configuration value provided. execution_mode expected "
-               "values are 0 or 1 but got " +
+               "Invalid configuration value provided. Expected values for "
+               " execution_mode are 0 or 1 but got " +
                std::to_string(execution_mode) + " .")
                .c_str())));
     } else {
