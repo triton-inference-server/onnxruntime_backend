@@ -160,8 +160,12 @@ optimization { execution_accelerators {
 
 ## Other Optimization Options with ONNX Runtime
 
-* `intra_op_thread_count`: Default 0 refers to number of cores.
+Details regarding when to use these options and what to expect from them can be found [here](https://onnxruntime.ai/docs/performance/tune-performance.html)
 
+* `intra_op_thread_count`: Sets the number of threads used to parallelize the execution within nodes. A value of 0 means ORT will pick a default which is number of cores.
+* `inter_op_thread_count`: Sets the number of threads used to parallelize the execution of the graph (across nodes). If sequential execution is enabled this value is ignored. 
+A value of 0 means ORT will pick a default which is number of cores.
+* `execution_mode`: Controls whether operators in the graph are executed sequentially or in parallel. Usually when the model has many branches, setting this option to 1 .i.e. "parallel" will give you better performance. Default is 0 which is "sequential execution."
 * `level`: Refers to the graph optimization level. By default all optimizations are enabled. Allowed values are -1 and 1. -1 refers to BASIC optimizations and 1 refers to basic plus extended optimizations like fusions. Please find the details [here](https://onnxruntime.ai/docs/performance/graph-optimizations.html)
 
 ```
@@ -171,5 +175,7 @@ optimization {
 }}
 
 parameters { key: "intra_op_thread_count" value: { string_value: "0" } }
+parameters { key: "execution_mode" value: { string_value: "0" } }
+parameters { key: "inter_op_thread_count" value: { string_value: "0" } }
 
 ```

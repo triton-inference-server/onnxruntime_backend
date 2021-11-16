@@ -205,7 +205,37 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   }
   THROW_IF_BACKEND_MODEL_ORT_ERROR(
       ort_api->SetSessionGraphOptimizationLevel(soptions, optimization_level));
+
   {
+    // Controls whether you want to execute operators in your graph sequentially
+    // or in parallel. Usually when the model has many branches, setting this
+    // option to ExecutionMode::ORT_PARALLEL will give you better performance.
+    int execution_mode = 0;
+    triton::common::TritonJson::Value params;
+    if (ModelConfig().Find("parameters", &params)) {
+      THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
+          params, "execution_mode", &execution_mode, 0));
+    }
+
+    // 0 and 1 are the only valid values.
+    if (execution_mode != 0 && execution_mode != 1) {
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string(
+               "Invalid configuration value provided. Expected values for "
+               " execution_mode are 0 or 1 but got " +
+               std::to_string(execution_mode) + " .")
+               .c_str())));
+    } else {
+      THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->SetSessionExecutionMode(
+          soptions, execution_mode == 0 ? ExecutionMode::ORT_SEQUENTIAL
+                                        : ExecutionMode::ORT_PARALLEL));
+    }
+  }
+
+  {
+    // Sets the number of threads used to parallelize the execution within nodes
+    // A value of 0 means ORT will pick a default
     int intra_op_thread_count = 0;
     triton::common::TritonJson::Value params;
     if (ModelConfig().Find("parameters", &params)) {
@@ -215,6 +245,22 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     if (intra_op_thread_count > 0) {
       THROW_IF_BACKEND_MODEL_ORT_ERROR(
           ort_api->SetIntraOpNumThreads(soptions, intra_op_thread_count));
+    }
+  }
+
+  {
+    // Sets the number of threads used to parallelize the execution of the graph
+    // (across nodes) If sequential execution is enabled this value is ignored
+    // A value of 0 means ORT will pick a default
+    int inter_op_thread_count = 0;
+    triton::common::TritonJson::Value params;
+    if (ModelConfig().Find("parameters", &params)) {
+      THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
+          params, "inter_op_thread_count", &inter_op_thread_count, 0));
+    }
+    if (inter_op_thread_count > 0) {
+      THROW_IF_BACKEND_MODEL_ORT_ERROR(
+          ort_api->SetInterOpNumThreads(soptions, inter_op_thread_count));
     }
   }
 
