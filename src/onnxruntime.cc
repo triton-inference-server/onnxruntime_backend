@@ -218,7 +218,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     }
 
     // 0 and 1 are the only valid values.
-    if (execution_mode != 0 || execution_mode != 1) {
+    if (execution_mode != 0 && execution_mode != 1) {
       throw BackendModelException(TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
           (std::string(
