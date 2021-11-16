@@ -175,5 +175,7 @@ optimization {
 }}
 
 parameters { key: "intra_op_thread_count" value: { string_value: "0" } }
+parameters { key: "execution_mode" value: { string_value: "0" } }
+parameters { key: "inter_op_thread_count" value: { string_value: "0" } }
 
 ```
