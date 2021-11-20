@@ -185,6 +185,14 @@ WORKDIR /workspace/onnxruntime
 ARG COMMON_BUILD_ARGS="--config ${ONNXRUNTIME_BUILD_CONFIG} --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86' "
 '''
 
+    # Remove version info from libonnxruntime.so
+    # This makes it possible to replace ort binaries in released triton containers
+    # for experimentation, without having to build triton-ort backend.
+    df += '''
+RUN sed -i 's/VERS_%s//' tools/ci_build/gen_def.py &&  (sed -i 's/% VERSION_STRING//' tools/ci_build/gen_def.py) 
+RUN sed -i 's/set_target_properties(onnxruntime PROPERTIES VERSION ${ORT_VERSION})//' cmake/onnxruntime.cmake
+'''
+
     df += '''
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 '''.format(ep_flags)
