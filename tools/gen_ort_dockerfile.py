@@ -219,10 +219,8 @@ RUN mkdir -p /opt/onnxruntime/include && \
 RUN mkdir -p /opt/onnxruntime/lib && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so \
        /opt/onnxruntime/lib && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so.${ONNXRUNTIME_VERSION} \
-       /opt/onnxruntime/lib && \
-    (cd /opt/onnxruntime/lib && \
-     ln -sf libonnxruntime.so.${ONNXRUNTIME_VERSION} libonnxruntime.so)
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so \
+       /opt/onnxruntime/lib
 
 RUN mkdir -p /opt/onnxruntime/bin && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnxruntime_perf_test \
