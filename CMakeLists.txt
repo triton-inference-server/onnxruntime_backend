@@ -142,7 +142,7 @@ else()
   if (WIN32)
     set(ONNXRUNTIME_LIBRARY "onnxruntime")
   else()
-    set(ONNXRUNTIME_LIBRARY "libonnxruntime.so.${TRITON_BUILD_ONNXRUNTIME_VERSION}")
+    set(ONNXRUNTIME_LIBRARY "libonnxruntime.so")
   endif() # WIN32
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     set(TBB_LIBRARY "libtbb.so")
