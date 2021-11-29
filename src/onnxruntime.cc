@@ -233,37 +233,44 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     }
   }
 
-  {
-    // Sets the number of threads used to parallelize the execution within nodes
-    // A value of 0 means ORT will pick a default
-    int intra_op_thread_count = 0;
-    triton::common::TritonJson::Value params;
-    if (ModelConfig().Find("parameters", &params)) {
-      THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
-          params, "intra_op_thread_count", &intra_op_thread_count, 0));
+  // If global threadpool is enabled, disable per session threads.
+  // If it is not enabled then try to read the configs for intra and inter
+  // op num threads and set them for session.
+  if (OnnxLoader::IsGlobalThreadPoolEnabled()) {
+    THROW_IF_BACKEND_MODEL_ORT_ERROR(
+        ort_api->DisablePerSessionThreads(soptions));
+  } else {
+    {
+      // Sets the number of threads used to parallelize the execution within
+      // nodes A value of 0 means ORT will pick a default
+      int intra_op_thread_count = 0;
+      triton::common::TritonJson::Value params;
+      if (ModelConfig().Find("parameters", &params)) {
+        THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
+            params, "intra_op_thread_count", &intra_op_thread_count, 0));
+      }
+      if (intra_op_thread_count > 0) {
+        THROW_IF_BACKEND_MODEL_ORT_ERROR(
+            ort_api->SetIntraOpNumThreads(soptions, intra_op_thread_count));
+      }
     }
-    if (intra_op_thread_count > 0) {
-      THROW_IF_BACKEND_MODEL_ORT_ERROR(
-          ort_api->SetIntraOpNumThreads(soptions, intra_op_thread_count));
+
+    {
+      // Sets the number of threads used to parallelize the execution of the
+      // graph (across nodes) If sequential execution is enabled this value is
+      // ignored A value of 0 means ORT will pick a default
+      int inter_op_thread_count = 0;
+      triton::common::TritonJson::Value params;
+      if (ModelConfig().Find("parameters", &params)) {
+        THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
+            params, "inter_op_thread_count", &inter_op_thread_count, 0));
+      }
+      if (inter_op_thread_count > 0) {
+        THROW_IF_BACKEND_MODEL_ORT_ERROR(
+            ort_api->SetInterOpNumThreads(soptions, inter_op_thread_count));
+      }
     }
   }
-
-  {
-    // Sets the number of threads used to parallelize the execution of the graph
-    // (across nodes) If sequential execution is enabled this value is ignored
-    // A value of 0 means ORT will pick a default
-    int inter_op_thread_count = 0;
-    triton::common::TritonJson::Value params;
-    if (ModelConfig().Find("parameters", &params)) {
-      THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
-          params, "inter_op_thread_count", &inter_op_thread_count, 0));
-    }
-    if (inter_op_thread_count > 0) {
-      THROW_IF_BACKEND_MODEL_ORT_ERROR(
-          ort_api->SetInterOpNumThreads(soptions, inter_op_thread_count));
-    }
-  }
-
   // FIXME. Is it possible to share a single OrtSession across
   // multiple instances? If so then should move loading and validation
   // of the session to here instead of creating a session for each
@@ -2236,8 +2243,30 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
             .c_str());
   }
 
+  // The backend configuration may contain information needed by the
+  // ort backend, such as command-line arguments.
+  TRITONSERVER_Message* backend_config_message;
+  RETURN_IF_ERROR(
+      TRITONBACKEND_BackendConfig(backend, &backend_config_message));
+
+  const char* buffer;
+  size_t byte_size;
+  RETURN_IF_ERROR(TRITONSERVER_MessageSerializeToJson(
+      backend_config_message, &buffer, &byte_size));
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("backend configuration:\n") + buffer).c_str());
+
+  triton::common::TritonJson::Value backend_config;
+  TRITONSERVER_Error* err = nullptr;
+  if (byte_size != 0) {
+    err = backend_config.Parse(buffer, byte_size);
+  }
+
+  RETURN_IF_ERROR(err);
+
   // Onetime initialization for the onnxruntime loader.
-  RETURN_IF_ERROR(OnnxLoader::Init());
+  RETURN_IF_ERROR(OnnxLoader::Init(backend_config));
 
   return nullptr;  // success
 }

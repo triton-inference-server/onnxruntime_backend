@@ -45,22 +45,73 @@ OnnxLoader::~OnnxLoader()
 }
 
 TRITONSERVER_Error*
-OnnxLoader::Init()
+OnnxLoader::Init(common::TritonJson::Value& backend_config)
 {
   if (loader == nullptr) {
     OrtEnv* env;
     // If needed, provide custom logger with
     // ort_api->CreateEnvWithCustomLogger()
     OrtStatus* status;
-    if (TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)) {
-      status = ort_api->CreateEnv(ORT_LOGGING_LEVEL_VERBOSE, "log", &env);
-    } else if (TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_WARN)) {
-      status = ort_api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "log", &env);
-    } else {
-      status = ort_api->CreateEnv(ORT_LOGGING_LEVEL_ERROR, "log", &env);
+    OrtLoggingLevel logging_level =
+        TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)
+            ? ORT_LOGGING_LEVEL_VERBOSE
+            : TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_WARN)
+                  ? ORT_LOGGING_LEVEL_WARNING
+                  : ORT_LOGGING_LEVEL_ERROR;
+
+    // Controls whether to enable global threadpool which will be shared across
+    // sessions. Use this in conjunction with DisablePerSessionThreads API or
+    // else the session will use it's own thread pool.
+    bool global_threadpool_enabled = false;
+    OrtThreadingOptions* threading_options = nullptr;
+
+    // Read backend config
+    triton::common::TritonJson::Value cmdline;
+    if (backend_config.Find("cmdline", &cmdline)) {
+      triton::common::TritonJson::Value value;
+      std::string value_str;
+      if (cmdline.Find("enable-global-threadpool", &value)) {
+        RETURN_IF_ERROR(value.AsString(&value_str));
+        RETURN_IF_ERROR(ParseBoolValue(value_str, &global_threadpool_enabled));
+
+        if (global_threadpool_enabled) {
+          // If provided by user, read intra and inter op num thread
+          // configuration and set ThreadingOptions accordingly. If not, we use
+          // default 0 which means value equal to number of cores will be used.
+          RETURN_IF_ORT_ERROR(
+              ort_api->CreateThreadingOptions(&threading_options));
+          if (cmdline.Find("intra-op-num-threads", &value)) {
+            int intra_op_num_threads = 0;
+            RETURN_IF_ERROR(value.AsString(&value_str));
+            RETURN_IF_ERROR(ParseIntValue(value_str, &intra_op_num_threads));
+            if (intra_op_num_threads > 0) {
+              RETURN_IF_ORT_ERROR(ort_api->SetGlobalIntraOpNumThreads(
+                  threading_options, intra_op_num_threads));
+            }
+          }
+          if (cmdline.Find("inter-op-num-threads", &value)) {
+            int inter_op_num_threads = 0;
+            RETURN_IF_ERROR(value.AsString(&value_str));
+            RETURN_IF_ERROR(ParseIntValue(value_str, &inter_op_num_threads));
+            if (inter_op_num_threads > 0) {
+              RETURN_IF_ORT_ERROR(ort_api->SetGlobalInterOpNumThreads(
+                  threading_options, inter_op_num_threads));
+            }
+          }
+        }
+      }
     }
 
-    loader.reset(new OnnxLoader(env));
+    if (global_threadpool_enabled && threading_options != nullptr) {
+      status = ort_api->CreateEnvWithGlobalThreadPools(
+          logging_level, "log", threading_options, &env);
+      ort_api->ReleaseThreadingOptions(threading_options);
+    } else {
+      status = ort_api->CreateEnv(logging_level, "log", &env);
+    }
+
+    status = ort_api->CreateEnv(logging_level, "log", &env);
+    loader.reset(new OnnxLoader(env, global_threadpool_enabled));
     RETURN_IF_ORT_ERROR(status);
   } else {
     return TRITONSERVER_ErrorNew(
@@ -100,6 +151,16 @@ OnnxLoader::Stop()
   }
 
   return nullptr;  // success
+}
+
+bool
+OnnxLoader::IsGlobalThreadPoolEnabled()
+{
+  if (loader != nullptr) {
+    return loader->global_threadpool_enabled_;
+  }
+
+  return false;
 }
 
 TRITONSERVER_Error*
