@@ -162,6 +162,7 @@ optimization { execution_accelerators {
 
 Details regarding when to use these options and what to expect from them can be found [here](https://onnxruntime.ai/docs/performance/tune-performance.html)
 
+### Model Config Options
 * `intra_op_thread_count`: Sets the number of threads used to parallelize the execution within nodes. A value of 0 means ORT will pick a default which is number of cores.
 * `inter_op_thread_count`: Sets the number of threads used to parallelize the execution of the graph (across nodes). If sequential execution is enabled this value is ignored. 
 A value of 0 means ORT will pick a default which is number of cores.
@@ -178,4 +179,11 @@ parameters { key: "intra_op_thread_count" value: { string_value: "0" } }
 parameters { key: "execution_mode" value: { string_value: "0" } }
 parameters { key: "inter_op_thread_count" value: { string_value: "0" } }
 
+```
+
+### Command line options
+When intra and inter op threads is set to 0 or a value higher than 1, by default ORT creates threadpool per session. This may not be ideal in every scenario, therefore ORT also supports global threadpools. When global threadpools are enabled ORT creates 1 global threadpool which is shared by every session. Use the backend config to enable global threadpool. When global threadpool is enabled, intra and inter op num threads config should also be provided via backend config. Config values provided in model config will be ignored.
+
+```
+--backend-config=onnxruntime,enable-global-threadpool=<0,1>, --backend-config=onnxruntime,intra_op_thread_count=<int> , --backend-config=onnxruntime,inter_op_thread_count=<int> 
 ```

@@ -80,7 +80,7 @@ OnnxLoader::Init(common::TritonJson::Value& backend_config)
           // default 0 which means value equal to number of cores will be used.
           RETURN_IF_ORT_ERROR(
               ort_api->CreateThreadingOptions(&threading_options));
-          if (cmdline.Find("intra-op-num-threads", &value)) {
+          if (cmdline.Find("intra_op_thread_count", &value)) {
             int intra_op_num_threads = 0;
             RETURN_IF_ERROR(value.AsString(&value_str));
             RETURN_IF_ERROR(ParseIntValue(value_str, &intra_op_num_threads));
@@ -89,7 +89,7 @@ OnnxLoader::Init(common::TritonJson::Value& backend_config)
                   threading_options, intra_op_num_threads));
             }
           }
-          if (cmdline.Find("inter-op-num-threads", &value)) {
+          if (cmdline.Find("inter_op_thread_count", &value)) {
             int inter_op_num_threads = 0;
             RETURN_IF_ERROR(value.AsString(&value_str));
             RETURN_IF_ERROR(ParseIntValue(value_str, &inter_op_num_threads));
