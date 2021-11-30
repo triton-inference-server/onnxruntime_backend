@@ -33,9 +33,13 @@ import re
 FLAGS = None
 
 ORT_TO_TRTPARSER_VERSION_MAP = {
-    '1.9.1': (
+    '1.9.0': (
         '8.2',         # TensorRT version
-        'release/8.2-EA' # ONNX-Tensorrt parser version
+        'release/8.2-GA' # ONNX-Tensorrt parser version
+    ),
+    '1.10.0': (
+        '8.2',         # TensorRT version
+        'release/8.2-GA' # ONNX-Tensorrt parser version
     )
 }
 
@@ -540,7 +544,8 @@ if __name__ == '__main__':
     # map corresponding to ort version + trt version combo. If yes then use it
     # otherwise we leave it empty and use the defaults from ort
     if FLAGS.onnx_tensorrt_tag == "" and FLAGS.ort_version in ORT_TO_TRTPARSER_VERSION_MAP.keys(): 
-        if FLAGS.trt_version == ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][0]:
+        trt_version = re.match(r'^[0-9]+\.[0-9]+', FLAGS.trt_version)
+        if trt_version and trt_version.group(0) == ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][0]:
             FLAGS.onnx_tensorrt_tag = ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][1]
 
 
