@@ -28,6 +28,7 @@
 #include <onnxruntime_c_api.h>
 #include <memory>
 #include <mutex>
+#include "triton/backend/backend_common.h"
 #include "triton/core/tritonbackend.h"
 
 namespace triton { namespace backend { namespace onnxruntime {
@@ -39,7 +40,7 @@ class OnnxLoader {
   ~OnnxLoader();
 
   /// Initialize loader with default environment settings
-  static TRITONSERVER_Error* Init();
+  static TRITONSERVER_Error* Init(common::TritonJson::Value& backend_config);
 
   /// Stop loader, and once all Onnx sessions are unloaded via UnloadSession()
   /// the resource it allocated will be released
@@ -63,8 +64,16 @@ class OnnxLoader {
   /// \param session The Onnx model session to be unloaded
   static TRITONSERVER_Error* UnloadSession(OrtSession* session);
 
+  /// Returns whether global thread pool is enabled.
+  /// If the loader is not initialized it returns false.
+  static bool IsGlobalThreadPoolEnabled();
+
  private:
-  OnnxLoader(OrtEnv* env) : env_(env), live_session_cnt_(0), closing_(false) {}
+  OnnxLoader(OrtEnv* env, bool enable_global_threadpool = false)
+      : env_(env), global_threadpool_enabled_(enable_global_threadpool),
+        live_session_cnt_(0), closing_(false)
+  {
+  }
 
   /// Decrease 'live_session_cnt_' if 'decrement_session_cnt' is true, and then
   /// release Onnx Runtime environment if it is closing and no live sessions
@@ -75,7 +84,7 @@ class OnnxLoader {
   static std::unique_ptr<OnnxLoader> loader;
 
   OrtEnv* env_;
-
+  bool global_threadpool_enabled_;
   std::mutex mu_;
   size_t live_session_cnt_;
   bool closing_;
