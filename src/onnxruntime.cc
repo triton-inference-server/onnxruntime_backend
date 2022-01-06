@@ -1413,6 +1413,7 @@ ModelInstanceState::ProcessRequests(
   // can skip them in the output tensors).
   std::vector<TRITONBACKEND_Response*> responses;
   responses.reserve(request_count);
+  bool all_response_failed = false;
 
   for (size_t i = 0; i < request_count; i++) {
     TRITONBACKEND_Response* response;
@@ -1445,23 +1446,25 @@ ModelInstanceState::ProcessRequests(
       requests, request_count, &responses, model_state_->TritonMemoryManager(),
       model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
       HostPolicyName().c_str());
-  RESPOND_ALL_AND_RETURN_IF_ERROR(
-      requests, request_count, &responses,
+  RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+      responses, request_count, all_response_failed,
       SetInputTensors(
           total_batch_size, requests, request_count, &responses, &collector,
           &input_names, &cuda_copy));
 
-  // Request to retrieve all model outputs. 'output_names' and
-  // 'output_tensors_' are parallel vectors and so must be kept in
-  // sync. [TODO] should collect only the outputs needed by some
-  // request.
-  for (auto& output_name : StateForModel()->ModelOutputs()) {
-    output_tensors_.emplace_back(nullptr);
+  if (!all_response_failed) {
+    // Request to retrieve all model outputs. 'output_names' and
+    // 'output_tensors_' are parallel vectors and so must be kept in
+    // sync. [TODO] should collect only the outputs needed by some
+    // request.
+    for (auto& output_name : StateForModel()->ModelOutputs()) {
+      output_tensors_.emplace_back(nullptr);
 
-    RESPOND_ALL_AND_RETURN_IF_ORT_ERROR(
-        requests, request_count, &responses,
-        ort_api->BindOutputToDevice(
-            io_binding_, output_name.first.c_str(), cpu_allocator_info_));
+      RESPOND_ALL_AND_SET_TRUE_IF_ORT_ERROR(
+          responses, request_count, all_response_failed,
+          ort_api->BindOutputToDevice(
+              io_binding_, output_name.first.c_str(), cpu_allocator_info_));
+    }
   }
 
   // Wait for any in-flight input tensor copies to complete.
@@ -1474,15 +1477,21 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  RESPOND_ALL_AND_RETURN_IF_ERROR(
-      requests, request_count, &responses, OrtRun(&responses, request_count));
+  if (!all_response_failed) {
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        OrtRun(&responses, request_count));
+  }
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
 
-  RESPOND_ALL_AND_RETURN_IF_ERROR(
-      requests, request_count, &responses,
-      ReadOutputTensors(total_batch_size, requests, request_count, &responses));
+  if (!all_response_failed) {
+    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+        responses, request_count, all_response_failed,
+        ReadOutputTensors(
+            total_batch_size, requests, request_count, &responses));
+  }
 
   uint64_t exec_end_ns = 0;
   SET_TIMESTAMP(exec_end_ns);
@@ -1515,12 +1524,14 @@ ModelInstanceState::ProcessRequests(
         "failed releasing request");
   }
 
-  // Report the entire batch statistics.
-  LOG_IF_ERROR(
-      TRITONBACKEND_ModelInstanceReportBatchStatistics(
-          TritonModelInstance(), total_batch_size, exec_start_ns,
-          compute_start_ns, compute_end_ns, exec_end_ns),
-      "failed reporting batch request statistics");
+  if (!all_response_failed) {
+    // Report the entire batch statistics.
+    LOG_IF_ERROR(
+        TRITONBACKEND_ModelInstanceReportBatchStatistics(
+            TritonModelInstance(), total_batch_size, exec_start_ns,
+            compute_start_ns, compute_end_ns, exec_end_ns),
+        "failed reporting batch request statistics");
+  }
 }
 
 TRITONSERVER_Error*
