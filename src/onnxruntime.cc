@@ -2109,22 +2109,29 @@ ModelInstanceState::SetStringBuffer(
     // 'content'. If it did not request this output then just skip it
     // in the 'content'.
     bool need_output = false;
-    if (response != nullptr) {
-      uint32_t output_count;
-      RESPOND_AND_SET_NULL_IF_ERROR(
-          &response, TRITONBACKEND_RequestOutputCount(request, &output_count));
+    if (!state) {
       if (response != nullptr) {
-        for (uint32_t output_idx = 0; output_idx < output_count; output_idx++) {
-          const char* req_output_name;
-          RESPOND_AND_SET_NULL_IF_ERROR(
-              &response, TRITONBACKEND_RequestOutputName(
-                             request, output_idx, &req_output_name));
-          if ((response != nullptr) && (req_output_name == name)) {
-            need_output = true;
-            break;
+        uint32_t output_count;
+        RESPOND_AND_SET_NULL_IF_ERROR(
+            &response,
+            TRITONBACKEND_RequestOutputCount(request, &output_count));
+        if (response != nullptr) {
+          for (uint32_t output_idx = 0; output_idx < output_count;
+               output_idx++) {
+            const char* req_output_name;
+            RESPOND_AND_SET_NULL_IF_ERROR(
+                &response, TRITONBACKEND_RequestOutputName(
+                               request, output_idx, &req_output_name));
+            if ((response != nullptr) && (req_output_name == name)) {
+              need_output = true;
+              break;
+            }
           }
         }
       }
+    } else {
+      // need_output must be always set to true for state tensors.
+      need_output = true;
     }
 
     if (need_output) {
@@ -2199,6 +2206,10 @@ ModelInstanceState::SetStringBuffer(
       }
 
       RESPOND_AND_SET_NULL_IF_ERROR(&response, err);
+      if (state) {
+        RESPOND_AND_SET_NULL_IF_ERROR(
+            &response, TRITONBACKEND_StateUpdate(response_state));
+      }
     }
 
     element_idx += expected_element_cnt;
