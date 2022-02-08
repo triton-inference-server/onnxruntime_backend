@@ -1490,18 +1490,22 @@ ModelInstanceState::ProcessRequests(
 
         // save this as we need the mem type and device id for reading the
         // outputs.
-        output_device_info_[output_name] = {memory_type, memory_type_id};
+        output_device_info_.insert(
+            {output_name.first, {memory_type, memory_type_id}});
       } else {
-        auto output_device_info_iter = output_device_info_.find(name);
+        auto output_device_info_iter =
+            output_device_info_.find(output_name.first);
         if (output_device_info_iter == output_device_info_.end()) {
-          RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INTERNAL,
-              (std::string("device info for output tensor '") + name +
-               "' not found")
-                  .c_str()));
+          RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+              responses, request_count, all_response_failed,
+              TRITONSERVER_ErrorNew(
+                  TRITONSERVER_ERROR_INTERNAL,
+                  (std::string("device info for output tensor '") +
+                   output_name.first + "' not found")
+                      .c_str()));
         }
-        memory_type = output_device_info_iter.second.first;
-        memory_type_id = output_device_info_iter.second.second;
+        memory_type = output_device_info_iter->second.first;
+        memory_type_id = output_device_info_iter->second.second;
       }
 
       RESPOND_ALL_AND_SET_TRUE_IF_ORT_ERROR(
@@ -2036,7 +2040,7 @@ ModelInstanceState::ReadOutputTensors(
               .c_str()));
     }
 
-    const auto& alloc_perference = output_device_info_iter.second;
+    const auto& alloc_perference = output_device_info_iter->second;
 
     const BatchOutput* batch_output = StateForModel()->FindBatchOutput(name);
     if (batch_output == nullptr) {
