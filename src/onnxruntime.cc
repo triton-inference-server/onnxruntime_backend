@@ -1482,12 +1482,19 @@ ModelInstanceState::ProcessRequests(
         // to this destination memory type. The destination memory type
         // for an output for all requests should be same. So use any request for
         // this query.
-        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-            responses, request_count, all_response_failed,
-            TRITONBACKEND_RequestOutputBufferProperties(
-                requests[0], output_name.first.c_str(), /*byte_size*/ nullptr,
-                &memory_type, &memory_type_id));
+        auto err = TRITONBACKEND_RequestOutputBufferProperties(
+            requests[0], output_name.first.c_str(), /*byte_size*/ nullptr,
+            &memory_type, &memory_type_id);
 
+        if (err != nullptr) {
+          LOG_MESSAGE(
+              TRITONSERVER_LOG_WARN,
+              (std::string("Output Properties Unavailable. Using cpu as "
+                           "preferred location for all outputs.")
+                   .c_str()));
+          memory_type = TRITONSERVER_MEMORY_CPU;
+          memory_type_id = 0;
+        }
         // save this as we need the mem type and device id for reading the
         // outputs.
         output_device_info_.insert(
