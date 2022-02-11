@@ -1488,7 +1488,7 @@ ModelInstanceState::ProcessRequests(
 
         if (err != nullptr) {
           LOG_MESSAGE(
-              TRITONSERVER_LOG_WARN,
+              TRITONSERVER_LOG_VERBOSE,
               (std::string("Output Properties Unavailable. Using cpu as "
                            "preferred location for all outputs.")
                    .c_str()));
