@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -25,10 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
-
 #include <mutex>
 #include <vector>
-
 #include "onnxruntime_loader.h"
 #include "onnxruntime_utils.h"
 #include "triton/backend/backend_common.h"
@@ -1672,12 +1670,13 @@ ModelInstanceState::SetInputTensors(
       std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>>
           allowed_input_types;
       if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-        allowed_input_types = {{TRITONSERVER_MEMORY_GPU, DeviceId()},
-                               {TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                               {TRITONSERVER_MEMORY_CPU, 0}};
+        allowed_input_types = {
+            {TRITONSERVER_MEMORY_GPU, DeviceId()},
+            {TRITONSERVER_MEMORY_CPU_PINNED, 0},
+            {TRITONSERVER_MEMORY_CPU, 0}};
       } else {
-        allowed_input_types = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                               {TRITONSERVER_MEMORY_CPU, 0}};
+        allowed_input_types = {
+            {TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
       }
 
       RETURN_IF_ERROR(collector->ProcessTensor(
