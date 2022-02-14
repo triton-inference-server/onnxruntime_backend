@@ -1487,8 +1487,10 @@ ModelInstanceState::ProcessRequests(
         if (iit == output_tensor_infos_.end()) {
           LOG_MESSAGE(
               TRITONSERVER_LOG_VERBOSE,
-              (std::string("Error while retrieving output data type. Using cpu "
-                           "as preferred location for all outputs")
+              (std::string(
+                   "Error while retrieving output data type. Using cpu "
+                   "as preferred location for output: " +
+                   output_name.first)
                    .c_str()));
         } else if (iit->second.type_ != ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
           // Query the memory type of destination output buffer. Bind the
@@ -1505,8 +1507,10 @@ ModelInstanceState::ProcessRequests(
           if (err != nullptr) {
             LOG_MESSAGE(
                 TRITONSERVER_LOG_VERBOSE,
-                (std::string("Output Properties Unavailable. Using cpu as "
-                             "preferred location for all outputs.")
+                (std::string(
+                     "Output Properties Unavailable. Using cpu as "
+                     "preferred location for output: " +
+                     output_name.first)
                      .c_str()));
             memory_type = TRITONSERVER_MEMORY_CPU;
             memory_type_id = 0;
