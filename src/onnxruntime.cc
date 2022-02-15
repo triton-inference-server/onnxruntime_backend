@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -173,6 +173,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
       it->second.first = i;
     }
   }
+
 
   return nullptr;  // success
 }
@@ -853,6 +854,11 @@ class ModelInstanceState : public BackendModelInstance {
   const OrtMemoryInfo* cpu_allocator_info_;
   OrtIoBinding* io_binding_;
   OrtRunOptions* runOptions_;
+  // map of output name -> bound mem type and id
+  std::unordered_map<std::string, std::pair<TRITONSERVER_MemoryType, int64_t>>
+      output_device_info_;
+  // map of output name -> tensor info
+  OnnxTensorInfoMap output_tensor_infos_;
 
   // Onnx Runtime variables that will be reset and used for every run
   // on this instance.
@@ -1223,9 +1229,8 @@ ModelInstanceState::ValidateOutputs()
   std::set<std::string> output_tensor_names;
   RETURN_IF_ERROR(OutputNames(session_, output_tensor_names));
 
-  OnnxTensorInfoMap output_tensor_infos;
   RETURN_IF_ERROR(
-      OutputInfos(session_, default_allocator_, output_tensor_infos));
+      OutputInfos(session_, default_allocator_, output_tensor_infos_));
 
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("output", &ios));
@@ -1237,8 +1242,8 @@ ModelInstanceState::ValidateOutputs()
     std::string io_dtype;
     RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
 
-    auto iit = output_tensor_infos.find(io_name);
-    if (iit == output_tensor_infos.end()) {
+    auto iit = output_tensor_infos_.find(io_name);
+    if (iit == output_tensor_infos_.end()) {
       RETURN_IF_ERROR(CheckAllowedModelOutput(io, output_tensor_names));
     }
 
@@ -1293,8 +1298,8 @@ ModelInstanceState::ValidateOutputs()
         std::vector<int64_t> dims;
         RETURN_IF_ERROR(ParseShape(state, "dims", &dims));
 
-        auto iit = output_tensor_infos.find(state_name);
-        if (iit == output_tensor_infos.end()) {
+        auto iit = output_tensor_infos_.find(state_name);
+        if (iit == output_tensor_infos_.end()) {
           RETURN_IF_ERROR(CheckAllowedModelOutput(state, output_tensor_names));
         }
 
@@ -1453,6 +1458,15 @@ ModelInstanceState::ProcessRequests(
           &input_names, &cuda_copy));
 
   if (!all_response_failed) {
+    // Set preferred memory type and id. This will be used while querying
+    // memory type to be used for output buffer.
+    TRITONSERVER_MemoryType preferred_memory_type = TRITONSERVER_MEMORY_CPU;
+    int64_t preferred_memory_type_id = 0;
+    if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+      preferred_memory_type = TRITONSERVER_MEMORY_GPU;
+      preferred_memory_type_id = DeviceId();
+    }
+
     // Request to retrieve all model outputs. 'output_names' and
     // 'output_tensors_' are parallel vectors and so must be kept in
     // sync. [TODO] should collect only the outputs needed by some
@@ -1460,10 +1474,74 @@ ModelInstanceState::ProcessRequests(
     for (auto& output_name : StateForModel()->ModelOutputs()) {
       output_tensors_.emplace_back(nullptr);
 
+      TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+      int64_t memory_type_id = 0;
+
+      if (output_device_info_.size() !=
+          StateForModel()->ModelOutputs().size()) {
+        // Get data type for this output. If this is a string then
+        // use CPU for binding output otherwise, query the preferred location
+        // for this output and bind accordingly. In case of any errors we
+        // fallback to binding the output to CPU.
+        auto iit = output_tensor_infos_.find(output_name.first);
+        if (iit == output_tensor_infos_.end()) {
+          LOG_MESSAGE(
+              TRITONSERVER_LOG_VERBOSE,
+              (std::string(
+                   "Error while retrieving output data type. Using cpu "
+                   "as preferred location for output: " +
+                   output_name.first)
+                   .c_str()));
+        } else if (iit->second.type_ != ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
+          // Query the memory type of destination output buffer. Bind the
+          // output
+          // to this destination memory type. The destination memory type
+          // for an output for all requests should be same. So use any request
+          // for this query.
+          memory_type = preferred_memory_type;
+          memory_type_id = preferred_memory_type_id;
+          auto err = TRITONBACKEND_RequestOutputBufferProperties(
+              requests[0], output_name.first.c_str(), /*byte_size*/ nullptr,
+              &memory_type, &memory_type_id);
+
+          if (err != nullptr) {
+            LOG_MESSAGE(
+                TRITONSERVER_LOG_VERBOSE,
+                (std::string(
+                     "Output Properties Unavailable. Using cpu as "
+                     "preferred location for output: " +
+                     output_name.first)
+                     .c_str()));
+            memory_type = TRITONSERVER_MEMORY_CPU;
+            memory_type_id = 0;
+          }
+        }
+        // finally save the derived mem type and device id as we need it for
+        // reading the outputs.
+        output_device_info_.insert(
+            {output_name.first, {memory_type, memory_type_id}});
+      } else {
+        auto output_device_info_iter =
+            output_device_info_.find(output_name.first);
+        if (output_device_info_iter == output_device_info_.end()) {
+          RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+              responses, request_count, all_response_failed,
+              TRITONSERVER_ErrorNew(
+                  TRITONSERVER_ERROR_INTERNAL,
+                  (std::string("device info for output tensor '") +
+                   output_name.first + "' not found")
+                      .c_str()));
+        }
+        memory_type = output_device_info_iter->second.first;
+        memory_type_id = output_device_info_iter->second.second;
+      }
+
       RESPOND_ALL_AND_SET_TRUE_IF_ORT_ERROR(
           responses, request_count, all_response_failed,
           ort_api->BindOutputToDevice(
-              io_binding_, output_name.first.c_str(), cpu_allocator_info_));
+              io_binding_, output_name.first.c_str(),
+              memory_type == TRITONSERVER_MEMORY_GPU ? cuda_allocator_info_
+                                                     : cpu_allocator_info_));
     }
   }
 
@@ -1962,8 +2040,6 @@ ModelInstanceState::ReadOutputTensors(
 
   // Use to hold string output contents
   bool cuda_copy = false;
-  std::pair<TRITONSERVER_MemoryType, int64_t> alloc_perference = {
-      TRITONSERVER_MEMORY_CPU, 0};
   auto& model_outputs = StateForModel()->ModelOutputs();
 
   size_t output_count = 0;
@@ -1981,6 +2057,17 @@ ModelInstanceState::ReadOutputTensors(
     OrtValue* output_tensor = output_tensors_[idx] = output_buffer_[idx];
     const std::string& name = model_outputs_it->first;
     auto& output_tensor_pair = model_outputs_it->second;
+
+    auto output_device_info_iter = output_device_info_.find(name);
+    if (output_device_info_iter == output_device_info_.end()) {
+      RETURN_IF_ERROR(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL,
+          (std::string("device info for output tensor '") + name +
+           "' not found")
+              .c_str()));
+    }
+
+    const auto& alloc_perference = output_device_info_iter->second;
 
     const BatchOutput* batch_output = StateForModel()->FindBatchOutput(name);
     if (batch_output == nullptr) {
