@@ -301,6 +301,10 @@ RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_ope
        /opt/onnxruntime/lib && \
     cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_lp_transformations.so \
        /opt/onnxruntime/lib && \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_ir_reader.so \
+       /opt/onnxruntime/lib && \
+    cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/inference_engine/lib/intel64/libinference_engine_onnx_reader.so \
+       /opt/onnxruntime/lib && \
     (cd /opt/onnxruntime/lib && \
      chmod a-x * && \
      ln -sf libtbb.so.2 libtbb.so)
