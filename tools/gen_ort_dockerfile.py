@@ -272,10 +272,13 @@ RUN cp -r /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/licensing \
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
-# libonnx_proto.so is needed when openvino execution provider is used
+# libonnx_proto.so, libprotobuf.so.3.7.1.0 are needed when openvino execution provider is used
 RUN if [ -f /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/ngraph/lib/libonnx_proto.so ]; then \
         cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/ngraph/lib/libonnx_proto.so \
-        /opt/onnxruntime/lib; \
+            /opt/onnxruntime/lib; \
+        cp /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}/deployment_tools/ngraph/lib/libprotobuf.so.3.7.1.0 \
+            /opt/onnxruntime/lib; \
+        (cd /opt/onnxruntime/lib && ln -sf libprotobuf.so.3.7.1.0 libprotobuf.so); \
     fi
 
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
