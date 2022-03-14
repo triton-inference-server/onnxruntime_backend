@@ -151,7 +151,7 @@ configuration as shown below.
 optimization { execution_accelerators {
   cpu_execution_accelerator : [ {
     name : "openvino"
-  ]
+  } ]
 }}
 .
 .
