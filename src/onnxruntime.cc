@@ -25,8 +25,10 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
+
 #include <mutex>
 #include <vector>
+
 #include "onnxruntime_loader.h"
 #include "onnxruntime_utils.h"
 #include "triton/backend/backend_common.h"
@@ -272,6 +274,64 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
       }
     }
   }
+
+  // memory configs
+  // enable/disable mem arena
+  {
+    triton::common::TritonJson::Value params;
+    if (ModelConfig().Find("parameters", &params)) {
+      triton::common::TritonJson::Value json_value;
+      if (params.Find("enable_mem_arena", &json_value)) {
+        std::string string_value;
+        THROW_IF_BACKEND_MODEL_ERROR(
+            json_value.MemberAsString("string_value", &string_value));
+        bool enable_cpu_mem_arena = false;
+        THROW_IF_BACKEND_MODEL_ERROR(
+            ParseBoolValue(string_value, &enable_cpu_mem_arena));
+
+        OrtStatus* ort_status = nullptr;
+        if (enable_cpu_mem_arena) {
+          ort_status = ort_api->EnableCpuMemArena(soptions);
+        } else {
+          ort_status = ort_api->DisableCpuMemArena(soptions);
+        }
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_VERBOSE,
+            (std::string("Configuring enable_mem_arena to ") + string_value)
+                .c_str());
+        THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_status);
+      }
+    }
+  }
+
+  // enable/disable mem pattern
+  {
+    triton::common::TritonJson::Value params;
+    if (ModelConfig().Find("parameters", &params)) {
+      triton::common::TritonJson::Value json_value;
+      if (params.Find("enable_mem_pattern", &json_value)) {
+        std::string string_value;
+        THROW_IF_BACKEND_MODEL_ERROR(
+            json_value.MemberAsString("string_value", &string_value));
+        bool enable_mem_pattern = false;
+        auto err = ParseBoolValue(string_value, &enable_mem_pattern);
+        THROW_IF_BACKEND_MODEL_ERROR(err);
+
+        OrtStatus* ort_status = nullptr;
+        if (enable_mem_pattern) {
+          ort_status = ort_api->EnableMemPattern(soptions);
+        } else {
+          ort_status = ort_api->DisableMemPattern(soptions);
+        }
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_VERBOSE,
+            (std::string("Configuring enable_mem_pattern to ") + string_value)
+                .c_str());
+        THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_status);
+      }
+    }
+  }
+
   // FIXME. Is it possible to share a single OrtSession across
   // multiple instances? If so then should move loading and validation
   // of the session to here instead of creating a session for each
@@ -910,6 +970,28 @@ ModelInstanceState::ModelInstanceState(
       ort_api->CreateIoBinding(session_, &io_binding_));
 
   THROW_IF_BACKEND_INSTANCE_ORT_ERROR(ort_api->CreateRunOptions(&runOptions_));
+
+  // Read configs that needs to be set in RunOptions
+  triton::common::TritonJson::Value params;
+  if (model_state->ModelConfig().Find("parameters", &params)) {
+    triton::common::TritonJson::Value json_value;
+    const char* enable_memory_arena_shrinkage_key =
+        "memory.enable_memory_arena_shrinkage";
+    if (params.Find(enable_memory_arena_shrinkage_key, &json_value)) {
+      std::string string_value;
+      THROW_IF_BACKEND_MODEL_ERROR(
+          json_value.MemberAsString("string_value", &string_value));
+
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_VERBOSE,
+          (std::string("Configuring ") + enable_memory_arena_shrinkage_key +
+           " to " + string_value)
+              .c_str());
+      THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddRunConfigEntry(
+          runOptions_, enable_memory_arena_shrinkage_key,
+          string_value.c_str()));
+    }
+  }
 
   size_t expected_input_cnt = 0;
   {
@@ -1693,12 +1775,13 @@ ModelInstanceState::SetInputTensors(
       std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>>
           allowed_input_types;
       if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-        allowed_input_types = {{TRITONSERVER_MEMORY_GPU, DeviceId()},
-                               {TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                               {TRITONSERVER_MEMORY_CPU, 0}};
+        allowed_input_types = {
+            {TRITONSERVER_MEMORY_GPU, DeviceId()},
+            {TRITONSERVER_MEMORY_CPU_PINNED, 0},
+            {TRITONSERVER_MEMORY_CPU, 0}};
       } else {
-        allowed_input_types = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                               {TRITONSERVER_MEMORY_CPU, 0}};
+        allowed_input_types = {
+            {TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
       }
 
       RETURN_IF_ERROR(collector->ProcessTensor(
