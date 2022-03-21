@@ -1547,6 +1547,9 @@ ModelInstanceState::ProcessRequests(
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
       preferred_memory_type = TRITONSERVER_MEMORY_GPU;
       preferred_memory_type_id = DeviceId();
+    } else {
+      preferred_memory_type = TRITONSERVER_MEMORY_CPU;
+      preferred_memory_type_id = 0;
     }
 
     // Request to retrieve all model outputs. 'output_names' and
@@ -1576,8 +1579,7 @@ ModelInstanceState::ProcessRequests(
                    .c_str()));
         } else if (iit->second.type_ != ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
           // Query the memory type of destination output buffer. Bind the
-          // output
-          // to this destination memory type. The destination memory type
+          // output to this destination memory type. The destination memory type
           // for an output for all requests should be same. So use any request
           // for this query.
           memory_type = preferred_memory_type;
@@ -1598,6 +1600,13 @@ ModelInstanceState::ProcessRequests(
             memory_type_id = 0;
           }
         }
+
+        // If the instance type is not KIND_GPU, set the memory type to CPU.
+        if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+          memory_type = TRITONSERVER_MEMORY_CPU;
+          memory_type_id = 0;
+        }
+
         // finally save the derived mem type and device id as we need it for
         // reading the outputs.
         output_device_info_.insert(
@@ -1775,13 +1784,12 @@ ModelInstanceState::SetInputTensors(
       std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>>
           allowed_input_types;
       if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-        allowed_input_types = {
-            {TRITONSERVER_MEMORY_GPU, DeviceId()},
-            {TRITONSERVER_MEMORY_CPU_PINNED, 0},
-            {TRITONSERVER_MEMORY_CPU, 0}};
+        allowed_input_types = {{TRITONSERVER_MEMORY_GPU, DeviceId()},
+                               {TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                               {TRITONSERVER_MEMORY_CPU, 0}};
       } else {
-        allowed_input_types = {
-            {TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
+        allowed_input_types = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
+                               {TRITONSERVER_MEMORY_CPU, 0}};
       }
 
       RETURN_IF_ERROR(collector->ProcessTensor(
