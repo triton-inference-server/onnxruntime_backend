@@ -1547,9 +1547,6 @@ ModelInstanceState::ProcessRequests(
     if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
       preferred_memory_type = TRITONSERVER_MEMORY_GPU;
       preferred_memory_type_id = DeviceId();
-    } else {
-      preferred_memory_type = TRITONSERVER_MEMORY_CPU;
-      preferred_memory_type_id = 0;
     }
 
     // Request to retrieve all model outputs. 'output_names' and
@@ -1601,8 +1598,8 @@ ModelInstanceState::ProcessRequests(
           }
         }
 
-        // If the instance type is not KIND_GPU, set the memory type to CPU.
-        if (Kind() != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+        // If the cuda allocator is not set, bind the output to CPU.
+        if (cuda_allocator_info_ == nullptr) {
           memory_type = TRITONSERVER_MEMORY_CPU;
           memory_type_id = 0;
         }
