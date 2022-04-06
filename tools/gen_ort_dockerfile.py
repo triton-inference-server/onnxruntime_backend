@@ -40,10 +40,6 @@ ORT_TO_TRTPARSER_VERSION_MAP = {
     '1.10.0': (
         '8.2',         # TensorRT version
         'release/8.2-GA' # ONNX-Tensorrt parser version
-    ),
-    '1.11.0': (
-        '8.2',         # TensorRT version
-        'release/8.2-GA' # ONNX-Tensorrt parser version
     )    
 }
 
