@@ -607,7 +607,9 @@ ModelState::LoadModel(
         }
       }
     }
-  } else {
+  }
+#ifdef TRITON_ENABLE_GPU
+  else {
     // If instance kind is AUTO, default to use GPU execution provider.
     // Using default values for everything other than device id and cuda
     // stream
@@ -650,6 +652,7 @@ ModelState::LoadModel(
          "' on device " + std::to_string(instance_group_device_id))
             .c_str());
   }
+#endif  // TRITON_ENABLE_GPU
 
   // Register all op libraries that contain custom operations.
   {
