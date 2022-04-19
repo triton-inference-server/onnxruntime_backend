@@ -607,6 +607,48 @@ ModelState::LoadModel(
         }
       }
     }
+  } else {
+    // If instance kind is AUTO, default to use GPU execution provider.
+    // Using default values for everything other than device id and cuda
+    // stream
+    OrtCUDAProviderOptions cuda_options;
+    cuda_options.device_id = instance_group_device_id;
+    cuda_options.has_user_compute_stream = stream != nullptr ? 1 : 0;
+    cuda_options.user_compute_stream =
+        stream != nullptr ? (void*)stream : nullptr,
+    cuda_options.default_memory_arena_cfg = nullptr;
+
+    {
+      // Parse CUDA EP configurations
+      triton::common::TritonJson::Value params;
+      if (model_config_.Find("parameters", &params)) {
+        int cudnn_conv_algo_search = 0;
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "cudnn_conv_algo_search", &cudnn_conv_algo_search, 0));
+        cuda_options.cudnn_conv_algo_search =
+            static_cast<OrtCudnnConvAlgoSearch>(cudnn_conv_algo_search);
+
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "gpu_mem_limit", &cuda_options.gpu_mem_limit,
+            std::numeric_limits<size_t>::max()));
+
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "arena_extend_strategy",
+            &cuda_options.arena_extend_strategy, 0));
+
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "do_copy_in_default_stream",
+            &cuda_options.do_copy_in_default_stream, true));
+      }
+    }
+
+    RETURN_IF_ORT_ERROR(ort_api->SessionOptionsAppendExecutionProvider_CUDA(
+        soptions, &cuda_options));
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_VERBOSE,
+        (std::string("CUDA Execution Accelerator is set for '") + Name() +
+         "' on device " + std::to_string(instance_group_device_id))
+            .c_str());
   }
 
   // Register all op libraries that contain custom operations.
