@@ -388,229 +388,139 @@ ModelState::LoadModel(
   // to indicate that execution providers should not be added (this is
   // just a local convention to this function, not the standard
   // interpretation of AUTO).
-  if (instance_group_kind != TRITONSERVER_INSTANCEGROUPKIND_AUTO) {
-    // Don't need to ensure uniqueness of the providers, ONNX Runtime
-    // will check it.
+  // Don't need to ensure uniqueness of the providers, ONNX Runtime
+  // will check it.
 
-    // GPU execution providers
+  // GPU execution providers
 #ifdef TRITON_ENABLE_GPU
-    if (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-      triton::common::TritonJson::Value optimization;
-      if (model_config_.Find("optimization", &optimization)) {
-        triton::common::TritonJson::Value eas;
-        if (optimization.Find("execution_accelerators", &eas)) {
-          triton::common::TritonJson::Value gpu_eas;
-          if (eas.Find("gpu_execution_accelerator", &gpu_eas)) {
-            for (size_t ea_idx = 0; ea_idx < gpu_eas.ArraySize(); ea_idx++) {
-              triton::common::TritonJson::Value ea;
-              RETURN_IF_ERROR(gpu_eas.IndexAsObject(ea_idx, &ea));
-              std::string name;
-              RETURN_IF_ERROR(ea.MemberAsString("name", &name));
+  if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) &&
+      (instance_group_kind != TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
+    triton::common::TritonJson::Value optimization;
+    if (model_config_.Find("optimization", &optimization)) {
+      triton::common::TritonJson::Value eas;
+      if (optimization.Find("execution_accelerators", &eas)) {
+        triton::common::TritonJson::Value gpu_eas;
+        if (eas.Find("gpu_execution_accelerator", &gpu_eas)) {
+          for (size_t ea_idx = 0; ea_idx < gpu_eas.ArraySize(); ea_idx++) {
+            triton::common::TritonJson::Value ea;
+            RETURN_IF_ERROR(gpu_eas.IndexAsObject(ea_idx, &ea));
+            std::string name;
+            RETURN_IF_ERROR(ea.MemberAsString("name", &name));
 #ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
-              if (name == kTensorRTExecutionAccelerator) {
-                // create tensorrt options with default values
-                std::string int8_calibration_table_name;
-                std::string trt_engine_cache_path;
-                OrtTensorRTProviderOptions trt_options{
-                    instance_group_device_id,
-                    stream != nullptr ? 1 : 0,
-                    stream != nullptr ? (void*)stream : nullptr,
-                    1000,     // trt_max_partition_iterations
-                    1,        // trt_min_subgraph_size
-                    1 << 30,  // max_workspace_size
-                    0,        // trt_fp16_enable
-                    0,        // trt_int8_enable
-                    nullptr,  // trt_int8_calibration_table_name
-                    0,        // trt_int8_use_native_calibration_table
-                    0,        // trt_dla_enable
-                    0,        // trt_dla_core
-                    0,        // trt_dump_subgraphs
-                    0,        // trt_engine_cache_enable
-                    nullptr,  // trt_engine_cache_path
-                    0,        // trt_engine_decryption_enable
-                    nullptr,  // trt_engine_decryption_lib_path
-                    0         // trt_force_sequential_engine_build
-                };
-                // Validate and set parameters
-                triton::common::TritonJson::Value params;
-                if (ea.Find("parameters", &params)) {
-                  std::vector<std::string> param_keys;
-                  RETURN_IF_ERROR(params.Members(&param_keys));
-                  for (const auto& param_key : param_keys) {
-                    std::string value_string;
-                    if (param_key == "precision_mode") {
-                      RETURN_IF_ERROR(params.MemberAsString(
-                          param_key.c_str(), &value_string));
-                      if (value_string == "FP16") {
-                        trt_options.trt_fp16_enable = 1;
-                      } else if (value_string == "INT8") {
-                        trt_options.trt_int8_enable = 1;
-                      } else if (value_string != "FP32") {
-                        RETURN_ERROR_IF_FALSE(
-                            false, TRITONSERVER_ERROR_INVALID_ARG,
-                            std::string("unsupported precision mode '") +
-                                value_string + "' is requested");
-                      }
-                    } else if (param_key == "max_workspace_size_bytes") {
-                      RETURN_IF_ERROR(params.MemberAsString(
-                          param_key.c_str(), &value_string));
-                      size_t max_workspace_size_bytes;
-                      RETURN_IF_ERROR(ParseUnsignedLongLongValue(
-                          value_string, &max_workspace_size_bytes));
-                      trt_options.trt_max_workspace_size =
-                          max_workspace_size_bytes;
-                    } else if (param_key == "int8_calibration_table_name") {
-                      RETURN_IF_ERROR(params.MemberAsString(
-                          param_key.c_str(), &int8_calibration_table_name));
-                      trt_options.trt_int8_calibration_table_name =
-                          int8_calibration_table_name.c_str();
-                    } else if (
-                        param_key == "int8_use_native_calibration_table") {
-                      RETURN_IF_ERROR(params.MemberAsString(
-                          param_key.c_str(), &value_string));
-                      int use_native_calibration_table;
-                      RETURN_IF_ERROR(ParseIntValue(
-                          value_string, &use_native_calibration_table));
-                      trt_options.trt_int8_use_native_calibration_table =
-                          use_native_calibration_table;
-                    } else if (param_key == "trt_engine_cache_enable") {
-                      RETURN_IF_ERROR(params.MemberAsString(
-                          param_key.c_str(), &value_string));
-                      bool enable_cache;
-                      RETURN_IF_ERROR(
-                          ParseBoolValue(value_string, &enable_cache));
-                      trt_options.trt_engine_cache_enable = enable_cache;
-                    } else if (param_key == "trt_engine_cache_path") {
-                      RETURN_IF_ERROR(params.MemberAsString(
-                          param_key.c_str(), &trt_engine_cache_path));
-                      trt_options.trt_engine_cache_path =
-                          trt_engine_cache_path.c_str();
-                    } else {
-                      return TRITONSERVER_ErrorNew(
-                          TRITONSERVER_ERROR_INVALID_ARG,
-                          std::string(
-                              "unknown parameter '" + param_key +
-                              "' is provided for TensorRT Execution "
-                              "Accelerator")
-                              .c_str());
+            if (name == kTensorRTExecutionAccelerator) {
+              // create tensorrt options with default values
+              std::string int8_calibration_table_name;
+              std::string trt_engine_cache_path;
+              OrtTensorRTProviderOptions trt_options{
+                  instance_group_device_id,
+                  stream != nullptr ? 1 : 0,
+                  stream != nullptr ? (void*)stream : nullptr,
+                  1000,     // trt_max_partition_iterations
+                  1,        // trt_min_subgraph_size
+                  1 << 30,  // max_workspace_size
+                  0,        // trt_fp16_enable
+                  0,        // trt_int8_enable
+                  nullptr,  // trt_int8_calibration_table_name
+                  0,        // trt_int8_use_native_calibration_table
+                  0,        // trt_dla_enable
+                  0,        // trt_dla_core
+                  0,        // trt_dump_subgraphs
+                  0,        // trt_engine_cache_enable
+                  nullptr,  // trt_engine_cache_path
+                  0,        // trt_engine_decryption_enable
+                  nullptr,  // trt_engine_decryption_lib_path
+                  0         // trt_force_sequential_engine_build
+              };
+              // Validate and set parameters
+              triton::common::TritonJson::Value params;
+              if (ea.Find("parameters", &params)) {
+                std::vector<std::string> param_keys;
+                RETURN_IF_ERROR(params.Members(&param_keys));
+                for (const auto& param_key : param_keys) {
+                  std::string value_string;
+                  if (param_key == "precision_mode") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    if (value_string == "FP16") {
+                      trt_options.trt_fp16_enable = 1;
+                    } else if (value_string == "INT8") {
+                      trt_options.trt_int8_enable = 1;
+                    } else if (value_string != "FP32") {
+                      RETURN_ERROR_IF_FALSE(
+                          false, TRITONSERVER_ERROR_INVALID_ARG,
+                          std::string("unsupported precision mode '") +
+                              value_string + "' is requested");
                     }
+                  } else if (param_key == "max_workspace_size_bytes") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    size_t max_workspace_size_bytes;
+                    RETURN_IF_ERROR(ParseUnsignedLongLongValue(
+                        value_string, &max_workspace_size_bytes));
+                    trt_options.trt_max_workspace_size =
+                        max_workspace_size_bytes;
+                  } else if (param_key == "int8_calibration_table_name") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &int8_calibration_table_name));
+                    trt_options.trt_int8_calibration_table_name =
+                        int8_calibration_table_name.c_str();
+                  } else if (param_key == "int8_use_native_calibration_table") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    int use_native_calibration_table;
+                    RETURN_IF_ERROR(ParseIntValue(
+                        value_string, &use_native_calibration_table));
+                    trt_options.trt_int8_use_native_calibration_table =
+                        use_native_calibration_table;
+                  } else if (param_key == "trt_engine_cache_enable") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool enable_cache;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &enable_cache));
+                    trt_options.trt_engine_cache_enable = enable_cache;
+                  } else if (param_key == "trt_engine_cache_path") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &trt_engine_cache_path));
+                    trt_options.trt_engine_cache_path =
+                        trt_engine_cache_path.c_str();
+                  } else {
+                    return TRITONSERVER_ErrorNew(
+                        TRITONSERVER_ERROR_INVALID_ARG,
+                        std::string(
+                            "unknown parameter '" + param_key +
+                            "' is provided for TensorRT Execution "
+                            "Accelerator")
+                            .c_str());
                   }
                 }
-
-                RETURN_IF_ORT_ERROR(
-                    ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
-                        soptions, &trt_options));
-                LOG_MESSAGE(
-                    TRITONSERVER_LOG_VERBOSE,
-                    (std::string(
-                         "TensorRT Execution Accelerator is set for '") +
-                     Name() + "' on device " +
-                     std::to_string(instance_group_device_id))
-                        .c_str());
-                continue;
               }
+
+              RETURN_IF_ORT_ERROR(
+                  ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
+                      soptions, &trt_options));
+              LOG_MESSAGE(
+                  TRITONSERVER_LOG_VERBOSE,
+                  (std::string("TensorRT Execution Accelerator is set for '") +
+                   Name() + "' on device " +
+                   std::to_string(instance_group_device_id))
+                      .c_str());
+              continue;
+            }
 #endif  // TRITON_ENABLE_ONNXRUNTIME_TENSORRT
-              return TRITONSERVER_ErrorNew(
-                  TRITONSERVER_ERROR_INVALID_ARG,
-                  (std::string("unknown Execution Accelerator '") + name +
-                   "' is requested")
-                      .c_str());
-            }
-          }
-        }
-      }
-
-      // Default GPU execution provider.
-      // Using default values for everything other than device id and cuda
-      // stream
-      OrtCUDAProviderOptions cuda_options;
-      cuda_options.device_id = instance_group_device_id;
-      cuda_options.has_user_compute_stream = stream != nullptr ? 1 : 0;
-      cuda_options.user_compute_stream =
-          stream != nullptr ? (void*)stream : nullptr,
-      cuda_options.default_memory_arena_cfg = nullptr;
-
-      {
-        // Parse CUDA EP configurations
-        triton::common::TritonJson::Value params;
-        if (model_config_.Find("parameters", &params)) {
-          int cudnn_conv_algo_search = 0;
-          RETURN_IF_ERROR(TryParseModelStringParameter(
-              params, "cudnn_conv_algo_search", &cudnn_conv_algo_search, 0));
-          cuda_options.cudnn_conv_algo_search =
-              static_cast<OrtCudnnConvAlgoSearch>(cudnn_conv_algo_search);
-
-          RETURN_IF_ERROR(TryParseModelStringParameter(
-              params, "gpu_mem_limit", &cuda_options.gpu_mem_limit,
-              std::numeric_limits<size_t>::max()));
-
-          RETURN_IF_ERROR(TryParseModelStringParameter(
-              params, "arena_extend_strategy",
-              &cuda_options.arena_extend_strategy, 0));
-
-          RETURN_IF_ERROR(TryParseModelStringParameter(
-              params, "do_copy_in_default_stream",
-              &cuda_options.do_copy_in_default_stream, true));
-        }
-      }
-
-      RETURN_IF_ORT_ERROR(ort_api->SessionOptionsAppendExecutionProvider_CUDA(
-          soptions, &cuda_options));
-      LOG_MESSAGE(
-          TRITONSERVER_LOG_VERBOSE,
-          (std::string("CUDA Execution Accelerator is set for '") + Name() +
-           "' on device " + std::to_string(instance_group_device_id))
-              .c_str());
-    }
-#endif  // TRITON_ENABLE_GPU
-
-    // CPU execution providers
-    {
-      triton::common::TritonJson::Value optimization;
-      if (model_config_.Find("optimization", &optimization)) {
-        triton::common::TritonJson::Value eas;
-        if (optimization.Find("execution_accelerators", &eas)) {
-          triton::common::TritonJson::Value cpu_eas;
-          if (eas.Find("cpu_execution_accelerator", &cpu_eas)) {
-            for (size_t ea_idx = 0; ea_idx < cpu_eas.ArraySize(); ea_idx++) {
-              triton::common::TritonJson::Value ea;
-              RETURN_IF_ERROR(cpu_eas.IndexAsObject(ea_idx, &ea));
-              std::string name;
-              RETURN_IF_ERROR(ea.MemberAsString("name", &name));
-#ifdef TRITON_ENABLE_ONNXRUNTIME_OPENVINO
-              if (name == kOpenVINOExecutionAccelerator) {
-                need_lock = true;
-                OrtOpenVINOProviderOptions openvino_options;
-                openvino_options.device_type =
-                    "CPU_FP32";  // device_type default is CPU_FP32
-
-                RETURN_IF_ORT_ERROR(
-                    ort_api->SessionOptionsAppendExecutionProvider_OpenVINO(
-                        soptions, &openvino_options));
-
-                LOG_MESSAGE(
-                    TRITONSERVER_LOG_VERBOSE,
-                    (std::string(
-                         "OpenVINO Execution Accelerator is set for '") +
-                     Name() + "' on CPU")
-                        .c_str());
-                continue;
-              }
-#endif  // TRITON_ENABLE_ONNXRUNTIME_OPENVINO
-              return TRITONSERVER_ErrorNew(
-                  TRITONSERVER_ERROR_INVALID_ARG,
-                  (std::string("unknown Execution Accelerator '") + name +
-                   "' is requested")
-                      .c_str());
-            }
+            return TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INVALID_ARG,
+                (std::string("unknown Execution Accelerator '") + name +
+                 "' is requested")
+                    .c_str());
           }
         }
       }
     }
   }
-#ifdef TRITON_ENABLE_GPU
-  else {
-    // If instance kind is AUTO, default to use GPU execution provider.
+
+  if (instance_group_kind != TRITONSERVER_INSTANCEGROUPKIND_CPU) {
+    // Default GPU execution provider.
     // Using default values for everything other than device id and cuda
     // stream
     OrtCUDAProviderOptions cuda_options;
@@ -653,6 +563,49 @@ ModelState::LoadModel(
             .c_str());
   }
 #endif  // TRITON_ENABLE_GPU
+
+  // CPU execution providers
+  if (instance_group_kind != TRITONSERVER_INSTANCEGROUPKIND_AUTO) {
+    triton::common::TritonJson::Value optimization;
+    if (model_config_.Find("optimization", &optimization)) {
+      triton::common::TritonJson::Value eas;
+      if (optimization.Find("execution_accelerators", &eas)) {
+        triton::common::TritonJson::Value cpu_eas;
+        if (eas.Find("cpu_execution_accelerator", &cpu_eas)) {
+          for (size_t ea_idx = 0; ea_idx < cpu_eas.ArraySize(); ea_idx++) {
+            triton::common::TritonJson::Value ea;
+            RETURN_IF_ERROR(cpu_eas.IndexAsObject(ea_idx, &ea));
+            std::string name;
+            RETURN_IF_ERROR(ea.MemberAsString("name", &name));
+#ifdef TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+            if (name == kOpenVINOExecutionAccelerator) {
+              need_lock = true;
+              OrtOpenVINOProviderOptions openvino_options;
+              openvino_options.device_type =
+                  "CPU_FP32";  // device_type default is CPU_FP32
+
+              RETURN_IF_ORT_ERROR(
+                  ort_api->SessionOptionsAppendExecutionProvider_OpenVINO(
+                      soptions, &openvino_options));
+
+              LOG_MESSAGE(
+                  TRITONSERVER_LOG_VERBOSE,
+                  (std::string("OpenVINO Execution Accelerator is set for '") +
+                   Name() + "' on CPU")
+                      .c_str());
+              continue;
+            }
+#endif  // TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+            return TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INVALID_ARG,
+                (std::string("unknown Execution Accelerator '") + name +
+                 "' is requested")
+                    .c_str());
+          }
+        }
+      }
+    }
+  }
 
   // Register all op libraries that contain custom operations.
   {
