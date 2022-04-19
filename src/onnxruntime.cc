@@ -384,17 +384,14 @@ ModelState::LoadModel(
 
   bool need_lock = false;
 
-  // Execution providers if they are requested... kind == AUTO if used
-  // to indicate that execution providers should not be added (this is
-  // just a local convention to this function, not the standard
-  // interpretation of AUTO).
+  // Add execution providers if they are requested.
   // Don't need to ensure uniqueness of the providers, ONNX Runtime
   // will check it.
 
   // GPU execution providers
 #ifdef TRITON_ENABLE_GPU
-  if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) &&
-      (instance_group_kind != TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
+  if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
+      (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
     triton::common::TritonJson::Value optimization;
     if (model_config_.Find("optimization", &optimization)) {
       triton::common::TritonJson::Value eas;
@@ -517,9 +514,7 @@ ModelState::LoadModel(
         }
       }
     }
-  }
 
-  if (instance_group_kind != TRITONSERVER_INSTANCEGROUPKIND_CPU) {
     // Default GPU execution provider.
     // Using default values for everything other than device id and cuda
     // stream
@@ -565,7 +560,7 @@ ModelState::LoadModel(
 #endif  // TRITON_ENABLE_GPU
 
   // CPU execution providers
-  if (instance_group_kind != TRITONSERVER_INSTANCEGROUPKIND_AUTO) {
+  {
     triton::common::TritonJson::Value optimization;
     if (model_config_.Find("optimization", &optimization)) {
       triton::common::TritonJson::Value eas;
@@ -681,7 +676,7 @@ ModelState::AutoCompleteConfig()
   RETURN_IF_ERROR(
       ModelConfig().MemberAsString("default_model_filename", &artifact_name));
 
-  // Must cleanup 'session'.  'allocator' is default allocator which
+  // Must cleanup 'session'. 'allocator' is default allocator which
   // is managed by ONNX Runtime so don't need to free/release
   std::unique_ptr<OrtSession, SessionDeleter> session;
   OrtAllocator* default_allocator;
