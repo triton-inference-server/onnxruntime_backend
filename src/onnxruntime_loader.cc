@@ -31,6 +31,7 @@
 #include <locale>
 #include <string>
 #include <thread>
+
 #include "onnxruntime_utils.h"
 
 namespace triton { namespace backend { namespace onnxruntime {
@@ -55,9 +56,9 @@ OnnxLoader::Init(common::TritonJson::Value& backend_config)
     OrtLoggingLevel logging_level =
         TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)
             ? ORT_LOGGING_LEVEL_VERBOSE
-            : TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_WARN)
-                  ? ORT_LOGGING_LEVEL_WARNING
-                  : ORT_LOGGING_LEVEL_ERROR;
+        : TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_WARN)
+            ? ORT_LOGGING_LEVEL_WARNING
+            : ORT_LOGGING_LEVEL_ERROR;
 
     // Controls whether to enable global threadpool which will be shared across
     // sessions. Use this in conjunction with DisablePerSessionThreads API or
@@ -110,7 +111,6 @@ OnnxLoader::Init(common::TritonJson::Value& backend_config)
       status = ort_api->CreateEnv(logging_level, "log", &env);
     }
 
-    status = ort_api->CreateEnv(logging_level, "log", &env);
     loader.reset(new OnnxLoader(env, global_threadpool_enabled));
     RETURN_IF_ORT_ERROR(status);
   } else {
