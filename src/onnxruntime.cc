@@ -692,7 +692,6 @@ ModelState::AutoCompleteConfig()
     // have already occurred. If at least one instance group with
     // "kind" = "KIND_GPU" then allow model to use GPU else autocomplete to
     // "KIND_CPU"
-    bool found_gpu_instance = false;
     for (size_t i = 0; i < instance_group.ArraySize(); ++i) {
       triton::common::TritonJson::Value instance_obj;
       instance_group.IndexAsObject(i, &instance_obj);
@@ -703,15 +702,12 @@ ModelState::AutoCompleteConfig()
       RETURN_IF_ERROR(instance_group_kind.AsString(&kind_str));
 
       if (kind_str == "KIND_GPU") {
-        found_gpu_instance = true;
+        kind = TRITONSERVER_INSTANCEGROUPKIND_GPU;
         break;
       }
     }
-
-    if (found_gpu_instance) {
-      kind = TRITONSERVER_INSTANCEGROUPKIND_GPU;
-    }
 #endif  // TRITON_ENABLE_GPU
+
     OrtSession* sptr = nullptr;
     RETURN_IF_ERROR(LoadModel(
         artifact_name, kind, 0, &model_path, &sptr, &default_allocator,
