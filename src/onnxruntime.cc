@@ -682,14 +682,16 @@ ModelState::AutoCompleteConfig()
   OrtAllocator* default_allocator;
   std::string model_path;
   {
-    TRITONSERVER_InstanceGroupKind kind;
+    TRITONSERVER_InstanceGroupKind kind = TRITONSERVER_INSTANCEGROUPKIND_CPU;
 
+#ifdef TRITON_ENABLE_GPU
     triton::common::TritonJson::Value instance_group;
     ModelConfig().Find("instance_group", &instance_group);
 
     // Earlier in the model lifecycle, device checks for the instance group
     // have already occurred. If at least one instance group with
-    // "kind" = "KIND_GPU" then allow model to use GPU else autocomplete to CPU
+    // "kind" = "KIND_GPU" then allow model to use GPU else autocomplete to
+    // "KIND_CPU"
     bool found_gpu_instance = false;
     for (size_t i = 0; i < instance_group.ArraySize(); ++i) {
       triton::common::TritonJson::Value instance_obj;
@@ -700,7 +702,7 @@ ModelState::AutoCompleteConfig()
       std::string kind_str;
       RETURN_IF_ERROR(instance_group_kind.AsString(&kind_str));
 
-      if (kind_str == "KIND_GPU" || kind_str == "KIND_AUTO") {
+      if (kind_str == "KIND_GPU") {
         found_gpu_instance = true;
         break;
       }
@@ -708,10 +710,8 @@ ModelState::AutoCompleteConfig()
 
     if (found_gpu_instance) {
       kind = TRITONSERVER_INSTANCEGROUPKIND_GPU;
-    } else {
-      kind = TRITONSERVER_INSTANCEGROUPKIND_CPU;
     }
-
+#endif  // TRITON_ENABLE_GPU
     OrtSession* sptr = nullptr;
     RETURN_IF_ERROR(LoadModel(
         artifact_name, kind, 0, &model_path, &sptr, &default_allocator,
