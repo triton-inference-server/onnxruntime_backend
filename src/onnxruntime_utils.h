@@ -27,6 +27,7 @@
 #pragma once
 
 #include <onnxruntime_c_api.h>
+#include <regex>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -148,5 +149,8 @@ TRITONSERVER_Error* CompareDimsSupported(
     const std::string& model_name, const std::string& tensor_name,
     const std::vector<int64_t>& model_shape, const std::vector<int64_t>& dims,
     const int max_batch_size, const bool compare_exact);
+
+std::string GetInstanceGroupName(
+    const std::string& model_name, const std::string& instance_name);
 
 }}}  // namespace triton::backend::onnxruntime

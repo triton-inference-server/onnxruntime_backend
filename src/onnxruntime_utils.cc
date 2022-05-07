@@ -493,5 +493,22 @@ CompareDimsSupported(
   return nullptr;  // success
 }
 
+std::string
+GetInstanceGroupName(
+    const std::string& model_name, const std::string& instance_name)
+{
+  std::regex groupNameRegex('(' + model_name + '_' + "[0-9]" + ')');
+  std::smatch groupName;
+
+  if (model_name.empty() || instance_name.empty()) {
+    return "";
+  }
+
+  if (std::regex_search(instance_name, groupName, groupNameRegex)) {
+    return groupName.str(1);
+  }
+
+  return "";
+}
 
 }}}  // namespace triton::backend::onnxruntime
