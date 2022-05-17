@@ -55,9 +55,7 @@ struct SessionDeleter {
 
 // BackendConfiguration
 struct BackendConfiguration {
-  BackendConfiguration() : default_max_batch_size_(0)
-  {
-  }
+  BackendConfiguration() : default_max_batch_size_(0) {}
 
   int default_max_batch_size_;
 };
@@ -784,8 +782,8 @@ ModelState::AutoCompleteMaxBatch(
         void* state;
         THROW_IF_BACKEND_INSTANCE_ERROR(
             TRITONBACKEND_BackendState(backend, &state));
-        default_max_batch_size =
-            reinterpret_cast<BackendConfiguration*>(state)->default_max_batch_size_;
+        default_max_batch_size = reinterpret_cast<BackendConfiguration*>(state)
+                                     ->default_max_batch_size_;
       }
       int max_batch_size = std::max(default_max_batch_size, 1);
 
@@ -797,12 +795,13 @@ ModelState::AutoCompleteMaxBatch(
       // turn on dynamic batching since model supports batching
       if (max_batch_size > 1) {
         triton::common::TritonJson::Value value;
-        bool found_sequence_batching = ModelConfig().Find("sequence_batching", &value);
-        bool found_dynamic_batching = ModelConfig().Find("dynamic_batching", &value);
+        bool found_sequence_batching =
+            ModelConfig().Find("sequence_batching", &value);
+        bool found_dynamic_batching =
+            ModelConfig().Find("dynamic_batching", &value);
         if (!found_sequence_batching && !found_dynamic_batching) {
           triton::common::TritonJson::Value dynamic_batching(
-            ModelConfig(),
-            triton::common::TritonJson::ValueType::OBJECT);
+              ModelConfig(), triton::common::TritonJson::ValueType::OBJECT);
           ModelConfig().Add("dynamic_batching", std::move(dynamic_batching));
         }
       }
@@ -2529,10 +2528,10 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
       int lvalue;
       RETURN_IF_ERROR(ParseIntValue(value_str, &lvalue));
       lconfig->default_max_batch_size_ = lvalue;
-    }    
+    }
   }
   RETURN_IF_ERROR(TRITONBACKEND_BackendSetState(
-    backend, reinterpret_cast<void*>(lconfig.get())));
+      backend, reinterpret_cast<void*>(lconfig.get())));
 
   lconfig.release();
   return nullptr;  // success
