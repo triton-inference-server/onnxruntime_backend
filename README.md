@@ -185,8 +185,29 @@ parameters { key: "inter_op_thread_count" value: { string_value: "0" } }
 * `memory.enable_memory_arena_shrinkage`: See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h) for more information.
 
 ### Command line options
+
+#### Thread Pools
+
 When intra and inter op threads is set to 0 or a value higher than 1, by default ORT creates threadpool per session. This may not be ideal in every scenario, therefore ORT also supports global threadpools. When global threadpools are enabled ORT creates 1 global threadpool which is shared by every session. Use the backend config to enable global threadpool. When global threadpool is enabled, intra and inter op num threads config should also be provided via backend config. Config values provided in model config will be ignored.
 
 ```
 --backend-config=onnxruntime,enable-global-threadpool=<0,1>, --backend-config=onnxruntime,intra_op_thread_count=<int> , --backend-config=onnxruntime,inter_op_thread_count=<int> 
 ```
+
+#### Default Max Batch Size
+
+The default-max-batch-size value is used for max_batch_size during [Autocomplete](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#auto-generated-model-configuration) when no 
+other value is found. If the `--strict-model-config=false` command-line
+option is used, the onnxruntime backend will set the max_batch_size
+of the model to this default value under the following conditions:
+
+1. Autocomplete has determined the model is capable of batching requests. 
+2. max_batch_size is 0 in the model configuration or max_batch_size 
+   is omitted from the model configuration.
+
+If max_batch_size > 1 and no [scheduler](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#scheduling-and-batching) is provided, the dynamic batch scheduler will be used.
+
+```
+--backend-config=onnxruntime,default-max-batch-size=<int>
+```
+
