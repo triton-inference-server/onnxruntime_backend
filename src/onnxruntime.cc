@@ -785,7 +785,7 @@ ModelState::AutoCompleteMaxBatch(
         default_max_batch_size = reinterpret_cast<BackendConfiguration*>(state)
                                      ->default_max_batch_size_;
       }
-      int max_batch_size = std::max(default_max_batch_size, 1);
+      int max_batch_size = std::max(default_max_batch_size, 0);
 
       triton::common::TritonJson::Value mbs_value;
       ModelConfig().Find("max_batch_size", &mbs_value);
@@ -794,7 +794,10 @@ ModelState::AutoCompleteMaxBatch(
 
       LOG_MESSAGE(
           TRITONSERVER_LOG_WARN,
-          (std::string("autofilled max_batch_size to 1 for model '") + Name() +
+          (std::string(
+               "autofilled max_batch_size to " +
+               std::to_string(max_batch_size) + " for model '") +
+           Name() +
            "' since batching is supporrted but no max_batch_size is "
            "specified "
            "in model configuration. Must specify max_batch_size to utilize "
