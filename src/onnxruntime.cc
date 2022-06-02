@@ -53,6 +53,13 @@ struct SessionDeleter {
   void operator()(OrtSession* f) { OnnxLoader::UnloadSession(f); }
 };
 
+// BackendConfiguration
+struct BackendConfiguration {
+  BackendConfiguration() : default_max_batch_size_(0) {}
+
+  int default_max_batch_size_;
+};
+
 //
 // ModelState
 //
@@ -767,19 +774,52 @@ ModelState::AutoCompleteMaxBatch(
   // initialized in the model state.
   if (can_support_batching) {
     if (MaxBatchSize() == 0) {
+      int default_max_batch_size = 0;
+      {
+        TRITONBACKEND_Backend* backend;
+        THROW_IF_BACKEND_INSTANCE_ERROR(
+            TRITONBACKEND_ModelBackend(TritonModel(), &backend));
+        void* state;
+        THROW_IF_BACKEND_INSTANCE_ERROR(
+            TRITONBACKEND_BackendState(backend, &state));
+        default_max_batch_size = reinterpret_cast<BackendConfiguration*>(state)
+                                     ->default_max_batch_size_;
+      }
+      int max_batch_size = std::max(default_max_batch_size, 0);
+
       triton::common::TritonJson::Value mbs_value;
       ModelConfig().Find("max_batch_size", &mbs_value);
-      mbs_value.SetInt(1);
-      SetMaxBatchSize(1);
+      mbs_value.SetInt(max_batch_size);
+      SetMaxBatchSize(max_batch_size);
+
       LOG_MESSAGE(
           TRITONSERVER_LOG_WARN,
-          (std::string("autofilled max_batch_size to 1 for model '") + Name() +
+          (std::string(
+               "autofilled max_batch_size to " +
+               std::to_string(max_batch_size) + " for model '") +
+           Name() +
            "' since batching is supporrted but no max_batch_size is "
            "specified "
            "in model configuration. Must specify max_batch_size to utilize "
            "autofill with a larger max batch size")
               .c_str());
     }
+
+    // Check to see if we need to turn on dynamic batching
+    // since model supports batching
+    if (MaxBatchSize() > 1) {
+      triton::common::TritonJson::Value value;
+      bool found_sequence_batching =
+          ModelConfig().Find("sequence_batching", &value);
+      bool found_dynamic_batching =
+          ModelConfig().Find("dynamic_batching", &value);
+      if (!found_sequence_batching && !found_dynamic_batching) {
+        triton::common::TritonJson::Value dynamic_batching(
+            ModelConfig(), triton::common::TritonJson::ValueType::OBJECT);
+        ModelConfig().Add("dynamic_batching", std::move(dynamic_batching));
+      }
+    }
+
   } else if (MaxBatchSize() != 0) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -2484,6 +2524,22 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   // Onetime initialization for the onnxruntime loader.
   RETURN_IF_ERROR(OnnxLoader::Init(backend_config));
 
+  std::unique_ptr<BackendConfiguration> lconfig(new BackendConfiguration());
+  triton::common::TritonJson::Value cmdline;
+  if (backend_config.Find("cmdline", &cmdline)) {
+    triton::common::TritonJson::Value value;
+    std::string value_str;
+    if (cmdline.Find("default-max-batch-size", &value)) {
+      RETURN_IF_ERROR(value.AsString(&value_str));
+      int lvalue;
+      RETURN_IF_ERROR(ParseIntValue(value_str, &lvalue));
+      lconfig->default_max_batch_size_ = lvalue;
+    }
+  }
+  RETURN_IF_ERROR(TRITONBACKEND_BackendSetState(
+      backend, reinterpret_cast<void*>(lconfig.get())));
+
+  lconfig.release();
   return nullptr;  // success
 }
 
