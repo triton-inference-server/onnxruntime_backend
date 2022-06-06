@@ -2547,6 +2547,11 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
 {
   LOG_IF_ERROR(OnnxLoader::Stop(), "failed to stop OnnxLoader");
+  void* state = nullptr;
+  LOG_IF_ERROR(TRITONBACKEND_BackendState(backend, &state), "failed to get backend state");
+  if (state != nullptr) {
+    delete reinterpret_cast<BackendConfiguration*>(state);
+  }
   return nullptr;  // success
 }
 
