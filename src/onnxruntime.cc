@@ -131,15 +131,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
       triton_model, &auto_complete_config));
   if (auto_complete_config) {
     RETURN_IF_ERROR((*state)->AutoCompleteConfig());
-
-    triton::common::TritonJson::WriteBuffer json_buffer;
-    (*state)->ModelConfig().Write(&json_buffer);
-
-    TRITONSERVER_Message* message;
-    RETURN_IF_ERROR(TRITONSERVER_MessageNewFromSerializedJson(
-        &message, json_buffer.Base(), json_buffer.Size()));
-    RETURN_IF_ERROR(TRITONBACKEND_ModelSetConfig(
-        triton_model, 1 /* config_version */, message));
+    RETURN_IF_ERROR((*state)->SetModelConfig());
   }
 
   auto& model_outputs = (*state)->model_outputs_;
