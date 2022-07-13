@@ -211,3 +211,4 @@ If max_batch_size > 1 and no [scheduler](https://github.com/triton-inference-ser
 --backend-config=onnxruntime,default-max-batch-size=<int>
 ```
 
+The default value of `default-max-batch-size` is 4.
