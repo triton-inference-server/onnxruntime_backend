@@ -31,6 +31,7 @@
 #include <locale>
 #include <string>
 #include <thread>
+#include <fstream>
 
 #include "onnxruntime_utils.h"
 
@@ -191,8 +192,17 @@ OnnxLoader::LoadSession(
           loader->env_, ort_style_model_str.c_str(), model.size(),
           session_options, session);
     } else {
-      status = ort_api->CreateSession(
-          loader->env_, ort_style_model_str.c_str(), session_options, session);
+      // Onnxruntime uses the model path to create the TRT hash path,
+      // this triggers a regeneration when coupled with temporal paths
+      // Using the binary directly sidesteps the issue
+      // see: https://github.com/microsoft/onnxruntime/blob/927bac0/onnxruntime/core/framework/execution_provider.cc#L151
+      std::ifstream bytes_stream(ort_style_model_str.c_str(), std::ios::in | std::ios::binary | std::ios::ate);
+      std::streamsize num_bytes = bytes_stream.tellg();
+      bytes_stream.seekg(0, std::ios::beg);
+      std::vector<char> buffer(num_bytes);
+      bytes_stream.read(buffer.data(), num_bytes);
+      status = ort_api->CreateSessionFromArray(
+          loader->env_, buffer.data(), num_bytes, session_options, session);
     }
 
     if (status != nullptr) {
