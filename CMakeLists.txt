@@ -158,8 +158,8 @@ else()
     set(ONNXRUNTIME_LIBRARY "libonnxruntime.so")
   endif() # WIN32
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
-    set(TBB_LIBRARY "libtbb.so")
-    set(INFERENCE_ENGINE_LIBRARY "libinference_engine.so")
+    set(TBB_LIBRARY "libgna.so")
+    set(INFERENCE_ENGINE_LIBRARY "libopenvino.so")
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 endif()
 
