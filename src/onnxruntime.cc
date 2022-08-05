@@ -693,7 +693,7 @@ ModelState::AutoCompleteConfig()
     // "KIND_CPU"
     for (size_t i = 0; i < instance_group.ArraySize(); ++i) {
       triton::common::TritonJson::Value instance_obj;
-      instance_group.IndexAsObject(i, &instance_obj);
+      RETURN_IF_ERROR(instance_group.IndexAsObject(i, &instance_obj));
 
       triton::common::TritonJson::Value instance_group_kind;
       instance_obj.Find("kind", &instance_group_kind);
@@ -808,7 +808,8 @@ ModelState::AutoCompleteMaxBatch(
       if (!found_sequence_batching && !found_dynamic_batching) {
         triton::common::TritonJson::Value dynamic_batching(
             ModelConfig(), triton::common::TritonJson::ValueType::OBJECT);
-        ModelConfig().Add("dynamic_batching", std::move(dynamic_batching));
+        RETURN_IF_ERROR(
+            ModelConfig().Add("dynamic_batching", std::move(dynamic_batching)));
       }
     }
 
@@ -2540,7 +2541,9 @@ TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
 {
   LOG_IF_ERROR(OnnxLoader::Stop(), "failed to stop OnnxLoader");
   void* state = nullptr;
-  LOG_IF_ERROR(TRITONBACKEND_BackendState(backend, &state), "failed to get backend state");
+  LOG_IF_ERROR(
+      TRITONBACKEND_BackendState(backend, &state),
+      "failed to get backend state");
   if (state != nullptr) {
     delete reinterpret_cast<BackendConfiguration*>(state);
   }
