@@ -274,14 +274,23 @@ RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvi
 
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_2022/runtime/lib/intel64/lib*.so \
+    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino.so \
+       /opt/onnxruntime/lib && \
+    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino_c.so \
+       /opt/onnxruntime/lib && \
+    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so \
+       /opt/onnxruntime/lib && \
+    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino_ir_frontend.so \
+       /opt/onnxruntime/lib && \
+    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino_onnx_frontend.so \
        /opt/onnxruntime/lib && \
     cp /opt/intel/openvino_2022/runtime/lib/intel64/plugins.xml \
        /opt/onnxruntime/lib && \
+    cp /opt/intel/openvino_2022/runtime/3rdparty/tbb/lib/libtbb.so.2 \
+       /opt/onnxruntime/lib && \
     (cd /opt/onnxruntime/lib && \
      chmod a-x * && \
-     ln -sf libgna.so libgna.so.2 && \
-     ln -sf libgna.so libgna.so.3.0.0.1455)
+     ln -sf libtbb.so.2 libtbb.so)
 '''
 
     df += '''

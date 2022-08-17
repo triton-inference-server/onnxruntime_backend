@@ -132,8 +132,8 @@ if(NOT TRITON_ONNXRUNTIME_DOCKER_BUILD)
   find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     find_library(TBB_LIBRARY NAMES tbb PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
-    find_library(INFERENCE_ENGINE_LIBRARY
-      NAMES inference_engine
+    find_library(OV_LIBRARY
+      NAMES openvino
       PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 
@@ -158,8 +158,8 @@ else()
     set(ONNXRUNTIME_LIBRARY "libonnxruntime.so")
   endif() # WIN32
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
-    set(TBB_LIBRARY "libgna.so")
-    set(INFERENCE_ENGINE_LIBRARY "libopenvino.so")
+    set(TBB_LIBRARY "libtbb.so")
+    set(OV_LIBRARY "libopenvino.so")
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 endif()
 
@@ -307,7 +307,7 @@ if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     triton-onnxruntime-backend
     PRIVATE
       ${TBB_LIBRARY}
-      ${INFERENCE_ENGINE_LIBRARY}
+      ${OV_LIBRARY}
   )
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 
