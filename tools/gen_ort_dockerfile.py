@@ -164,20 +164,6 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
         (cd onnxruntime && git submodule update --init --recursive)
 
        '''
-    # Use the tensorrt-8.5ea branch to use Tensor RT 8.5a to use the built-in tensorrt parser
-    elif FLAGS.ort_version == "1.12.1":
-        df += '''
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
-    ARG ONNXRUNTIME_BUILD_CONFIG
-
-    RUN git clone -b tensorrt-8.5ea --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
-
-       '''
     else:
         df += '''
     #
@@ -208,8 +194,6 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         if FLAGS.ort_tensorrt:
             ep_flags += ' --use_tensorrt'
-            if FLAGS.ort_version == "1.12.1":
-                ep_flags += ' --use_tensorrt_builtin_parser'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
     if FLAGS.ort_openvino is not None:
