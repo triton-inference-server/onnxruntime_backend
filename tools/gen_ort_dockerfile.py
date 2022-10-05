@@ -165,7 +165,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 
        '''
     # Use the tensorrt-8.5ea branch to use Tensor RT 8.5a to use the built-in tensorrt parser
-    elif FLAGS.ort_version == "1.12.1":
+    elif FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0":
         df += '''
     #
     # ONNX Runtime build
@@ -208,7 +208,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         if FLAGS.ort_tensorrt:
             ep_flags += ' --use_tensorrt'
-            if FLAGS.ort_version == "1.12.1":
+            if FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0" :
                 ep_flags += ' --use_tensorrt_builtin_parser'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
