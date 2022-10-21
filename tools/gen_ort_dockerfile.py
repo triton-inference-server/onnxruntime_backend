@@ -165,7 +165,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 
        '''
     # Use the tensorrt-8.5ea branch to use Tensor RT 8.5a to use the built-in tensorrt parser
-    elif FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0":
+    elif FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0" or  FLAGS.ort_version == "1.13.1" :
         df += '''
     #
     # ONNX Runtime build
