@@ -196,7 +196,7 @@ When intra and inter op threads is set to 0 or a value higher than 1, by default
 
 #### Default Max Batch Size
 
-The default-max-batch-size value is used for max_batch_size during [Autocomplete](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#auto-generated-model-configuration) when no 
+The default-max-batch-size value is used for max_batch_size during [Autocomplete](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#auto-generated-model-configuration) when no 
 other value is found. Assuming server was not launched with `--disable-auto-complete-config`
 command-line option, the onnxruntime backend will set the max_batch_size
 of the model to this default value under the following conditions:
@@ -205,7 +205,7 @@ of the model to this default value under the following conditions:
 2. max_batch_size is 0 in the model configuration or max_batch_size 
    is omitted from the model configuration.
 
-If max_batch_size > 1 and no [scheduler](https://github.com/triton-inference-server/server/blob/main/docs/model_configuration.md#scheduling-and-batching) is provided, the dynamic batch scheduler will be used.
+If max_batch_size > 1 and no [scheduler](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#scheduling-and-batching) is provided, the dynamic batch scheduler will be used.
 
 ```
 --backend-config=onnxruntime,default-max-batch-size=<int>
