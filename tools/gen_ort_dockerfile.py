@@ -208,7 +208,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         if FLAGS.ort_tensorrt:
             ep_flags += ' --use_tensorrt'
-            if FLAGS.ort_version == "1.12.1":
+            if FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0" or FLAGS.ort_version == "1.13.1" :
                 ep_flags += ' --use_tensorrt_builtin_parser'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
