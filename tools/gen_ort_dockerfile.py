@@ -96,13 +96,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install dependencies from
 # onnxruntime/dockerfiles/scripts/install_common_deps.sh.
-RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
-      gpg --dearmor - |  \
-      tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
-    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-      cmake-data=3.21.1-0kitware1ubuntu20.04.1 cmake=3.21.1-0kitware1ubuntu20.04.1 && \
+ ARG CMAKE_VERSION=3.25.2
+ RUN apt update && apt install -y curl tar && \
+     curl -OL https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz && \
+     tar -xvf cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz -C /usr/local  --strip 1 --exclude=doc --exclude=man && \
+     rm -rf cmake-${CMAKE_VERSION}-linux-$(uname -m).tar.gz && \
     cmake --version
 
 '''
