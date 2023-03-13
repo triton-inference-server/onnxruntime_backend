@@ -229,10 +229,10 @@ ARG COMMON_BUILD_ARGS="--config ${ONNXRUNTIME_BUILD_CONFIG} --skip_submodule_syn
     --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
 '''.format(cuda_archs)
 
+    # Remove version info from libonnxruntime.so
+    # This makes it possible to replace ort binaries in released triton containers
+    # for experimentation, without having to build triton-ort backend.
     df += '''
-# Remove version info from libonnxruntime.so
-# This makes it possible to replace ort binaries in released triton containers
-# for experimentation, without having to build triton-ort backend.
 RUN sed -i 's/VERS_%s//' tools/ci_build/gen_def.py &&  (sed -i 's/% VERSION_STRING//' tools/ci_build/gen_def.py) 
 RUN sed -i 's/set_target_properties(onnxruntime PROPERTIES VERSION ${ORT_VERSION})//' cmake/onnxruntime.cmake
 '''
