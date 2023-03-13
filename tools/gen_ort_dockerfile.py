@@ -226,9 +226,7 @@ ARG COMMON_BUILD_ARGS="--config ${ONNXRUNTIME_BUILD_CONFIG} --skip_submodule_syn
     --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
 '''.format(cuda_archs)
 
-if target_platform() != 'jetpack': df += '''
-'''
-
+    df += '''
     # Remove version info from libonnxruntime.so
     # This makes it possible to replace ort binaries in released triton containers
     # for experimentation, without having to build triton-ort backend.
