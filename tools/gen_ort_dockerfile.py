@@ -214,10 +214,19 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
     if FLAGS.ort_openvino is not None:
         ep_flags += ' --use_openvino CPU_FP32'
+    
+    # DLIS-4658: Once Jetson build supports high enough level of CUDA, include compute_90 for Jetson.
+    cuda_archs="52;60;61;70;75;80;86"
+    if target_platform() != 'jetpack':
+        cuda_archs+=";90"
 
     df += '''
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${ONNXRUNTIME_BUILD_CONFIG} --skip_submodule_sync --parallel --build_shared_lib --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='52;60;61;70;75;80;86;90' "
+ARG COMMON_BUILD_ARGS="--config ${ONNXRUNTIME_BUILD_CONFIG} --skip_submodule_sync --parallel --build_shared_lib \
+    --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
+'''.format(cuda_archs)
+
+if target_platform() != 'jetpack': df += '''
 '''
 
     # Remove version info from libonnxruntime.so
