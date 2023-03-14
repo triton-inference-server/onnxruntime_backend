@@ -149,6 +149,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     dpkg -i *.deb && rm -rf *.deb
 '''
 
+
 ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
 # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
 # use tensorrt-8.0 branch instead of using rel-1.8.1
