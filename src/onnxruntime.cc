@@ -1005,13 +1005,6 @@ ModelInstanceState::ModelInstanceState(
       cuda_allocator_info_(nullptr), cpu_allocator_info_(nullptr),
       io_binding_(nullptr), output_buffer_(nullptr)
 {
-  // Segmentation fault on server destruction is observed under parallel model
-  // loading when running L0_onnx_optimization if this construction is not
-  // serialized.
-  // [FIXME] TITLE (DLIS-XXXX)
-  static std::mutex construction_mu;
-  std::lock_guard<std::mutex> construction_lock(construction_mu);
-
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
       ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
       &default_allocator_, CudaStream()));

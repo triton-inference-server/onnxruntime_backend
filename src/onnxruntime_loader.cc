@@ -186,13 +186,19 @@ OnnxLoader::LoadSession(
     }
 
     OrtStatus* status = nullptr;
-    if (!is_path) {
-      status = ort_api->CreateSessionFromArray(
-          loader->env_, ort_style_model_str.c_str(), model.size(),
-          session_options, session);
-    } else {
-      status = ort_api->CreateSession(
-          loader->env_, ort_style_model_str.c_str(), session_options, session);
+    {
+      // [FIXME] Remove lock when ORT create session is thread safe [DLIS-4663]
+      static std::mutex ort_create_session_mu;
+      std::lock_guard<std::mutex> ort_lk(ort_create_session_mu);
+
+      if (!is_path) {
+        status = ort_api->CreateSessionFromArray(
+            loader->env_, ort_style_model_str.c_str(), model.size(),
+            session_options, session);
+      } else {
+        status = ort_api->CreateSession(
+            loader->env_, ort_style_model_str.c_str(), session_options, session);
+      }
     }
 
     if (status != nullptr) {
