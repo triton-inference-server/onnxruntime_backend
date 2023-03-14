@@ -34,14 +34,15 @@ FLAGS = None
 
 ORT_TO_TRTPARSER_VERSION_MAP = {
     '1.9.0': (
-        '8.2',         # TensorRT version
-        'release/8.2-GA' # ONNX-Tensorrt parser version
+        '8.2',  # TensorRT version
+        'release/8.2-GA'  # ONNX-Tensorrt parser version
     ),
     '1.10.0': (
-        '8.2',         # TensorRT version
-        'release/8.2-GA' # ONNX-Tensorrt parser version
+        '8.2',  # TensorRT version
+        'release/8.2-GA'  # ONNX-Tensorrt parser version
     )
 }
+
 
 def target_platform():
     if FLAGS.target_platform is not None:
@@ -147,10 +148,11 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
     dpkg -i *.deb && rm -rf *.deb
 '''
-   ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
-   # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
-   # use tensorrt-8.0 branch instead of using rel-1.8.1
-   # From ORT 1.9 onwards we will switch back to using rel-* branches
+
+## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
+# For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
+# use tensorrt-8.0 branch instead of using rel-1.8.1
+# From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
         df += '''
     #
@@ -211,17 +213,17 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         if FLAGS.ort_tensorrt:
             ep_flags += ' --use_tensorrt'
-            if FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0" or FLAGS.ort_version == "1.13.1" :
+            if FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0" or FLAGS.ort_version == "1.13.1":
                 ep_flags += ' --use_tensorrt_builtin_parser'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
     if FLAGS.ort_openvino is not None:
         ep_flags += ' --use_openvino CPU_FP32'
-    
+
     # DLIS-4658: Once Jetson build supports high enough level of CUDA, include compute_90 for Jetson.
-    cuda_archs="52;60;61;70;75;80;86"
+    cuda_archs = "52;60;61;70;75;80;86"
     if target_platform() != 'jetpack':
-        cuda_archs+=";90"
+        cuda_archs += ";90"
 
     df += '''
 WORKDIR /workspace/onnxruntime
@@ -278,7 +280,6 @@ RUN mkdir -p /opt/onnxruntime/bin && \
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_cuda.so \
        /opt/onnxruntime/lib    
 '''
-
 
     if FLAGS.ort_tensorrt:
         df += '''
@@ -447,10 +448,10 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.li
 
 
 def preprocess_gpu_flags():
-    if target_platform() == 'windows': 
+    if target_platform() == 'windows':
         # Default to CUDA based on CUDA_PATH envvar and TensorRT in
         # C:/tensorrt
-        if 'CUDA_PATH'in os.environ:
+        if 'CUDA_PATH' in os.environ:
             if FLAGS.cuda_home is None:
                 FLAGS.cuda_home = os.environ['CUDA_PATH']
             elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
@@ -470,14 +471,16 @@ def preprocess_gpu_flags():
             print("warning: --cuda-version does not match CUDA_PATH envvar")
 
         if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
-            print("error: windows build requires --cuda-version and --cuda-home")
+            print(
+                "error: windows build requires --cuda-version and --cuda-home")
 
         if FLAGS.tensorrt_home is None:
             FLAGS.tensorrt_home = '/tensorrt'
     else:
-        if 'CUDNN_VERSION'in os.environ:
+        if 'CUDNN_VERSION' in os.environ:
             version = None
-            m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]', os.environ['CUDNN_VERSION'])
+            m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]',
+                         os.environ['CUDNN_VERSION'])
             if m:
                 version = m.group(1)
             if FLAGS.cudnn_home is None:
@@ -514,7 +517,7 @@ if __name__ == '__main__':
                         help='Enable GPU support')
     parser.add_argument('--ort-build-config',
                         type=str,
-                        default ="Release",
+                        default="Release",
                         choices=["Debug", "Release", "RelWithDebInfo"],
                         help='ORT build configuration.')
     parser.add_argument(
@@ -537,10 +540,12 @@ if __name__ == '__main__':
                         type=str,
                         required=False,
                         help='Home directory for CUDNN.')
-    parser.add_argument('--ort-openvino',
-                        type=str,
-                        required=False,
-                        help='Enable OpenVino execution provider using specified OpenVINO version.')
+    parser.add_argument(
+        '--ort-openvino',
+        type=str,
+        required=False,
+        help=
+        'Enable OpenVino execution provider using specified OpenVINO version.')
     parser.add_argument('--ort-tensorrt',
                         action="store_true",
                         required=False,
@@ -566,11 +571,13 @@ if __name__ == '__main__':
     # if the tag is empty - check whether there is an entry in the ORT_TO_TRTPARSER_VERSION_MAP
     # map corresponding to ort version + trt version combo. If yes then use it
     # otherwise we leave it empty and use the defaults from ort
-    if FLAGS.onnx_tensorrt_tag == "" and FLAGS.ort_version in ORT_TO_TRTPARSER_VERSION_MAP.keys(): 
+    if FLAGS.onnx_tensorrt_tag == "" and FLAGS.ort_version in ORT_TO_TRTPARSER_VERSION_MAP.keys(
+    ):
         trt_version = re.match(r'^[0-9]+\.[0-9]+', FLAGS.trt_version)
-        if trt_version and trt_version.group(0) == ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][0]:
-            FLAGS.onnx_tensorrt_tag = ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][1]
-
+        if trt_version and trt_version.group(0) == ORT_TO_TRTPARSER_VERSION_MAP[
+                FLAGS.ort_version][0]:
+            FLAGS.onnx_tensorrt_tag = ORT_TO_TRTPARSER_VERSION_MAP[
+                FLAGS.ort_version][1]
 
     if target_platform() == 'windows':
         # OpenVINO EP not yet supported for windows build
