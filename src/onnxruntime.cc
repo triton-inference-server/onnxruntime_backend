@@ -180,7 +180,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model)
+    : BackendModel(triton_model, true /* allow_optional */)
 {
   // Create session options that will be cloned and used for each
   // instance when creating that instance's session.
@@ -1050,6 +1050,16 @@ ModelInstanceState::ModelInstanceState(
     triton::common::TritonJson::Value inputs;
     if (model_state->ModelConfig().Find("input", &inputs)) {
       expected_input_cnt = inputs.ArraySize();
+      // Skip the optional inputs which are initializers
+      for (size_t i = 0; i < inputs.ArraySize(); i++) {
+        triton::common::TritonJson::Value input;
+        THROW_IF_BACKEND_INSTANCE_ERROR(inputs.IndexAsObject(i, &input));
+        bool is_optional;
+        THROW_IF_BACKEND_INSTANCE_ERROR(input.MemberAsBool("optional", &is_optional));
+        if (is_optional) {
+          expected_input_cnt--;
+        }
+      }
     }
 
     triton::common::TritonJson::Value config_batch_inputs;
@@ -1278,6 +1288,12 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
   OnnxTensorInfoMap input_tensor_infos;
   RETURN_IF_ERROR(InputInfos(session_, default_allocator_, input_tensor_infos));
 
+  std::set<std::string> overridable_initializer_tensor_names;
+  RETURN_IF_ERROR(OverridableInitializerNames(session_, overridable_initializer_tensor_names));
+
+  OnnxTensorInfoMap overridable_initializer_tensor_infos;
+  RETURN_IF_ERROR(OverridableInitializerInfos(session_, default_allocator_, overridable_initializer_tensor_infos));
+
   if (input_tensor_infos.size() != expected_input_cnt) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -1296,10 +1312,18 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     RETURN_IF_ERROR(io.MemberAsString("name", &io_name));
     std::string io_dtype;
     RETURN_IF_ERROR(io.MemberAsString("data_type", &io_dtype));
+    bool io_optional;
+    RETURN_IF_ERROR(io.MemberAsBool("optional", &io_optional));
 
-    auto iit = input_tensor_infos.find(io_name);
-    if (iit == input_tensor_infos.end()) {
-      RETURN_IF_ERROR(CheckAllowedModelInput(io, input_tensor_names));
+    const auto& tensor_names = io_optional
+      ? overridable_initializer_tensor_names
+      : input_tensor_names;
+    const auto& tensor_infos = io_optional
+      ? overridable_initializer_tensor_infos
+      : input_tensor_infos;
+    auto iit = tensor_infos.find(io_name);
+    if (iit == tensor_infos.end()) {
+      RETURN_IF_ERROR(CheckAllowedModelInput(io, tensor_names));
     }
 
     auto onnx_data_type = ModelConfigDataTypeToOnnxDataType(io_dtype);
@@ -1335,22 +1359,34 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     if (io.Find("allow_ragged_batch", &allow_ragged_batch_json)) {
       RETURN_IF_ERROR(allow_ragged_batch_json.AsBool(&allow_ragged_batch));
     }
-    if (allow_ragged_batch) {
-      const std::vector<int64_t>& model_shape = iit->second.dims_;
-      // Make sure the input has shpae [-1]
-      if ((model_shape.size() != 1) || (model_shape[0] != WILDCARD_DIM)) {
-        return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INVALID_ARG,
-            (std::string("unable to load model '") + model_state_->Name() +
-             "', configuration expects model provides input with shape [-1]  "
-             "for ragged input '" +
-             io_name + "', model provides " + ShapeToString(model_shape))
-                .c_str());
+    if (!io_optional) {
+      if (allow_ragged_batch) {
+        const std::vector<int64_t>& model_shape = iit->second.dims_;
+        // Make sure the input has shpae [-1]
+        if ((model_shape.size() != 1) || (model_shape[0] != WILDCARD_DIM)) {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              (std::string("unable to load model '") + model_state_->Name() +
+              "', configuration expects model provides input with shape [-1]  "
+              "for ragged input '" +
+              io_name + "', model provides " + ShapeToString(model_shape))
+                  .c_str());
+        }
+      } else {
+        RETURN_IF_ERROR(CompareDimsSupported(
+            model_state_->Name(), io_name, iit->second.dims_, dims,
+            model_state_->MaxBatchSize(), false /* compare_exact */));
       }
     } else {
-      RETURN_IF_ERROR(CompareDimsSupported(
-          model_state_->Name(), io_name, iit->second.dims_, dims,
-          model_state_->MaxBatchSize(), false /* compare_exact */));
+      if (allow_ragged_batch) {
+          return TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              (std::string("unable to load model '") + model_state_->Name() +
+              "', configuration expects model provides input with shape [-1] "
+              "for ragged input '" +
+              io_name + "', which is not supported for optional input")
+                  .c_str());
+      }
     }
   }
 
@@ -1789,6 +1825,9 @@ ModelInstanceState::SetInputTensors(
     RETURN_IF_ERROR(TRITONBACKEND_InputProperties(
         input, &input_name, &input_datatype, &input_shape, &input_dims_count,
         nullptr, nullptr));
+    bool is_initializer_tensor;
+    RETURN_IF_ERROR(TRITONBACKEND_InputPropertiesExtra(
+        input, &is_initializer_tensor));
 
     input_names->emplace_back(input_name);
     input_tensors_.emplace_back(nullptr);
@@ -1817,7 +1856,7 @@ ModelInstanceState::SetInputTensors(
     else {
       batchn_shape =
           std::vector<int64_t>(input_shape, input_shape + input_dims_count);
-      if (max_batch_size != 0) {
+      if (max_batch_size != 0 && !is_initializer_tensor) {
         batchn_shape[0] = total_batch_size;
       }
     }
