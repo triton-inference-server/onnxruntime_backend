@@ -67,12 +67,16 @@ InputOutputInitializerNames(
   names.clear();
 
   size_t num_nodes;
-  if (type == NameType::INPUT) {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetInputCount(session, &num_nodes));
-  } else if (type == NameType::OUTPUT) {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
-  } else {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
+  switch (type) {
+    case NameType::INPUT:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetInputCount(session, &num_nodes));
+      break;
+    case NameType::OUTPUT:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
+      break;
+    case NameType::INITIALIZER:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
+      break;
   }
 
   // iterate over all input / output nodes
@@ -81,12 +85,16 @@ InputOutputInitializerNames(
   OrtStatus* onnx_status = nullptr;
   for (size_t i = 0; i < num_nodes; i++) {
     char* node_name = nullptr;
-    if (type == NameType::INPUT) {
-      onnx_status = ort_api->SessionGetInputName(session, i, allocator, &node_name);
-    } else if (type == NameType::OUTPUT) {
-      onnx_status = ort_api->SessionGetOutputName(session, i, allocator, &node_name);
-    } else {
-      onnx_status = ort_api->SessionGetOverridableInitializerName(session, i, allocator, &node_name);
+    switch (type) {
+      case NameType::INPUT:
+        onnx_status = ort_api->SessionGetInputName(session, i, allocator, &node_name);
+        break;
+      case NameType::OUTPUT:
+        onnx_status = ort_api->SessionGetOutputName(session, i, allocator, &node_name);
+        break;
+      case NameType::INITIALIZER:
+        onnx_status = ort_api->SessionGetOverridableInitializerName(session, i, allocator, &node_name);
+        break;
     }
 
     // Make a std::string copy of the name and then free 'node_name'
@@ -122,26 +130,34 @@ InputOutputInitializerInfos(
   infos.clear();
 
   size_t num_nodes;
-  if (type == NameType::INPUT) {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetInputCount(session, &num_nodes));
-  } else if (type == NameType::OUTPUT) {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
-  } else {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
+  switch (type) {
+    case NameType::INPUT:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetInputCount(session, &num_nodes));
+      break;
+    case NameType::OUTPUT:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
+      break;
+    case NameType::INITIALIZER:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
+      break;
   }
 
   // iterate over all nodes
   for (size_t i = 0; i < num_nodes; i++) {
     char* cname = nullptr;
-    if (type == NameType::INPUT) {
-      RETURN_IF_ORT_ERROR(
+    switch (type) {
+      case NameType::INPUT:
+        RETURN_IF_ORT_ERROR(
           ort_api->SessionGetInputName(session, i, allocator, &cname));
-    } else if (type == NameType::OUTPUT) {
-      RETURN_IF_ORT_ERROR(
+        break;
+      case NameType::OUTPUT:
+        RETURN_IF_ORT_ERROR(
           ort_api->SessionGetOutputName(session, i, allocator, &cname));
-    } else {
-      RETURN_IF_ORT_ERROR(
+        break;
+      case NameType::INITIALIZER:
+        RETURN_IF_ORT_ERROR(
           ort_api->SessionGetOverridableInitializerName(session, i, allocator, &cname));
+        break;
     }
 
     // Make a std::string copy of the name and then free 'cname' since
@@ -159,15 +175,19 @@ InputOutputInitializerInfos(
     }
 
     OrtTypeInfo* typeinfo;
-    if (type == NameType::INPUT) {
-      RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetInputTypeInfo(session, i, &typeinfo));
-    } else if (type == NameType::OUTPUT) {
-      RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetOutputTypeInfo(session, i, &typeinfo));
-    } else {
-      RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetOverridableInitializerTypeInfo(session, i, &typeinfo));
+    switch (type) {
+      case NameType::INPUT:
+        RETURN_IF_ORT_ERROR(
+            ort_api->SessionGetInputTypeInfo(session, i, &typeinfo));
+        break;
+      case NameType::OUTPUT:
+        RETURN_IF_ORT_ERROR(
+            ort_api->SessionGetOutputTypeInfo(session, i, &typeinfo));
+        break;
+      case NameType::INITIALIZER:
+        RETURN_IF_ORT_ERROR(
+            ort_api->SessionGetOverridableInitializerTypeInfo(session, i, &typeinfo));
+        break;
     }
 
     std::unique_ptr<OrtTypeInfo, TypeInfoDeleter> typeinfo_wrapper(typeinfo);

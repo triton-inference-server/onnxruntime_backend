@@ -1315,6 +1315,15 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     bool io_optional;
     RETURN_IF_ERROR(io.MemberAsBool("optional", &io_optional));
 
+    if (io_optional && model_state_->MaxBatchSize() != 0) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("unable to load model '") + model_state_->Name() +
+           "', optional input '" + io_name +
+           "' is not supported for models that support batching")
+              .c_str());
+    }
+
     const auto& tensor_names = io_optional
       ? overridable_initializer_tensor_names
       : input_tensor_names;
@@ -1359,34 +1368,31 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     if (io.Find("allow_ragged_batch", &allow_ragged_batch_json)) {
       RETURN_IF_ERROR(allow_ragged_batch_json.AsBool(&allow_ragged_batch));
     }
-    if (!io_optional) {
-      if (allow_ragged_batch) {
-        const std::vector<int64_t>& model_shape = iit->second.dims_;
-        // Make sure the input has shpae [-1]
-        if ((model_shape.size() != 1) || (model_shape[0] != WILDCARD_DIM)) {
-          return TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INVALID_ARG,
-              (std::string("unable to load model '") + model_state_->Name() +
-              "', configuration expects model provides input with shape [-1]  "
-              "for ragged input '" +
-              io_name + "', model provides " + ShapeToString(model_shape))
-                  .c_str());
-        }
-      } else {
-        RETURN_IF_ERROR(CompareDimsSupported(
-            model_state_->Name(), io_name, iit->second.dims_, dims,
-            model_state_->MaxBatchSize(), false /* compare_exact */));
+    if (io_optional && allow_ragged_batch) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("unable to load model '") + model_state_->Name() +
+          "', configuration expects model provides input with shape [-1] "
+          "for ragged input '" +
+          io_name + "', which is not supported for optional input")
+              .c_str());
+    }
+    if (allow_ragged_batch) {
+      const std::vector<int64_t>& model_shape = iit->second.dims_;
+      // Make sure the input has shpae [-1]
+      if ((model_shape.size() != 1) || (model_shape[0] != WILDCARD_DIM)) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INVALID_ARG,
+            (std::string("unable to load model '") + model_state_->Name() +
+            "', configuration expects model provides input with shape [-1]  "
+            "for ragged input '" +
+            io_name + "', model provides " + ShapeToString(model_shape))
+                .c_str());
       }
     } else {
-      if (allow_ragged_batch) {
-          return TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INVALID_ARG,
-              (std::string("unable to load model '") + model_state_->Name() +
-              "', configuration expects model provides input with shape [-1] "
-              "for ragged input '" +
-              io_name + "', which is not supported for optional input")
-                  .c_str());
-      }
+      RETURN_IF_ERROR(CompareDimsSupported(
+          model_state_->Name(), io_name, iit->second.dims_, dims,
+          model_state_->MaxBatchSize(), false /* compare_exact */));
     }
   }
 
@@ -1825,9 +1831,6 @@ ModelInstanceState::SetInputTensors(
     RETURN_IF_ERROR(TRITONBACKEND_InputProperties(
         input, &input_name, &input_datatype, &input_shape, &input_dims_count,
         nullptr, nullptr));
-    bool is_initializer_tensor;
-    RETURN_IF_ERROR(TRITONBACKEND_InputPropertiesExtra(
-        input, &is_initializer_tensor));
 
     input_names->emplace_back(input_name);
     input_tensors_.emplace_back(nullptr);
@@ -1856,7 +1859,7 @@ ModelInstanceState::SetInputTensors(
     else {
       batchn_shape =
           std::vector<int64_t>(input_shape, input_shape + input_dims_count);
-      if (max_batch_size != 0 && !is_initializer_tensor) {
+      if (max_batch_size != 0) {
         batchn_shape[0] = total_batch_size;
       }
     }
