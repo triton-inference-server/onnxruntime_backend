@@ -1127,6 +1127,7 @@ ModelInstanceState::~ModelInstanceState()
 void
 ModelInstanceState::ReleaseOrtRunResources()
 {
+  ort_api->ClearBoundInputs(io_binding_);
   for (auto& tensor : input_tensors_) {
     if (tensor != nullptr) {
       ort_api->ReleaseValue(tensor);
@@ -1135,6 +1136,7 @@ ModelInstanceState::ReleaseOrtRunResources()
   input_tensors_.clear();
 
   // first release the Ortvalues
+  ort_api->ClearBoundOutputs(io_binding_);
   for (auto& tensor : output_tensors_) {
     if (tensor != nullptr) {
       ort_api->ReleaseValue(tensor);

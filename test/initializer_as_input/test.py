@@ -38,7 +38,7 @@ class OptionalInputTest(unittest.TestCase):
         self.input_data_ = np.zeros((5, 5)).astype(np.float32)
         self.input_ = httpclient.InferInput('INPUT', self.input_data_.shape, 'FP32')
         self.input_.set_data_from_numpy(self.input_data_, binary_data=False)
-        self.optional_input_ = httpclient.InferInput('INPUT', self.input_data_.shape, 'FP32')
+        self.optional_input_ = httpclient.InferInput('INITIALIZER', self.input_data_.shape, 'FP32')
         self.optional_input_.set_data_from_numpy(self.input_data_, binary_data=False)
 
     def test_without_optional(self):
@@ -50,7 +50,7 @@ class OptionalInputTest(unittest.TestCase):
     def test_with_optional(self):
         # Send request with optional input provided, the ONNX model
         # should use provided value for the initializer
-        results = self.client_.infer(self.model_name_, [self.input_])
+        results = self.client_.infer(self.model_name_, [self.input_, self.optional_input_])
         np.testing.assert_allclose(results.as_numpy("OUTPUT"), (self.input_data_ + self.input_data_))
 
 if __name__ == "__main__":
