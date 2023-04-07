@@ -75,7 +75,8 @@ InputOutputInitializerNames(
       RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
       break;
     case NameType::INITIALIZER:
-      RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
+      RETURN_IF_ORT_ERROR(
+          ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
       break;
   }
 
@@ -87,13 +88,16 @@ InputOutputInitializerNames(
     char* node_name = nullptr;
     switch (type) {
       case NameType::INPUT:
-        onnx_status = ort_api->SessionGetInputName(session, i, allocator, &node_name);
+        onnx_status =
+            ort_api->SessionGetInputName(session, i, allocator, &node_name);
         break;
       case NameType::OUTPUT:
-        onnx_status = ort_api->SessionGetOutputName(session, i, allocator, &node_name);
+        onnx_status =
+            ort_api->SessionGetOutputName(session, i, allocator, &node_name);
         break;
       case NameType::INITIALIZER:
-        onnx_status = ort_api->SessionGetOverridableInitializerName(session, i, allocator, &node_name);
+        onnx_status = ort_api->SessionGetOverridableInitializerName(
+            session, i, allocator, &node_name);
         break;
     }
 
@@ -138,7 +142,8 @@ InputOutputInitializerInfos(
       RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
       break;
     case NameType::INITIALIZER:
-      RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
+      RETURN_IF_ORT_ERROR(
+          ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
       break;
   }
 
@@ -148,15 +153,15 @@ InputOutputInitializerInfos(
     switch (type) {
       case NameType::INPUT:
         RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetInputName(session, i, allocator, &cname));
+            ort_api->SessionGetInputName(session, i, allocator, &cname));
         break;
       case NameType::OUTPUT:
         RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetOutputName(session, i, allocator, &cname));
+            ort_api->SessionGetOutputName(session, i, allocator, &cname));
         break;
       case NameType::INITIALIZER:
-        RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetOverridableInitializerName(session, i, allocator, &cname));
+        RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerName(
+            session, i, allocator, &cname));
         break;
     }
 
@@ -185,8 +190,8 @@ InputOutputInitializerInfos(
             ort_api->SessionGetOutputTypeInfo(session, i, &typeinfo));
         break;
       case NameType::INITIALIZER:
-        RETURN_IF_ORT_ERROR(
-            ort_api->SessionGetOverridableInitializerTypeInfo(session, i, &typeinfo));
+        RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerTypeInfo(
+            session, i, &typeinfo));
         break;
     }
 
@@ -455,14 +460,16 @@ TRITONSERVER_Error*
 InputInfos(
     OrtSession* session, OrtAllocator* allocator, OnnxTensorInfoMap& infos)
 {
-  return InputOutputInitializerInfos(session, allocator, NameType::INPUT, infos);
+  return InputOutputInitializerInfos(
+      session, allocator, NameType::INPUT, infos);
 }
 
 TRITONSERVER_Error*
 OutputInfos(
     OrtSession* session, OrtAllocator* allocator, OnnxTensorInfoMap& infos)
 {
-  return InputOutputInitializerInfos(session, allocator, NameType::OUTPUT, infos);
+  return InputOutputInitializerInfos(
+      session, allocator, NameType::OUTPUT, infos);
 }
 
 TRITONSERVER_Error*

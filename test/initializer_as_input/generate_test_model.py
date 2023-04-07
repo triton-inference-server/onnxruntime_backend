@@ -30,7 +30,7 @@ import onnx
 # Reference script on how the model used in this test is created
 if __name__ == "__main__":
     values = np.ones((5, 5)).astype(np.float32)
-    onnx_dtype=onnx.TensorProto.FLOAT
+    onnx_dtype = onnx.TensorProto.FLOAT
     initialized_input = onnx.helper.make_tensor(
         name="INITIALIZER",
         data_type=onnx_dtype,
@@ -39,11 +39,16 @@ if __name__ == "__main__":
     )
     add = onnx.helper.make_node("Add", ["INPUT", "INITIALIZER"], ["OUTPUT"])
 
-    input = onnx.helper.make_tensor_value_info("INPUT", onnx_dtype, values.shape)
-    initializer = onnx.helper.make_tensor_value_info("INITIALIZER", onnx_dtype, values.shape)
-    output = onnx.helper.make_tensor_value_info("OUTPUT", onnx_dtype, values.shape)
+    input = onnx.helper.make_tensor_value_info("INPUT", onnx_dtype,
+                                               values.shape)
+    initializer = onnx.helper.make_tensor_value_info("INITIALIZER", onnx_dtype,
+                                                     values.shape)
+    output = onnx.helper.make_tensor_value_info("OUTPUT", onnx_dtype,
+                                                values.shape)
 
-    graph_proto = onnx.helper.make_graph([add], "init_input", [input, initializer], [output],
-                                        initializer=[initialized_input])
+    graph_proto = onnx.helper.make_graph([add],
+                                         "init_input", [input, initializer],
+                                         [output],
+                                         initializer=[initialized_input])
     model_def = onnx.helper.make_model(graph_proto, producer_name="triton")
     onnx.save(model_def, "model.onnx")

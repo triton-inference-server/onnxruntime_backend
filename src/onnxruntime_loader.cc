@@ -197,7 +197,8 @@ OnnxLoader::LoadSession(
             session_options, session);
       } else {
         status = ort_api->CreateSession(
-            loader->env_, ort_style_model_str.c_str(), session_options, session);
+            loader->env_, ort_style_model_str.c_str(), session_options,
+            session);
       }
     }
 
