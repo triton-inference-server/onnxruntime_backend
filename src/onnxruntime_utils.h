@@ -134,11 +134,15 @@ ONNXTensorElementDataType ModelConfigDataTypeToOnnxDataType(
 std::string OnnxDataTypeToModelConfigDataType(
     ONNXTensorElementDataType data_type);
 
+TRITONSERVER_Error* OverridableInitializerNames(
+    OrtSession* session, std::set<std::string>& names);
 TRITONSERVER_Error* InputNames(
     OrtSession* session, std::set<std::string>& names);
 TRITONSERVER_Error* OutputNames(
     OrtSession* session, std::set<std::string>& names);
 
+TRITONSERVER_Error* OverridableInitializerInfos(
+    OrtSession* session, OrtAllocator* allocator, OnnxTensorInfoMap& infos);
 TRITONSERVER_Error* InputInfos(
     OrtSession* session, OrtAllocator* allocator, OnnxTensorInfoMap& infos);
 TRITONSERVER_Error* OutputInfos(

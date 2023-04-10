@@ -54,17 +54,30 @@ OnnxTypeName(ONNXType onnx_type)
   return "ONNX_TYPE_UNKNOWN";
 }
 
+enum class NameType {
+  INPUT,
+  OUTPUT,
+  INITIALIZER,
+};
+
 TRITONSERVER_Error*
-InputOutputNames(
-    OrtSession* session, bool is_input, std::set<std::string>& names)
+InputOutputInitializerNames(
+    OrtSession* session, NameType type, std::set<std::string>& names)
 {
   names.clear();
 
   size_t num_nodes;
-  if (is_input) {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetInputCount(session, &num_nodes));
-  } else {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
+  switch (type) {
+    case NameType::INPUT:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetInputCount(session, &num_nodes));
+      break;
+    case NameType::OUTPUT:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
+      break;
+    case NameType::INITIALIZER:
+      RETURN_IF_ORT_ERROR(
+          ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
+      break;
   }
 
   // iterate over all input / output nodes
@@ -73,12 +86,19 @@ InputOutputNames(
   OrtStatus* onnx_status = nullptr;
   for (size_t i = 0; i < num_nodes; i++) {
     char* node_name = nullptr;
-    if (is_input) {
-      onnx_status =
-          ort_api->SessionGetInputName(session, i, allocator, &node_name);
-    } else {
-      onnx_status =
-          ort_api->SessionGetOutputName(session, i, allocator, &node_name);
+    switch (type) {
+      case NameType::INPUT:
+        onnx_status =
+            ort_api->SessionGetInputName(session, i, allocator, &node_name);
+        break;
+      case NameType::OUTPUT:
+        onnx_status =
+            ort_api->SessionGetOutputName(session, i, allocator, &node_name);
+        break;
+      case NameType::INITIALIZER:
+        onnx_status = ort_api->SessionGetOverridableInitializerName(
+            session, i, allocator, &node_name);
+        break;
     }
 
     // Make a std::string copy of the name and then free 'node_name'
@@ -107,28 +127,42 @@ InputOutputNames(
 }
 
 TRITONSERVER_Error*
-InputOutputInfos(
-    OrtSession* session, OrtAllocator* allocator, bool is_input,
+InputOutputInitializerInfos(
+    OrtSession* session, OrtAllocator* allocator, NameType type,
     OnnxTensorInfoMap& infos)
 {
   infos.clear();
 
   size_t num_nodes;
-  if (is_input) {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetInputCount(session, &num_nodes));
-  } else {
-    RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
+  switch (type) {
+    case NameType::INPUT:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetInputCount(session, &num_nodes));
+      break;
+    case NameType::OUTPUT:
+      RETURN_IF_ORT_ERROR(ort_api->SessionGetOutputCount(session, &num_nodes));
+      break;
+    case NameType::INITIALIZER:
+      RETURN_IF_ORT_ERROR(
+          ort_api->SessionGetOverridableInitializerCount(session, &num_nodes));
+      break;
   }
 
   // iterate over all nodes
   for (size_t i = 0; i < num_nodes; i++) {
     char* cname = nullptr;
-    if (is_input) {
-      RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetInputName(session, i, allocator, &cname));
-    } else {
-      RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetOutputName(session, i, allocator, &cname));
+    switch (type) {
+      case NameType::INPUT:
+        RETURN_IF_ORT_ERROR(
+            ort_api->SessionGetInputName(session, i, allocator, &cname));
+        break;
+      case NameType::OUTPUT:
+        RETURN_IF_ORT_ERROR(
+            ort_api->SessionGetOutputName(session, i, allocator, &cname));
+        break;
+      case NameType::INITIALIZER:
+        RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerName(
+            session, i, allocator, &cname));
+        break;
     }
 
     // Make a std::string copy of the name and then free 'cname' since
@@ -146,12 +180,19 @@ InputOutputInfos(
     }
 
     OrtTypeInfo* typeinfo;
-    if (is_input) {
-      RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetInputTypeInfo(session, i, &typeinfo));
-    } else {
-      RETURN_IF_ORT_ERROR(
-          ort_api->SessionGetOutputTypeInfo(session, i, &typeinfo));
+    switch (type) {
+      case NameType::INPUT:
+        RETURN_IF_ORT_ERROR(
+            ort_api->SessionGetInputTypeInfo(session, i, &typeinfo));
+        break;
+      case NameType::OUTPUT:
+        RETURN_IF_ORT_ERROR(
+            ort_api->SessionGetOutputTypeInfo(session, i, &typeinfo));
+        break;
+      case NameType::INITIALIZER:
+        RETURN_IF_ORT_ERROR(ort_api->SessionGetOverridableInitializerTypeInfo(
+            session, i, &typeinfo));
+        break;
     }
 
     std::unique_ptr<OrtTypeInfo, TypeInfoDeleter> typeinfo_wrapper(typeinfo);
@@ -398,29 +439,45 @@ OnnxDataTypeToModelConfigDataType(ONNXTensorElementDataType data_type)
 }
 
 TRITONSERVER_Error*
+OverridableInitializerNames(OrtSession* session, std::set<std::string>& names)
+{
+  return InputOutputInitializerNames(session, NameType::INITIALIZER, names);
+}
+
+TRITONSERVER_Error*
 InputNames(OrtSession* session, std::set<std::string>& names)
 {
-  return InputOutputNames(session, true, names);
+  return InputOutputInitializerNames(session, NameType::INPUT, names);
 }
 
 TRITONSERVER_Error*
 OutputNames(OrtSession* session, std::set<std::string>& names)
 {
-  return InputOutputNames(session, false, names);
+  return InputOutputInitializerNames(session, NameType::OUTPUT, names);
 }
 
 TRITONSERVER_Error*
 InputInfos(
     OrtSession* session, OrtAllocator* allocator, OnnxTensorInfoMap& infos)
 {
-  return InputOutputInfos(session, allocator, true, infos);
+  return InputOutputInitializerInfos(
+      session, allocator, NameType::INPUT, infos);
 }
 
 TRITONSERVER_Error*
 OutputInfos(
     OrtSession* session, OrtAllocator* allocator, OnnxTensorInfoMap& infos)
 {
-  return InputOutputInfos(session, allocator, false, infos);
+  return InputOutputInitializerInfos(
+      session, allocator, NameType::OUTPUT, infos);
+}
+
+TRITONSERVER_Error*
+OverridableInitializerInfos(
+    OrtSession* session, OrtAllocator* allocator, OnnxTensorInfoMap& infos)
+{
+  return InputOutputInitializerInfos(
+      session, allocator, NameType::INITIALIZER, infos);
 }
 
 TRITONSERVER_Error*
