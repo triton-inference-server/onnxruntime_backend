@@ -187,11 +187,8 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     ARG ONNXRUNTIME_REPO
     ARG ONNXRUNTIME_BUILD_CONFIG
 
-    # [FIXME] WAR to cherry pick "extra include" fix to build with CUDA 12,
-    # should be removed once advance to an ORT release that contains the fix.
     RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive && \
-         git cherry-pick -n 12d91173c4478e0975771c06fd9d062a33c46339)
+        (cd onnxruntime && git submodule update --init --recursive)
 
         '''
 
