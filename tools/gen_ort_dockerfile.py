@@ -143,8 +143,8 @@ RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCT
     apt install -y openvino-${ONNXRUNTIME_OPENVINO_VERSION}
 
 # NOTE: This appears to be an optional step from the apt install docs, so
-# commenting it out for now as it doesn't come with the 2022.3.0 apt package
-#    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh -y
+# allowing failure for now as it doesn't come with the 2022.3.0 apt package
+RUN cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh -y || true
 
 ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
 RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
