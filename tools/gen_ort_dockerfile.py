@@ -123,6 +123,8 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
         df += '''
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
+# NOTE: Most of these paths will be invalid with 2022.3.0 install,
+# but leave them for now
 ENV INTEL_OPENVINO_DIR /opt/intel/openvino_2022
 ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/tools/compile_tool:$INTEL_OPENVINO_DIR/runtime/3rdparty/tbb/lib:$INTEL_OPENVINO_DIR/runtime/3rdparty/hddl/lib:$INTEL_OPENVINO_DIR/runtime/lib/intel64:/usr/local/openblas/lib:$LD_LIBRARY_PATH
 ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
@@ -138,8 +140,11 @@ RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCT
     cd /etc/apt/sources.list.d && \
     echo "deb https://apt.repos.intel.com/openvino/2022 focal main">intel-openvino-2022.list && \
     apt update && \
-    apt install -y openvino-${ONNXRUNTIME_OPENVINO_VERSION} && \
-    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh -y
+    apt install -y openvino-${ONNXRUNTIME_OPENVINO_VERSION}
+
+# NOTE: This appears to be an optional step from the apt install docs, so
+# commenting it out for now as it doesn't come with the 2022.3.0 apt package
+#    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh -y
 
 ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
 RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
