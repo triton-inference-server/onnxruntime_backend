@@ -81,6 +81,9 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #   - If you want to disable GPU usage, set TRITON_ENABLE_GPU=OFF. 
 #    This will make builds with CUDA and TensorRT flags to fail. 
 #
+#   - If you want to optionally set the platform rather than rely on it being detected,
+#     set TRITON_BUILD_PLATFORM equal to Ubuntu, Windows, or Jetpack.
+#
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 option(TRITON_ENABLE_ONNXRUNTIME_TENSORRT
@@ -94,6 +97,7 @@ set(TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION "" CACHE STRING "ONNXRuntime OpenV
 set(TRITON_BUILD_CUDA_VERSION "" CACHE STRING "Version of CUDA install")
 set(TRITON_BUILD_CUDA_HOME "" CACHE PATH "Path to CUDA install")
 set(TRITON_BUILD_CUDNN_HOME "" CACHE PATH "Path to CUDNN install")
+set(TRITON_BUILD_PLATFORM "" CACHE STRING "Platform of build")
 set(TRITON_BUILD_TENSORRT_HOME "" CACHE PATH "Path to TensorRT install")
 set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "" CACHE PATH "Paths to ONNXRuntime includes")
 set(TRITON_ONNX_TENSORRT_REPO_TAG "" CACHE STRING "Tag for onnx-tensorrt repo")
@@ -334,6 +338,9 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-openvino=${TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION}")
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+  if(NOT ${TRITON_BUILD_PLATFORM} STREQUAL "")
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--target-platform=${TRITON_BUILD_PLATFORM}")
+  endif() # TRITON_BUILD_PLATFORM
 
   set(ENABLE_GPU_EXTRA_ARGS "")
   if(${TRITON_ENABLE_GPU})
