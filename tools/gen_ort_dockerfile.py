@@ -217,8 +217,18 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
                 ep_flags += ' --use_tensorrt_builtin_parser'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
+    
+    if os.name == 'posix' :
+        if os.getuid() == 0 :
+            ep_flags += ' --allow_running_as_root'
+    
     if FLAGS.ort_openvino is not None:
         ep_flags += ' --use_openvino CPU_FP32'
+
+    
+
+
+    
 
     # DLIS-4658: Once Jetson build supports CUDA 11.8+, include compute_90 for Jetson.
     cuda_archs = "52;60;61;70;75;80;86"
