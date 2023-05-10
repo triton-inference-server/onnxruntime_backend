@@ -140,7 +140,7 @@ RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCT
     echo "deb https://apt.repos.intel.com/openvino/2022 focal main">intel-openvino-2022.list && \
     apt update && \
     apt install -y openvino-${ONNXRUNTIME_OPENVINO_VERSION} && \
-    cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh -y
+    cd ${INTEL_OPENVINO_DIR}/install_dependencies && os=ubuntu20.04 ./install_openvino_dependencies.sh -y
 
 ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
 RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
