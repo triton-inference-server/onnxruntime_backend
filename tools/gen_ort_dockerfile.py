@@ -124,7 +124,7 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
         df += '''
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
-ENV INTEL_OPENVINO_DIR /opt/intel/openvino_2022
+ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
 ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/tools/compile_tool:$INTEL_OPENVINO_DIR/runtime/3rdparty/tbb/lib:$INTEL_OPENVINO_DIR/runtime/3rdparty/hddl/lib:$INTEL_OPENVINO_DIR/runtime/lib/intel64:/usr/local/openblas/lib:$LD_LIBRARY_PATH
 ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
 ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/runtime/lib/intel64
@@ -140,6 +140,7 @@ RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCT
     echo "deb https://apt.repos.intel.com/openvino/2022 focal main">intel-openvino-2022.list && \
     apt update && \
     apt install -y openvino-${ONNXRUNTIME_OPENVINO_VERSION} && \
+    mv /opt/intel/openvino_2022 ${INTEL_OPENVINO_DIR} && \
     cd ${INTEL_OPENVINO_DIR}/install_dependencies && os=ubuntu20.04 ./install_openvino_dependencies.sh -y
 
 ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
@@ -303,26 +304,26 @@ RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensor
     if FLAGS.ort_openvino is not None:
         df += '''
 # OpenVino specific headers and libraries
-RUN cp -r /opt/intel/openvino_2022/docs/licensing /opt/onnxruntime/LICENSE.openvino
+RUN cp -r ${INTEL_OPENVINO_DIR}/docs/licensing /opt/onnxruntime/LICENSE.openvino
 
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino_c.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_c.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino_ir_frontend.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_ir_frontend.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_2022/runtime/lib/intel64/libopenvino_onnx_frontend.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_onnx_frontend.so \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_2022/runtime/lib/intel64/plugins.xml \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/plugins.xml \
        /opt/onnxruntime/lib && \
-    cp /opt/intel/openvino_2022/runtime/3rdparty/tbb/lib/libtbb.so.2 \
+    cp ${INTEL_OPENVINO_DIR}/runtime/3rdparty/tbb/lib/libtbb.so.2 \
        /opt/onnxruntime/lib && \
     (cd /opt/onnxruntime/lib && \
      chmod a-x * && \
