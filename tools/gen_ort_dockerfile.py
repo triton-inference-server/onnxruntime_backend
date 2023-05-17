@@ -199,6 +199,8 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
     # are picked into the branch, and then apply the fix we need
     RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git checkout a3febf979a619f81d42ad8a2ed94e3c0ca78d678 && \
+            git config user.email "you@example.com" && \
+            git config --global user.name "Your Name" && \
             git cherry-pick dfac09650193287574bf9af8013e299e6525b4db && \
             git submodule update --init --recursive)
 
