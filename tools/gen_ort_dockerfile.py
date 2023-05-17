@@ -184,6 +184,25 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
         (cd onnxruntime && git submodule update --init --recursive)
 
        '''
+    # [WARNING] WAR until multi-GPU fix is picked into 1.15.0 release.
+    # Once picked, we should remove this else clause and use 1.15.0 directly.
+    elif FLAGS.ort_version == "1.15.0":
+        df += '''
+    #
+    # ONNX Runtime build
+    #
+    ARG ONNXRUNTIME_VERSION
+    ARG ONNXRUNTIME_REPO
+    ARG ONNXRUNTIME_BUILD_CONFIG
+
+    # check out a pinned commit from rel-1.15.0 to avoid issue when more commits
+    # are picked into the branch, and then apply the fix we need
+    RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+        (cd onnxruntime && git checkout a3febf979a619f81d42ad8a2ed94e3c0ca78d678 && \
+            git cherry-pick dfac09650193287574bf9af8013e299e6525b4db && \
+            git submodule update --init --recursive)
+
+       '''
     else:
         df += '''
     #
@@ -218,18 +237,13 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
                 ep_flags += ' --use_tensorrt_builtin_parser'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
-    
-    if os.name == 'posix' :
-        if os.getuid() == 0 :
+
+    if os.name == 'posix':
+        if os.getuid() == 0:
             ep_flags += ' --allow_running_as_root'
-    
+
     if FLAGS.ort_openvino is not None:
         ep_flags += ' --use_openvino CPU_FP32'
-
-    
-
-
-    
 
     # DLIS-4658: Once Jetson build supports CUDA 11.8+, include compute_90 for Jetson.
     cuda_archs = "52;60;61;70;75;80;86"
