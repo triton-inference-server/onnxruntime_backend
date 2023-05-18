@@ -1,0 +1,4 @@
+
+# Test from backend repository
+initializer_as_input--base:
+  extends: .test_template
