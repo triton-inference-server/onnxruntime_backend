@@ -220,7 +220,7 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
 
     # DLIS-4658: Once Jetson build supports CUDA 11.8+, include compute_90 for Jetson.
     cuda_archs = "52;60;61;70;75;80;86"
-    if platform.machine != 'aarch64':
+    if platform.machine() != 'aarch64':
         cuda_archs += ";90"
 
     df += '''
