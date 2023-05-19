@@ -1,3 +1,9 @@
+.test_template: 
+  environment: "${CI_JOB_NAME}"
+  before_script:
+  - env | sort
+  script:
+  - echo "Example test template to launch built QA container and run the test"
 
 # Test from backend repository
 initializer_as_input--base:
