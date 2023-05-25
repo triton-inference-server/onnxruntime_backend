@@ -211,17 +211,14 @@ RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         if FLAGS.ort_tensorrt:
             ep_flags += ' --use_tensorrt'
-            if FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0" or FLAGS.ort_version == "1.13.1" or  FLAGS.ort_version == "1.14.1" :
+            if FLAGS.ort_version == "1.12.1" or FLAGS.ort_version == "1.13.0" or FLAGS.ort_version == "1.13.1" or FLAGS.ort_version == "1.14.1":
                 ep_flags += ' --use_tensorrt_builtin_parser'
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
     if FLAGS.ort_openvino is not None:
         ep_flags += ' --use_openvino CPU_FP32'
 
-    # DLIS-4658: Once Jetson build supports CUDA 11.8+, include compute_90 for Jetson.
-    cuda_archs = "52;60;61;70;75;80;86"
-    if target_platform() != 'jetpack':
-        cuda_archs += ";90"
+    cuda_archs = "52;60;61;70;75;80;86;90"
 
     df += '''
 WORKDIR /workspace/onnxruntime
