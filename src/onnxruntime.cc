@@ -37,6 +37,7 @@
 #include "triton/backend/backend_model.h"
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
+#include "triton/backend/device_memory_tracker.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
@@ -55,9 +56,34 @@ struct SessionDeleter {
 
 // BackendConfiguration
 struct BackendConfiguration {
-  BackendConfiguration() : default_max_batch_size_(0) {}
+  static const BackendConfiguration& RetrieveFrom(
+      TRITONBACKEND_Backend* backend)
+  {
+    void* state = nullptr;
+    THROW_IF_BACKEND_INSTANCE_ERROR(
+        TRITONBACKEND_BackendState(backend, &state));
+    return *reinterpret_cast<BackendConfiguration*>(state);
+  }
 
-  int default_max_batch_size_;
+  static const BackendConfiguration& RetrieveFrom(TRITONBACKEND_Model* model)
+  {
+    TRITONBACKEND_Backend* backend = nullptr;
+    THROW_IF_BACKEND_INSTANCE_ERROR(
+        TRITONBACKEND_ModelBackend(model, &backend));
+    return RetrieveFrom(backend);
+  }
+
+  static const BackendConfiguration& RetrieveFrom(
+      TRITONBACKEND_ModelInstance* instance)
+  {
+    TRITONBACKEND_Model* model = nullptr;
+    THROW_IF_BACKEND_INSTANCE_ERROR(
+        TRITONBACKEND_ModelInstanceModel(instance, &model));
+    return RetrieveFrom(model);
+  }
+
+  bool enable_memory_tracker_{false};
+  int default_max_batch_size_{0};
 };
 
 //
@@ -2574,6 +2600,10 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
       lconfig->default_max_batch_size_ = lvalue;
     }
   }
+  // Check if device memory tracker is explicitly enabled
+  if (DeviceMemoryTracker::EnableFromBackendConfig(backend_config)) {
+    lconfig->enable_memory_tracker_ = DeviceMemoryTracker::Init();
+  }
   RETURN_IF_ERROR(TRITONBACKEND_BackendSetState(
       backend, reinterpret_cast<void*>(lconfig.get())));
 
@@ -2584,6 +2614,9 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
 TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
 {
+  if (BackendConfiguration::RetrieveFrom(backend).enable_memory_tracker_) {
+    DeviceMemoryTracker::Fini();
+  }
   LOG_IF_ERROR(OnnxLoader::Stop(), "failed to stop OnnxLoader");
   void* state = nullptr;
   LOG_IF_ERROR(
@@ -2611,6 +2644,16 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
        std::to_string(version) + ")")
           .c_str());
 
+
+  // Utilizing DeviceMemoryTracker behavior that function calls with
+  // 'nullptr' for usage will be no-ops.
+  std::unique_ptr<DeviceMemoryTracker::MemoryUsage> lusage;
+  if (BackendConfiguration::RetrieveFrom(model).enable_memory_tracker_) {
+    lusage.reset(new DeviceMemoryTracker::MemoryUsage());
+    DeviceMemoryTracker::TrackThreadMemoryUsage(lusage.get());
+  }
+
+
   // Create a ModelState object and associate it with the
   // TRITONBACKEND_Model.
   ModelState* model_state;
@@ -2618,6 +2661,14 @@ TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
   RETURN_IF_ERROR(
       TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
 
+  if (lusage) {
+    DeviceMemoryTracker::UntrackThreadMemoryUsage(lusage.get());
+    TRITONSERVER_BufferAttributes** ba_array;
+    uint32_t ba_len = 0;
+    RETURN_IF_ERROR(lusage->SerializeToBufferAttributes(&ba_array, &ba_len));
+    RETURN_IF_ERROR(
+        TRITONBACKEND_ModelReportMemoryUsage(model, ba_array, ba_len));
+  }
   return nullptr;  // success
 }
 
@@ -2663,6 +2714,15 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
   RETURN_IF_ERROR(TRITONBACKEND_ModelState(model, &vmodelstate));
   ModelState* model_state = reinterpret_cast<ModelState*>(vmodelstate);
 
+  // Utilizing DeviceMemoryTracker behavior that function calls with
+  // 'nullptr' for usage will be no-ops.
+  std::unique_ptr<DeviceMemoryTracker::MemoryUsage> lusage;
+  if (BackendConfiguration::RetrieveFrom(instance).enable_memory_tracker_) {
+    lusage.reset(new DeviceMemoryTracker::MemoryUsage());
+    DeviceMemoryTracker::TrackThreadMemoryUsage(lusage.get());
+  }
+
+
   // Create a ModelInstanceState object and associate it with the
   // TRITONBACKEND_ModelInstance.
   ModelInstanceState* instance_state;
@@ -2670,6 +2730,15 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
       ModelInstanceState::Create(model_state, instance, &instance_state));
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceSetState(
       instance, reinterpret_cast<void*>(instance_state)));
+
+  if (lusage) {
+    DeviceMemoryTracker::UntrackThreadMemoryUsage(lusage.get());
+    TRITONSERVER_BufferAttributes** ba_array;
+    uint32_t ba_len = 0;
+    RETURN_IF_ERROR(lusage->SerializeToBufferAttributes(&ba_array, &ba_len));
+    RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceReportMemoryUsage(
+        instance, ba_array, ba_len));
+  }
 
   return nullptr;  // success
 }
