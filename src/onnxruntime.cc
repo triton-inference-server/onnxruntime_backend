@@ -1904,12 +1904,13 @@ ModelInstanceState::SetInputTensors(
       std::vector<std::pair<TRITONSERVER_MemoryType, int64_t>>
           allowed_input_types;
       if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-        allowed_input_types = {{TRITONSERVER_MEMORY_GPU, DeviceId()},
-                               {TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                               {TRITONSERVER_MEMORY_CPU, 0}};
+        allowed_input_types = {
+            {TRITONSERVER_MEMORY_GPU, DeviceId()},
+            {TRITONSERVER_MEMORY_CPU_PINNED, 0},
+            {TRITONSERVER_MEMORY_CPU, 0}};
       } else {
-        allowed_input_types = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
-                               {TRITONSERVER_MEMORY_CPU, 0}};
+        allowed_input_types = {
+            {TRITONSERVER_MEMORY_CPU_PINNED, 0}, {TRITONSERVER_MEMORY_CPU, 0}};
       }
 
       RETURN_IF_ERROR(collector->ProcessTensor(

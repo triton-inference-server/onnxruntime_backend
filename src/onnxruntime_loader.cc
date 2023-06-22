@@ -56,9 +56,9 @@ OnnxLoader::Init(common::TritonJson::Value& backend_config)
     OrtLoggingLevel logging_level =
         TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)
             ? ORT_LOGGING_LEVEL_VERBOSE
-            : TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_WARN)
-                  ? ORT_LOGGING_LEVEL_WARNING
-                  : ORT_LOGGING_LEVEL_ERROR;
+        : TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_WARN)
+            ? ORT_LOGGING_LEVEL_WARNING
+            : ORT_LOGGING_LEVEL_ERROR;
 
     // Controls whether to enable global threadpool which will be shared across
     // sessions. Use this in conjunction with DisablePerSessionThreads API or
