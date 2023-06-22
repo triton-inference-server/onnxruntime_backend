@@ -184,6 +184,15 @@ parameters { key: "inter_op_thread_count" value: { string_value: "0" } }
 * `enable_mem_pattern`: Use 1 to enable memory pattern and 0 to disable. See [this](https://onnxruntime.ai/docs/api/c/struct_ort_api.html#ad13b711736956bf0565fea0f8d7a5d75) for more information.
 * `memory.enable_memory_arena_shrinkage`: See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h) for more information.
 
+## Custom ops with ONNX Runtime
+
+To register a custom ops library you must add the following to your model configuration file:
+```
+model_operations {
+  op_library_filename: "/path/to/shared/library.so"
+}
+```
+
 ### Command line options
 
 #### Thread Pools
