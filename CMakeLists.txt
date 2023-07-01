@@ -131,7 +131,6 @@ message(STATUS "Using Onnxruntime docker: ${TRITON_ONNXRUNTIME_DOCKER_BUILD}")
 if(NOT TRITON_ONNXRUNTIME_DOCKER_BUILD)
   find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
-    find_library(TBB_LIBRARY NAMES tbb PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
     find_library(OV_LIBRARY
       NAMES openvino
       PATHS ${TRITON_ONNXRUNTIME_LIB_PATHS})
@@ -158,7 +157,6 @@ else()
     set(ONNXRUNTIME_LIBRARY "libonnxruntime.so")
   endif() # WIN32
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
-    set(TBB_LIBRARY "libtbb.so")
     set(OV_LIBRARY "libopenvino.so")
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 endif()
@@ -306,7 +304,6 @@ if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
   target_link_libraries(
     triton-onnxruntime-backend
     PRIVATE
-      ${TBB_LIBRARY}
       ${OV_LIBRARY}
   )
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
