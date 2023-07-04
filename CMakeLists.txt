@@ -66,10 +66,10 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #     This enables using a version of tensorrt which is not yet supported in ONNXRuntime release branch.
 #     By default we pick the default branch which comes with the requested version of onnxruntime.
 #
-#     Optionally set TRT_VERSION to specify the verison of TRT which is being used. 
-#     This along with TRITON_BUILD_ONNXRUNTIME_VERSION is used to pick the right onnx tensorrt parser version. 
-#     When TRITON_ONNX_TENSORRT_REPO_TAG is set TRT_VERSION is ignored. 
-#     When neither TRITON_ONNX_TENSORRT_REPO_TAG or TRT_VERSION are set 
+#     Optionally set TRT_VERSION to specify the version of TRT which is being used.
+#     This along with TRITON_BUILD_ONNXRUNTIME_VERSION is used to pick the right onnx tensorrt parser version.
+#     When TRITON_ONNX_TENSORRT_REPO_TAG is set TRT_VERSION is ignored.
+#     When neither TRITON_ONNX_TENSORRT_REPO_TAG or TRT_VERSION are set
 #     the default parser version which comes with ORT is picked.
 #
 #   - If you want OpenVINO support set
@@ -78,8 +78,8 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #     version that is compatible with the specified version of ONNX
 #     Runtime.
 #
-#   - If you want to disable GPU usage, set TRITON_ENABLE_GPU=OFF. 
-#    This will make builds with CUDA and TensorRT flags to fail. 
+#   - If you want to disable GPU usage, set TRITON_ENABLE_GPU=OFF.
+#    This will make builds with CUDA and TensorRT flags to fail.
 #
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
@@ -164,7 +164,7 @@ endif()
 #
 # Dependencies
 #
-# FetchContent's composibility isn't very good. We must include the
+# FetchContent's composability isn't very good. We must include the
 # transitive closure of all repos so that we can override the tag.
 #
 include(FetchContent)

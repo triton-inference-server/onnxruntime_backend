@@ -1408,7 +1408,7 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
     }
     if (allow_ragged_batch) {
       const std::vector<int64_t>& model_shape = iit->second.dims_;
-      // Make sure the input has shpae [-1]
+      // Make sure the input has shape [-1]
       if ((model_shape.size() != 1) || (model_shape[0] != WILDCARD_DIM)) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INVALID_ARG,
