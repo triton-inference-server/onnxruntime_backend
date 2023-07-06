@@ -28,8 +28,9 @@ name: "CodeQL"
 
 on:
   pull_request:
+    branches: ['r[0-9][0-9].[0-9][0-9]']
   push:
-    branches: [ 'main' ]
+    branches: ['r[0-9][0-9].[0-9][0-9]']
 
 jobs:
   analyze:
