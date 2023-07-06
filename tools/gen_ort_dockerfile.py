@@ -310,19 +310,17 @@ RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_ope
        /opt/onnxruntime/lib && \
     cp /usr/lib/x86_64-linux-gnu/libpugixml.so.1 /opt/onnxruntime/lib
 
-RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,3,2)}'` && \
-    OV_SHORT_VERSION=${OV_SHORT_VERSION}`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,6,1)}'` && \
-    OV_SHORT_VERSION=${OV_SHORT_VERSION}`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,8,1)}'` && \
+RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{ split($0,a,"."); print substr(a[1],3) a[2] a[3] }'` && \
     (cd /opt/onnxruntime/lib && \
         chmod a-x * && \
         ln -s libopenvino.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino.so.${OV_SHORT_VERSION} libopenvino.so && \
+        ln -s libopenvino.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino.so && \
         ln -s libopenvino_c.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_c.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino_c.so.${OV_SHORT_VERSION} libopenvino_c.so && \
+        ln -s libopenvino_c.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_c.so && \
         ln -s libopenvino_ir_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_ir_frontend.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino_ir_frontend.so.${OV_SHORT_VERSION} libopenvino_ir_frontend.so && \
+        ln -s libopenvino_ir_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_ir_frontend.so && \
         ln -s libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_onnx_frontend.so.${OV_SHORT_VERSION} && \
-        ln -s libopenvino_onnx_frontend.so.${OV_SHORT_VERSION} libopenvino_onnx_frontend.so)
+        ln -s libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_onnx_frontend.so)
 '''
 
     df += '''
