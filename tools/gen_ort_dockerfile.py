@@ -138,7 +138,7 @@ RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2
     mv l_openvino_toolkit_ubuntu22_2023.0.0.10926.b4452d56304_x86_64/* ${INTEL_OPENVINO_DIR} && \
     rm openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     (cd ${INTEL_OPENVINO_DIR}/install_dependencies && \
-        os=ubuntu22.04 ./install_openvino_dependencies.sh -y) && \
+        ./install_openvino_dependencies.sh -y) && \
     ln -s ${INTEL_OPENVINO_DIR} ${INTEL_OPENVINO_DIR}/../openvino_`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,0,4)}'`
 '''
 
