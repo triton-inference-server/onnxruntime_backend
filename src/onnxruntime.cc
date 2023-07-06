@@ -1682,70 +1682,53 @@ ModelInstanceState::ProcessRequests(
       TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
       int64_t memory_type_id = 0;
 
-      if (output_device_info_.size() !=
-          StateForModel()->ModelOutputs().size()) {
-        // Get data type for this output. If this is a string then
-        // use CPU for binding output otherwise, query the preferred location
-        // for this output and bind accordingly. In case of any errors we
-        // fallback to binding the output to CPU.
-        auto iit = output_tensor_infos_.find(output_name.first);
-        if (iit == output_tensor_infos_.end()) {
+      // Get data type for this output. If this is a string then
+      // use CPU for binding output otherwise, query the preferred location
+      // for this output and bind accordingly. In case of any errors we
+      // fallback to binding the output to CPU.
+      auto iit = output_tensor_infos_.find(output_name.first);
+      if (iit == output_tensor_infos_.end()) {
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_VERBOSE,
+            (std::string(
+                 "Error while retrieving output data type. Using cpu "
+                 "as preferred location for output: " +
+                 output_name.first)
+                 .c_str()));
+      } else if (iit->second.type_ != ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
+        // Query the memory type of destination output buffer. Bind the
+        // output to this destination memory type. The destination memory type
+        // for an output for all requests should be same. So use any request
+        // for this query.
+        memory_type = preferred_memory_type;
+        memory_type_id = preferred_memory_type_id;
+        auto err = TRITONBACKEND_RequestOutputBufferProperties(
+            requests[0], output_name.first.c_str(), /*byte_size*/ nullptr,
+            &memory_type, &memory_type_id);
+
+        if (err != nullptr) {
           LOG_MESSAGE(
               TRITONSERVER_LOG_VERBOSE,
               (std::string(
-                   "Error while retrieving output data type. Using cpu "
-                   "as preferred location for output: " +
-                   output_name.first)
+                   "Output Properties Unavailable. Using cpu as "
+                   "preferred location for output: " +
+                   output_name.first +
+                   " Error: " + TRITONSERVER_ErrorMessage(err))
                    .c_str()));
-        } else if (iit->second.type_ != ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING) {
-          // Query the memory type of destination output buffer. Bind the
-          // output to this destination memory type. The destination memory type
-          // for an output for all requests should be same. So use any request
-          // for this query.
-          memory_type = preferred_memory_type;
-          memory_type_id = preferred_memory_type_id;
-          auto err = TRITONBACKEND_RequestOutputBufferProperties(
-              requests[0], output_name.first.c_str(), /*byte_size*/ nullptr,
-              &memory_type, &memory_type_id);
-
-          if (err != nullptr) {
-            LOG_MESSAGE(
-                TRITONSERVER_LOG_VERBOSE,
-                (std::string(
-                     "Output Properties Unavailable. Using cpu as "
-                     "preferred location for output: " +
-                     output_name.first)
-                     .c_str()));
-            memory_type = TRITONSERVER_MEMORY_CPU;
-            memory_type_id = 0;
-          }
-        }
-
-        // If the cuda allocator is not set, bind the output to CPU.
-        if (cuda_allocator_info_ == nullptr) {
           memory_type = TRITONSERVER_MEMORY_CPU;
           memory_type_id = 0;
         }
-
-        // finally save the derived mem type and device id as we need it for
-        // reading the outputs.
-        output_device_info_.insert(
-            {output_name.first, {memory_type, memory_type_id}});
-      } else {
-        auto output_device_info_iter =
-            output_device_info_.find(output_name.first);
-        if (output_device_info_iter == output_device_info_.end()) {
-          RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-              responses, request_count, all_response_failed,
-              TRITONSERVER_ErrorNew(
-                  TRITONSERVER_ERROR_INTERNAL,
-                  (std::string("device info for output tensor '") +
-                   output_name.first + "' not found")
-                      .c_str()));
-        }
-        memory_type = output_device_info_iter->second.first;
-        memory_type_id = output_device_info_iter->second.second;
       }
+
+      // If the cuda allocator is not set, bind the output to CPU.
+      if (cuda_allocator_info_ == nullptr) {
+        memory_type = TRITONSERVER_MEMORY_CPU;
+        memory_type_id = 0;
+      }
+
+      // finally save the derived mem type and device id as we need it for
+      // reading the outputs.
+      output_device_info_[output_name.first] = {memory_type, memory_type_id};
 
       RESPOND_ALL_AND_SET_TRUE_IF_ORT_ERROR(
           responses, request_count, all_response_failed,
