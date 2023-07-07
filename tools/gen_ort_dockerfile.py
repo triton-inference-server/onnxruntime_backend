@@ -33,14 +33,14 @@ import re
 FLAGS = None
 
 ORT_TO_TRTPARSER_VERSION_MAP = {
-    '1.9.0': (
-        '8.2',  # TensorRT version
-        'release/8.2-GA'  # ONNX-Tensorrt parser version
+    "1.9.0": (
+        "8.2",  # TensorRT version
+        "release/8.2-GA",  # ONNX-Tensorrt parser version
     ),
-    '1.10.0': (
-        '8.2',  # TensorRT version
-        'release/8.2-GA'  # ONNX-Tensorrt parser version
-    )
+    "1.10.0": (
+        "8.2",  # TensorRT version
+        "release/8.2-GA",  # ONNX-Tensorrt parser version
+    ),
 }
 
 
@@ -51,28 +51,32 @@ def target_platform():
 
 
 def dockerfile_common():
-    df = '''
+    df = """
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
 ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
 ARG ONNXRUNTIME_BUILD_CONFIG={}
-'''.format(FLAGS.triton_container, FLAGS.ort_version, FLAGS.ort_build_config)
+""".format(
+        FLAGS.triton_container, FLAGS.ort_version, FLAGS.ort_build_config
+    )
 
     if FLAGS.ort_openvino is not None:
-        df += '''
+        df += """
 ARG ONNXRUNTIME_OPENVINO_VERSION={}
-'''.format(FLAGS.ort_openvino)
+""".format(
+            FLAGS.ort_openvino
+        )
 
-    df += '''
+    df += """
 FROM ${BASE_IMAGE}
 WORKDIR /workspace
-'''
+"""
     return df
 
 
 def dockerfile_for_linux(output_file):
     df = dockerfile_common()
-    df += '''
+    df += """
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -92,7 +96,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-dev \
         python3-pip \
         git \
-        gnupg \ 
+        gnupg \
         gnupg1
 
 # Install dependencies from
@@ -108,9 +112,9 @@ RUN apt update && apt install -y gpg wget && \
         apt-get install -y --no-install-recommends cmake cmake-data && \
         cmake --version
 
-'''
+"""
     if FLAGS.enable_gpu:
-        df += '''
+        df += """
 # Allow configure to pick up cuDNN where it expects it.
 # (Note: $CUDNN_VERSION is defined by base image)
 RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
@@ -118,10 +122,10 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
     ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
     mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
     ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
-'''
+"""
 
     if FLAGS.ort_openvino is not None:
-        df += '''
+        df += """
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
 ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
@@ -145,15 +149,14 @@ ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
 ENV PKG_CONFIG_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64/pkgconfig
 ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/python3:$PYTHONPATH
-'''
+"""
 
-
-## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
-# For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
-# use tensorrt-8.0 branch instead of using rel-1.8.1
-# From ORT 1.9 onwards we will switch back to using rel-* branches
+    ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
+    # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
+    # use tensorrt-8.0 branch instead of using rel-1.8.1
+    # From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
-        df += '''
+        df += """
     #
     # ONNX Runtime build
     #
@@ -164,10 +167,10 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     RUN git clone -b tensorrt-8.0 --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
 
-       '''
+       """
     # Use the tensorrt-8.5ea branch to use Tensor RT 8.5a to use the built-in tensorrt parser
     elif FLAGS.ort_version == "1.12.1":
-        df += '''
+        df += """
     #
     # ONNX Runtime build
     #
@@ -178,9 +181,9 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     RUN git clone -b tensorrt-8.5ea --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
 
-       '''
+       """
     else:
-        df += '''
+        df += """
     #
     # ONNX Runtime build
     #
@@ -191,16 +194,18 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
 
-        '''
+        """
 
     if FLAGS.onnx_tensorrt_tag != "":
-        df += '''
+        df += """
     RUN (cd /workspace/onnxruntime/cmake/external/onnx-tensorrt && git fetch origin {}:ortrefbranch && git checkout ortrefbranch)
-    '''.format(FLAGS.onnx_tensorrt_tag)
+    """.format(
+            FLAGS.onnx_tensorrt_tag
+        )
 
-    ep_flags = ''
+    ep_flags = ""
     if FLAGS.enable_gpu:
-        ep_flags = '--use_cuda'
+        ep_flags = "--use_cuda"
         if FLAGS.cuda_version is not None:
             ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
         if FLAGS.cuda_home is not None:
@@ -208,40 +213,44 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
         if FLAGS.cudnn_home is not None:
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         if FLAGS.ort_tensorrt:
-            ep_flags += ' --use_tensorrt'
+            ep_flags += " --use_tensorrt"
             if FLAGS.ort_version >= "1.12.1":
-                ep_flags += ' --use_tensorrt_builtin_parser'
+                ep_flags += " --use_tensorrt_builtin_parser"
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
 
-    if os.name == 'posix':
+    if os.name == "posix":
         if os.getuid() == 0:
-            ep_flags += ' --allow_running_as_root'
+            ep_flags += " --allow_running_as_root"
 
     if FLAGS.ort_openvino is not None:
-        ep_flags += ' --use_openvino CPU_FP32'
+        ep_flags += " --use_openvino CPU_FP32"
 
     cuda_archs = "52;60;61;70;75;80;86;90"
 
-    df += '''
+    df += """
 WORKDIR /workspace/onnxruntime
 ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
     --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
-'''.format(cuda_archs)
+""".format(
+        cuda_archs
+    )
 
     # Remove version info from libonnxruntime.so
     # This makes it possible to replace ort binaries in released triton containers
     # for experimentation, without having to build triton-ort backend.
-    df += '''
-RUN sed -i 's/VERS_%s//' tools/ci_build/gen_def.py &&  (sed -i 's/% VERSION_STRING//' tools/ci_build/gen_def.py) 
+    df += """
+RUN sed -i 's/VERS_%s//' tools/ci_build/gen_def.py &&  (sed -i 's/% VERSION_STRING//' tools/ci_build/gen_def.py)
 RUN sed -i 's/set_target_properties(onnxruntime PROPERTIES VERSION ${ORT_VERSION})//' cmake/onnxruntime.cmake
-'''
+"""
 
-    df += '''
+    df += """
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
-'''.format(ep_flags)
+""".format(
+        ep_flags
+    )
 
-    df += '''
+    df += """
 #
 # Copy all artifacts needed by the backend to /opt/onnxruntime
 #
@@ -272,24 +281,24 @@ RUN mkdir -p /opt/onnxruntime/bin && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnx_test_runner \
        /opt/onnxruntime/bin && \
     (cd /opt/onnxruntime/bin && chmod a+x *)
-'''
+"""
     if FLAGS.enable_gpu:
-        df += '''
+        df += """
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_cuda.so \
-       /opt/onnxruntime/lib    
-'''
+       /opt/onnxruntime/lib
+"""
 
     if FLAGS.ort_tensorrt:
-        df += '''
+        df += """
 # TensorRT specific headers and libraries
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensorrt_provider_factory.h \
        /opt/onnxruntime/include && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_tensorrt.so \
        /opt/onnxruntime/lib
-'''
+"""
 
     if FLAGS.ort_openvino is not None:
-        df += '''
+        df += """
 # OpenVino specific headers and libraries
 RUN cp -r ${INTEL_OPENVINO_DIR}/docs/licensing /opt/onnxruntime/LICENSE.openvino
 
@@ -321,9 +330,9 @@ RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{ split($0,a,"
         ln -s libopenvino_ir_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_ir_frontend.so && \
         ln -s libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_onnx_frontend.so.${OV_SHORT_VERSION} && \
         ln -s libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_onnx_frontend.so)
-'''
+"""
 
-    df += '''
+    df += """
 RUN cd /opt/onnxruntime/lib && \
     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \
@@ -335,7 +344,7 @@ RUN mkdir -p /opt/onnxruntime/test && \
        /opt/onnxruntime/test && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/testdata/custom_op_library/custom_op_test.onnx \
        /opt/onnxruntime/test
-'''
+"""
 
     with open(output_file, "w") as dfile:
         dfile.write(df)
@@ -349,7 +358,7 @@ def dockerfile_for_windows(output_file):
     # use tensorrt-8.0 branch instead of using rel-1.8.1
     # From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
-        df += '''
+        df += """
 SHELL ["cmd", "/S", "/C"]
 
 #
@@ -360,9 +369,9 @@ ARG ONNXRUNTIME_REPO
 
 RUN git clone -b tensorrt-8.0 --recursive %ONNXRUNTIME_REPO% onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
-'''
+"""
     else:
-        df += '''
+        df += """
 SHELL ["cmd", "/S", "/C"]
 
 #
@@ -372,16 +381,18 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
-'''
+"""
 
     if FLAGS.onnx_tensorrt_tag != "":
-        df += '''
+        df += """
     RUN (cd \\workspace\\onnxruntime\\cmake\\external\\onnx-tensorrt && git fetch origin {}:ortrefbranch && git checkout ortrefbranch)
-    '''.format(FLAGS.onnx_tensorrt_tag)
+    """.format(
+            FLAGS.onnx_tensorrt_tag
+        )
 
-    ep_flags = ''
+    ep_flags = ""
     if FLAGS.enable_gpu:
-        ep_flags = '--use_cuda'
+        ep_flags = "--use_cuda"
         if FLAGS.cuda_version is not None:
             ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
         if FLAGS.cuda_home is not None:
@@ -389,20 +400,22 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
         if FLAGS.cudnn_home is not None:
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         if FLAGS.ort_tensorrt:
-            ep_flags += ' --use_tensorrt'
+            ep_flags += " --use_tensorrt"
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
     if FLAGS.ort_openvino is not None:
-        ep_flags += ' --use_openvino CPU_FP32'
+        ep_flags += " --use_openvino CPU_FP32"
 
-    df += '''
+    df += """
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
 RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=52;60;61;70;75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --update --build --build_dir /workspace/build {}
-'''.format(ep_flags)
+""".format(
+        ep_flags
+    )
 
-    df += '''
+    df += """
 #
 # Copy all artifacts needed by the backend to /opt/onnxruntime
 #
@@ -425,18 +438,18 @@ RUN copy \\workspace\\build\\Release\\Release\\onnx_test_runner.exe \\opt\\onnxr
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime.lib \\opt\\onnxruntime\\lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_shared.lib \\opt\\onnxruntime\\lib
-'''
+"""
 
     if FLAGS.enable_gpu:
-        df += '''
+        df += """
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.lib \\opt\\onnxruntime\\lib
 WORKDIR /opt/onnxruntime/bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
-'''
+"""
 
     if FLAGS.ort_tensorrt:
-        df += '''
+        df += """
 # TensorRT specific headers and libraries
 WORKDIR /opt/onnxruntime/include
 RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\tensorrt\\tensorrt_provider_factory.h \\opt\\onnxruntime\\include
@@ -446,26 +459,26 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dl
 
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
-'''
+"""
     with open(output_file, "w") as dfile:
         dfile.write(df)
 
 
 def preprocess_gpu_flags():
-    if target_platform() == 'windows':
+    if target_platform() == "windows":
         # Default to CUDA based on CUDA_PATH envvar and TensorRT in
         # C:/tensorrt
-        if 'CUDA_PATH' in os.environ:
+        if "CUDA_PATH" in os.environ:
             if FLAGS.cuda_home is None:
-                FLAGS.cuda_home = os.environ['CUDA_PATH']
-            elif FLAGS.cuda_home != os.environ['CUDA_PATH']:
+                FLAGS.cuda_home = os.environ["CUDA_PATH"]
+            elif FLAGS.cuda_home != os.environ["CUDA_PATH"]:
                 print("warning: --cuda-home does not match CUDA_PATH envvar")
 
         if FLAGS.cudnn_home is None:
             FLAGS.cudnn_home = FLAGS.cuda_home
 
         version = None
-        m = re.match(r'.*v([1-9]?[0-9]+\.[0-9]+)$', FLAGS.cuda_home)
+        m = re.match(r".*v([1-9]?[0-9]+\.[0-9]+)$", FLAGS.cuda_home)
         if m:
             version = m.group(1)
 
@@ -475,97 +488,87 @@ def preprocess_gpu_flags():
             print("warning: --cuda-version does not match CUDA_PATH envvar")
 
         if (FLAGS.cuda_home is None) or (FLAGS.cuda_version is None):
-            print(
-                "error: windows build requires --cuda-version and --cuda-home")
+            print("error: windows build requires --cuda-version and --cuda-home")
 
         if FLAGS.tensorrt_home is None:
-            FLAGS.tensorrt_home = '/tensorrt'
+            FLAGS.tensorrt_home = "/tensorrt"
     else:
-        if 'CUDNN_VERSION' in os.environ:
+        if "CUDNN_VERSION" in os.environ:
             version = None
-            m = re.match(r'([0-9]\.[0-9])\.[0-9]\.[0-9]',
-                         os.environ['CUDNN_VERSION'])
+            m = re.match(r"([0-9]\.[0-9])\.[0-9]\.[0-9]", os.environ["CUDNN_VERSION"])
             if m:
                 version = m.group(1)
             if FLAGS.cudnn_home is None:
-                FLAGS.cudnn_home = '/usr/local/cudnn-{}/cuda'.format(version)
+                FLAGS.cudnn_home = "/usr/local/cudnn-{}/cuda".format(version)
 
         if FLAGS.cuda_home is None:
-            FLAGS.cuda_home = '/usr/local/cuda'
+            FLAGS.cuda_home = "/usr/local/cuda"
 
         if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
             print("error: linux build requires --cudnn-home and --cuda-home")
 
         if FLAGS.tensorrt_home is None:
-            FLAGS.tensorrt_home = '/usr/src/tensorrt'
+            FLAGS.tensorrt_home = "/usr/src/tensorrt"
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--triton-container',
-                        type=str,
-                        required=True,
-                        help='Triton base container to use for ORT build.')
-    parser.add_argument('--ort-version',
-                        type=str,
-                        required=True,
-                        help='ORT version.')
-    parser.add_argument('--output',
-                        type=str,
-                        required=True,
-                        help='File to write Dockerfile to.')
-    parser.add_argument('--enable-gpu',
-                        action="store_true",
-                        required=False,
-                        help='Enable GPU support')
-    parser.add_argument('--ort-build-config',
-                        type=str,
-                        default="Release",
-                        choices=["Debug", "Release", "RelWithDebInfo"],
-                        help='ORT build configuration.')
     parser.add_argument(
-        '--target-platform',
+        "--triton-container",
+        type=str,
+        required=True,
+        help="Triton base container to use for ORT build.",
+    )
+    parser.add_argument("--ort-version", type=str, required=True, help="ORT version.")
+    parser.add_argument(
+        "--output", type=str, required=True, help="File to write Dockerfile to."
+    )
+    parser.add_argument(
+        "--enable-gpu", action="store_true", required=False, help="Enable GPU support"
+    )
+    parser.add_argument(
+        "--ort-build-config",
+        type=str,
+        default="Release",
+        choices=["Debug", "Release", "RelWithDebInfo"],
+        help="ORT build configuration.",
+    )
+    parser.add_argument(
+        "--target-platform",
         required=False,
         default=None,
-        help=
-        'Target for build, can be "ubuntu", "windows" or "jetpack". If not specified, build targets the current platform.'
+        help='Target for build, can be "ubuntu", "windows" or "jetpack". If not specified, build targets the current platform.',
     )
 
-    parser.add_argument('--cuda-version',
-                        type=str,
-                        required=False,
-                        help='Version for CUDA.')
-    parser.add_argument('--cuda-home',
-                        type=str,
-                        required=False,
-                        help='Home directory for CUDA.')
-    parser.add_argument('--cudnn-home',
-                        type=str,
-                        required=False,
-                        help='Home directory for CUDNN.')
     parser.add_argument(
-        '--ort-openvino',
+        "--cuda-version", type=str, required=False, help="Version for CUDA."
+    )
+    parser.add_argument(
+        "--cuda-home", type=str, required=False, help="Home directory for CUDA."
+    )
+    parser.add_argument(
+        "--cudnn-home", type=str, required=False, help="Home directory for CUDNN."
+    )
+    parser.add_argument(
+        "--ort-openvino",
         type=str,
         required=False,
-        help=
-        'Enable OpenVino execution provider using specified OpenVINO version.')
-    parser.add_argument('--ort-tensorrt',
-                        action="store_true",
-                        required=False,
-                        help='Enable TensorRT execution provider.')
-    parser.add_argument('--tensorrt-home',
-                        type=str,
-                        required=False,
-                        help='Home directory for TensorRT.')
-    parser.add_argument('--onnx-tensorrt-tag',
-                        type=str,
-                        default="",
-                        help='onnx-tensorrt repo tag.')
-    parser.add_argument('--trt-version',
-                        type=str,
-                        default="",
-                        help='TRT version.')
+        help="Enable OpenVino execution provider using specified OpenVINO version.",
+    )
+    parser.add_argument(
+        "--ort-tensorrt",
+        action="store_true",
+        required=False,
+        help="Enable TensorRT execution provider.",
+    )
+    parser.add_argument(
+        "--tensorrt-home", type=str, required=False, help="Home directory for TensorRT."
+    )
+    parser.add_argument(
+        "--onnx-tensorrt-tag", type=str, default="", help="onnx-tensorrt repo tag."
+    )
+    parser.add_argument("--trt-version", type=str, default="", help="TRT version.")
 
     FLAGS = parser.parse_args()
     if FLAGS.enable_gpu:
@@ -575,15 +578,19 @@ if __name__ == '__main__':
     # if the tag is empty - check whether there is an entry in the ORT_TO_TRTPARSER_VERSION_MAP
     # map corresponding to ort version + trt version combo. If yes then use it
     # otherwise we leave it empty and use the defaults from ort
-    if FLAGS.onnx_tensorrt_tag == "" and FLAGS.ort_version in ORT_TO_TRTPARSER_VERSION_MAP.keys(
+    if (
+        FLAGS.onnx_tensorrt_tag == ""
+        and FLAGS.ort_version in ORT_TO_TRTPARSER_VERSION_MAP.keys()
     ):
-        trt_version = re.match(r'^[0-9]+\.[0-9]+', FLAGS.trt_version)
-        if trt_version and trt_version.group(0) == ORT_TO_TRTPARSER_VERSION_MAP[
-                FLAGS.ort_version][0]:
-            FLAGS.onnx_tensorrt_tag = ORT_TO_TRTPARSER_VERSION_MAP[
-                FLAGS.ort_version][1]
+        trt_version = re.match(r"^[0-9]+\.[0-9]+", FLAGS.trt_version)
+        if (
+            trt_version
+            and trt_version.group(0)
+            == ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][0]
+        ):
+            FLAGS.onnx_tensorrt_tag = ORT_TO_TRTPARSER_VERSION_MAP[FLAGS.ort_version][1]
 
-    if target_platform() == 'windows':
+    if target_platform() == "windows":
         # OpenVINO EP not yet supported for windows build
         if FLAGS.ort_openvino is not None:
             print("warning: OpenVINO not supported for windows, ignoring")
