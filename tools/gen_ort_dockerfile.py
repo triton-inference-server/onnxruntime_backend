@@ -125,31 +125,26 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
 ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
-ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/tools/compile_tool:$INTEL_OPENVINO_DIR/runtime/3rdparty/tbb/lib:$INTEL_OPENVINO_DIR/runtime/3rdparty/hddl/lib:$INTEL_OPENVINO_DIR/runtime/lib/intel64:/usr/local/openblas/lib:$LD_LIBRARY_PATH
-ENV PYTHONPATH $INTEL_OPENVINO_DIR/tools:$PYTHONPATH
-ENV IE_PLUGINS_PATH $INTEL_OPENVINO_DIR/runtime/lib/intel64
+
+# Step 1: Download and install core components
+# Ref: https://docs.openvino.ai/2023.0/openvino_docs_install_guides_installing_openvino_from_archive_linux.html#step-1-download-and-install-the-openvino-core-components
+RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2023.0/linux/l_openvino_toolkit_ubuntu22_2023.0.0.10926.b4452d56304_x86_64.tgz --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
+    tar -xf openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
+    mkdir -p ${INTEL_OPENVINO_DIR} && \
+    mv l_openvino_toolkit_ubuntu22_2023.0.0.10926.b4452d56304_x86_64/* ${INTEL_OPENVINO_DIR} && \
+    rm openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
+    (cd ${INTEL_OPENVINO_DIR}/install_dependencies && \
+        ./install_openvino_dependencies.sh -y) && \
+    ln -s ${INTEL_OPENVINO_DIR} ${INTEL_OPENVINO_DIR}/../openvino_`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,0,4)}'`
+
+# Step 2: Configure the environment
+# Ref: https://docs.openvino.ai/2023.0/openvino_docs_install_guides_installing_openvino_from_archive_linux.html#step-2-configure-the-environment
 ENV InferenceEngine_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV ngraph_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
-
-# From 2022.1 onwards, the apt key is changed to GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB.
-# From 2021.3 onwards, install_openvino_dependencies defaults to enabling interactive mode.
-# We use -y to force non-interactive mode.
-RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
-    apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && rm GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
-    cd /etc/apt/sources.list.d && \
-    echo "deb https://apt.repos.intel.com/openvino/2022 focal main">intel-openvino-2022.list && \
-    apt update && \
-    apt install -y openvino-${ONNXRUNTIME_OPENVINO_VERSION} && \
-    mv /opt/intel/openvino_2022 ${INTEL_OPENVINO_DIR} && \
-    cd ${INTEL_OPENVINO_DIR}/install_dependencies && os=ubuntu20.04 ./install_openvino_dependencies.sh -y
-
-ARG INTEL_COMPUTE_RUNTIME_URL=https://github.com/intel/compute-runtime/releases/download/19.41.14441
-RUN wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-gmmlib_19.3.2_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-core_1.0.2597_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-igc-opencl_1.0.2597_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-opencl_19.41.14441_amd64.deb && \
-    wget ${INTEL_COMPUTE_RUNTIME_URL}/intel-ocloc_19.41.14441_amd64.deb && \
-    dpkg -i *.deb && rm -rf *.deb
+ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
+ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
+ENV PKG_CONFIG_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64/pkgconfig
+ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/python3:$PYTHONPATH
 '''
 
 
@@ -303,23 +298,29 @@ RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvi
 
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
-    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so.${ONNXRUNTIME_OPENVINO_VERSION} \
        /opt/onnxruntime/lib && \
-    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_c.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_c.so.${ONNXRUNTIME_OPENVINO_VERSION} \
        /opt/onnxruntime/lib && \
     cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_intel_cpu_plugin.so \
        /opt/onnxruntime/lib && \
-    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_ir_frontend.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_ir_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} \
        /opt/onnxruntime/lib && \
-    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_onnx_frontend.so \
+    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} \
        /opt/onnxruntime/lib && \
-    cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/plugins.xml \
-       /opt/onnxruntime/lib && \
-    cp ${INTEL_OPENVINO_DIR}/runtime/3rdparty/tbb/lib/libtbb.so.2 \
-       /opt/onnxruntime/lib && \
+    cp /usr/lib/x86_64-linux-gnu/libpugixml.so.1 /opt/onnxruntime/lib
+
+RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{ split($0,a,"."); print substr(a[1],3) a[2] a[3] }'` && \
     (cd /opt/onnxruntime/lib && \
-     chmod a-x * && \
-     ln -sf libtbb.so.2 libtbb.so)
+        chmod a-x * && \
+        ln -s libopenvino.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino.so.${OV_SHORT_VERSION} && \
+        ln -s libopenvino.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino.so && \
+        ln -s libopenvino_c.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_c.so.${OV_SHORT_VERSION} && \
+        ln -s libopenvino_c.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_c.so && \
+        ln -s libopenvino_ir_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_ir_frontend.so.${OV_SHORT_VERSION} && \
+        ln -s libopenvino_ir_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_ir_frontend.so && \
+        ln -s libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_onnx_frontend.so.${OV_SHORT_VERSION} && \
+        ln -s libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_onnx_frontend.so)
 '''
 
     df += '''
