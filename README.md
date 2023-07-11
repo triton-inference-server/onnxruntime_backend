@@ -1,5 +1,5 @@
 <!--
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -164,7 +164,7 @@ Details regarding when to use these options and what to expect from them can be 
 
 ### Model Config Options
 * `intra_op_thread_count`: Sets the number of threads used to parallelize the execution within nodes. A value of 0 means ORT will pick a default which is number of cores.
-* `inter_op_thread_count`: Sets the number of threads used to parallelize the execution of the graph (across nodes). If sequential execution is enabled this value is ignored. 
+* `inter_op_thread_count`: Sets the number of threads used to parallelize the execution of the graph (across nodes). If sequential execution is enabled this value is ignored.
 A value of 0 means ORT will pick a default which is number of cores.
 * `execution_mode`: Controls whether operators in the graph are executed sequentially or in parallel. Usually when the model has many branches, setting this option to 1 .i.e. "parallel" will give you better performance. Default is 0 which is "sequential execution."
 * `level`: Refers to the graph optimization level. By default all optimizations are enabled. Allowed values are -1 and 1. -1 refers to BASIC optimizations and 1 refers to basic plus extended optimizations like fusions. Please find the details [here](https://onnxruntime.ai/docs/performance/graph-optimizations.html)
@@ -191,18 +191,18 @@ parameters { key: "inter_op_thread_count" value: { string_value: "0" } }
 When intra and inter op threads is set to 0 or a value higher than 1, by default ORT creates threadpool per session. This may not be ideal in every scenario, therefore ORT also supports global threadpools. When global threadpools are enabled ORT creates 1 global threadpool which is shared by every session. Use the backend config to enable global threadpool. When global threadpool is enabled, intra and inter op num threads config should also be provided via backend config. Config values provided in model config will be ignored.
 
 ```
---backend-config=onnxruntime,enable-global-threadpool=<0,1>, --backend-config=onnxruntime,intra_op_thread_count=<int> , --backend-config=onnxruntime,inter_op_thread_count=<int> 
+--backend-config=onnxruntime,enable-global-threadpool=<0,1>, --backend-config=onnxruntime,intra_op_thread_count=<int> , --backend-config=onnxruntime,inter_op_thread_count=<int>
 ```
 
 #### Default Max Batch Size
 
-The default-max-batch-size value is used for max_batch_size during [Autocomplete](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#auto-generated-model-configuration) when no 
+The default-max-batch-size value is used for max_batch_size during [Autocomplete](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#auto-generated-model-configuration) when no
 other value is found. Assuming server was not launched with `--disable-auto-complete-config`
 command-line option, the onnxruntime backend will set the max_batch_size
 of the model to this default value under the following conditions:
 
-1. Autocomplete has determined the model is capable of batching requests. 
-2. max_batch_size is 0 in the model configuration or max_batch_size 
+1. Autocomplete has determined the model is capable of batching requests.
+2. max_batch_size is 0 in the model configuration or max_batch_size
    is omitted from the model configuration.
 
 If max_batch_size > 1 and no [scheduler](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#scheduling-and-batching) is provided, the dynamic batch scheduler will be used.
