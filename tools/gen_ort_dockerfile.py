@@ -317,6 +317,7 @@ RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_ope
        /opt/onnxruntime/lib && \
     cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} \
        /opt/onnxruntime/lib && \
+    cp /usr/lib/x86_64-linux-gnu/libtbb.so.12 /opt/onnxruntime/lib && \
     cp /usr/lib/x86_64-linux-gnu/libpugixml.so.1 /opt/onnxruntime/lib
 
 RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{ split($0,a,"."); print substr(a[1],3) a[2] a[3] }'` && \
