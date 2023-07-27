@@ -2784,5 +2784,21 @@ TRITONBACKEND_ModelInstanceExecute(
   return nullptr;  // success
 }
 
+TRITONSERVER_Error*
+TRITONBACKEND_GetBackendAttribute(
+    TRITONBACKEND_Backend* backend,
+    TRITONBACKEND_BackendAttribute* backend_attributes)
+{
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      "TRITONBACKEND_GetBackendAttribute: setting attributes");
+  // This backend can safely handle parallel calls to
+  // TRITONBACKEND_ModelInstanceInitialize (thread-safe).
+  RETURN_IF_ERROR(TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
+      backend_attributes, true));
+
+  return nullptr;
+}
+
 }  // extern "C"
 }}}  // namespace triton::backend::onnxruntime
