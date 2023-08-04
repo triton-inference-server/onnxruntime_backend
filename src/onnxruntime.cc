@@ -2674,6 +2674,10 @@ TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
 TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
 {
+  // NOTE: If the corresponding TRITONBACKEND_BackendAttribute is enabled by the
+  // backend for parallel model instance loading, the
+  // TRITONBACKEND_ModelInstanceInitialize may be called concurrently.
+  // Therefore, this function should be thread-safe.
   const char* cname;
   RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceName(instance, &cname));
   std::string name(cname);
@@ -2782,6 +2786,22 @@ TRITONBACKEND_ModelInstanceExecute(
   instance_state->ProcessRequests(requests, request_count);
 
   return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+TRITONBACKEND_GetBackendAttribute(
+    TRITONBACKEND_Backend* backend,
+    TRITONBACKEND_BackendAttribute* backend_attributes)
+{
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      "TRITONBACKEND_GetBackendAttribute: setting attributes");
+  // This backend can safely handle parallel calls to
+  // TRITONBACKEND_ModelInstanceInitialize (thread-safe).
+  RETURN_IF_ERROR(TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
+      backend_attributes, true));
+
+  return nullptr;
 }
 
 }  // extern "C"
