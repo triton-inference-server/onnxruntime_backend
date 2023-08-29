@@ -226,7 +226,7 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     if FLAGS.ort_openvino is not None:
         ep_flags += " --use_openvino CPU_FP32"
 
-    cuda_archs = "52;60;61;70;75;80;86;90"
+    cuda_archs = "60;61;70;75;80;86;90"
 
     df += """
 WORKDIR /workspace/onnxruntime
@@ -411,7 +411,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=52;60;61;70;75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --update --build --build_dir /workspace/build {}
 """.format(
         ep_flags
     )
