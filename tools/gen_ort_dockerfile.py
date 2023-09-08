@@ -236,14 +236,6 @@ ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_s
         cuda_archs
     )
 
-    # Remove version info from libonnxruntime.so
-    # This makes it possible to replace ort binaries in released triton containers
-    # for experimentation, without having to build triton-ort backend.
-    df += """
-RUN sed -i 's/VERS_%s//' tools/ci_build/gen_def.py &&  (sed -i 's/% VERSION_STRING//' tools/ci_build/gen_def.py)
-RUN sed -i 's/set_target_properties(onnxruntime PROPERTIES VERSION ${ORT_VERSION})//' cmake/onnxruntime.cmake
-"""
-
     df += """
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 """.format(
@@ -332,7 +324,11 @@ RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{ split($0,a,"
         ln -s libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_onnx_frontend.so.${OV_SHORT_VERSION} && \
         ln -s libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} libopenvino_onnx_frontend.so)
 """
-
+    # Linking compiled ONNX Runtime libraries to their corresponding versioned libraries
+    df += """
+RUN cd /opt/onnxruntime/lib \
+        && ln -s libonnxruntime.so libonnxruntime.so.${ONNXRUNTIME_VERSION}
+"""
     df += """
 RUN cd /opt/onnxruntime/lib && \
     for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
@@ -411,7 +407,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 16 2019" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --update --build --build_dir /workspace/build {}
 """.format(
         ep_flags
     )
