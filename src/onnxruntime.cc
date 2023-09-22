@@ -1428,7 +1428,8 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
                 .c_str());
       }
     } else {
-      if (model_state_->MaxBatchSize() != 0 || iit->second.dims_.size() > 0) {
+      // Only compare the dimensions if the tensor is not scalar
+      if (iit->second.dims_.size() != 0) {
         RETURN_IF_ERROR(CompareDimsSupported(
             model_state_->Name(), io_name, iit->second.dims_, dims,
             model_state_->MaxBatchSize(), false /* compare_exact */));
@@ -1448,9 +1449,6 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
                     .c_str());
           }
         }
-
-        // store the dimension for reference.
-        scalar_inputs_[io_name] = dims;
       }
     }
   }
@@ -1512,9 +1510,8 @@ ModelInstanceState::ValidateOutputs()
 
     // The batch output shape doesn't necessarily match the model
     if (model_state_->FindBatchOutput(io_name) == nullptr) {
-      // if max_batch_size == 0 and is a scalar tensor all the
-      // dimensions specified must be equal to 1
-      if (model_state_->MaxBatchSize() > 0 || iit->second.dims_.size() > 0) {
+      // Only compare the dimensions if the tensor is not scalar
+      if (iit->second.dims_.size() != 0) {
         RETURN_IF_ERROR(CompareDimsSupported(
             model_state_->Name(), io_name, iit->second.dims_, dims,
             model_state_->MaxBatchSize(), true /* compare_exact */));
