@@ -885,6 +885,8 @@ ModelState::AutoCompleteIO(const char* key, const OnnxTensorInfoMap& io_infos)
       triton::common::TritonJson::Value reshape_dims(
           ModelConfig(), triton::common::TritonJson::ValueType::ARRAY);
       RETURN_IF_ERROR(reshape.Add("shape", std::move(reshape_dims)));
+      // Empty reshape with `max_batch_size` indicates a scalar tensor in the
+      // model configuration which is not a valid model configuration.
       if (MaxBatchSize() > 0) {
         RETURN_IF_ERROR(io.Add("reshape", std::move(reshape)));
       }
@@ -2353,7 +2355,7 @@ ModelInstanceState::ReadOutputTensors(
           offsets));
 
       // If the number of dimensions is equal to zero, it means that it is a
-      // scalar and it would use the dimensions specified in the mdel
+      // scalar and it would use the dimensions specified in the model
       // configuration.
       if (batchn_shape.size() == 0) {
         auto scalar_output_dims_it = scalar_outputs_.find(name);
