@@ -1334,16 +1334,6 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
   RETURN_IF_ERROR(OverridableInitializerInfos(
       session_, default_allocator_, overridable_initializer_tensor_infos));
 
-  // Merge 'overridable_xxx' into 'input_xxx' as they can be request inputs,
-  // and all request inputs are checked against 'input_xxx'
-  for (const auto& name : overridable_initializer_tensor_names) {
-    input_tensor_names.emplace(name);
-  }
-
-  for (const auto& info : overridable_initializer_tensor_infos) {
-    input_tensor_infos_[info.first] = info.second;
-  }
-
   if (input_tensor_infos_.size() != expected_input_cnt) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -1352,6 +1342,16 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
          " inputs, model provides " +
          std::to_string(input_tensor_infos_.size()))
             .c_str());
+  }
+
+  // Merge 'overridable_xxx' into 'input_xxx' as they can be request inputs,
+  // and all request inputs are checked against 'input_xxx'
+  for (const auto& name : overridable_initializer_tensor_names) {
+    input_tensor_names.emplace(name);
+  }
+
+  for (const auto& info : overridable_initializer_tensor_infos) {
+    input_tensor_infos_[info.first] = info.second;
   }
 
   triton::common::TritonJson::Value ios;
