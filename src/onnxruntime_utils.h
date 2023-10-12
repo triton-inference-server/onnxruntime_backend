@@ -105,7 +105,9 @@ struct OnnxTensorInfo {
   {
   }
 
-  ONNXTensorElementDataType type_;
+  OnnxTensorInfo() {}
+
+  ONNXTensorElementDataType type_{ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED};
   std::vector<int64_t> dims_;
 };
 

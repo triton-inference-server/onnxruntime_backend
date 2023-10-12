@@ -1344,6 +1344,16 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
             .c_str());
   }
 
+  // Merge 'overridable_xxx' into 'input_xxx' as they can be request inputs,
+  // and all request inputs are checked against 'input_xxx'
+  for (const auto& name : overridable_initializer_tensor_names) {
+    input_tensor_names.emplace(name);
+  }
+
+  for (const auto& info : overridable_initializer_tensor_infos) {
+    input_tensor_infos_[info.first] = info.second;
+  }
+
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("input", &ios));
   for (size_t i = 0; i < ios.ArraySize(); i++) {
@@ -1365,11 +1375,8 @@ ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
               .c_str());
     }
 
-    const auto& tensor_names =
-        io_optional ? overridable_initializer_tensor_names : input_tensor_names;
-    const auto& tensor_infos = io_optional
-                                   ? overridable_initializer_tensor_infos
-                                   : input_tensor_infos_;
+    const auto& tensor_names = input_tensor_names;
+    const auto& tensor_infos = input_tensor_infos_;
     auto iit = tensor_infos.find(io_name);
     if (iit == tensor_infos.end()) {
       RETURN_IF_ERROR(CheckAllowedModelInput(io, tensor_names));
