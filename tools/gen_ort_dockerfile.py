@@ -183,7 +183,7 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
 
        """
     elif FLAGS.ort_version == "triton-ort-1.16.2":
-        # [TODO] Remove this branch once the patch lands in a 
+        # [TODO] Remove this branch once the patch lands in a
         # proper release
         df += """
     #
