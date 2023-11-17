@@ -182,6 +182,21 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
         (cd onnxruntime && git submodule update --init --recursive)
 
        """
+    elif FLAGS.ort_version == "triton-ort-1.16.2":
+        # [TODO] Remove this branch once the patch lands in a
+        # proper release
+        df += """
+    #
+    # ONNX Runtime build
+    #
+    ARG ONNXRUNTIME_VERSION
+    ARG ONNXRUNTIME_REPO
+    ARG ONNXRUNTIME_BUILD_CONFIG
+
+    RUN git clone -b ${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+        (cd onnxruntime && git submodule update --init --recursive)
+
+        """
     else:
         df += """
     #
