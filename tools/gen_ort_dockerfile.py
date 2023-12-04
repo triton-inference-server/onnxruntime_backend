@@ -124,6 +124,18 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
     ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 """
 
+    if FLAGS.enable_rocm:
+        df += """
+# Allow configure to pick up rocDNN where it expects it.
+# (Note: $CUDNN_VERSION is defined by base image)
+RUN _ROCDNN_VERSION=$(echo $ROCDNN_VERSION | cut -d. -f1-2) && \
+    mkdir -p /usr/local/rocdnn-$_ROCDNN_VERSION/rocm/include && \
+    ln -s /usr/include/rocdnn.h /usr/local/rocdnn-$_ROCDNN_VERSION/rocm/include/rocdnn.h && \
+    mkdir -p /usr/local/rocdnn-$_ROCDNN_VERSION/rocm/lib64 && \
+    ln -s /etc/alternatives/librocdnn_so /usr/local/rocdnn-$_ROCDNN_VERSION/rocm/lib64/librocdnn.so
+"""
+
+
     if FLAGS.ort_openvino is not None:
         df += """
 # Install OpenVINO
@@ -219,6 +231,14 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
 
+    if FLAGS.ort_rocm: 
+        ep_flags = "--use_rocm"
+        if FLAGS.ort_migraphx:
+            ep_flags += " --use_migraphx"
+            if FLAGS.tensorrt_home is not None:
+                ep_flags += ' --migraphx_home "{}"'.format(FLAGS.tensorrt_home)
+       
+
     if os.name == "posix":
         if os.getuid() == 0:
             ep_flags += " --allow_running_as_root"
@@ -280,12 +300,27 @@ RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_cud
        /opt/onnxruntime/lib
 """
 
+    if FLAGS.enable_rocm:
+        df += """
+RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_rocm.so \
+       /opt/onnxruntime/lib
+"""
+
     if FLAGS.ort_tensorrt:
         df += """
 # TensorRT specific headers and libraries
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensorrt_provider_factory.h \
        /opt/onnxruntime/include && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_tensorrt.so \
+       /opt/onnxruntime/lib
+"""
+
+    if FLAGS.ort_migraphx:
+        df += """
+# TensorRT specific headers and libraries
+RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/migraphx/migraphx_provider_factory.h \
+       /opt/onnxruntime/include && \
+    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_migraphx.so \
        /opt/onnxruntime/lib
 """
 
@@ -400,6 +435,20 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
             ep_flags += " --use_tensorrt"
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
+
+    if FLAGS.enable_rocm:
+        ep_flags = "--use_rocm"
+        if FLAGS.rocm_version is not None:
+            ep_flags += ' --rocm_version "{}"'.format(FLAGS.rocm_version)
+        if FLAGS.rocm_home is not None:
+            ep_flags += ' --rocm_home "{}"'.format(FLAGS.rocm_home)
+        if FLAGS.rocdnn_home is not None:
+            ep_flags += ' --rocdnn_home "{}"'.format(FLAGS.rocdnn_home)
+        if FLAGS.ort_migraphx:
+            ep_flags += " --use_migraphx"
+            if FLAGS.migraphx_home is not None:
+                ep_flags += ' --migraphx_home "{}"'.format(FLAGS.migraphx_home)
+
     if FLAGS.ort_openvino is not None:
         ep_flags += " --use_openvino CPU_FP32"
 
