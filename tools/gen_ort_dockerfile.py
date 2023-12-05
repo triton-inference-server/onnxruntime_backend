@@ -124,16 +124,45 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
     ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 """
 
-    if FLAGS.enable_rocm:
+    if FLAGS.enable_rocm:        
         df += """
-# Allow configure to pick up rocDNN where it expects it.
-# (Note: $CUDNN_VERSION is defined by base image)
-RUN _ROCDNN_VERSION=$(echo $ROCDNN_VERSION | cut -d. -f1-2) && \
-    mkdir -p /usr/local/rocdnn-$_ROCDNN_VERSION/rocm/include && \
-    ln -s /usr/include/rocdnn.h /usr/local/rocdnn-$_ROCDNN_VERSION/rocm/include/rocdnn.h && \
-    mkdir -p /usr/local/rocdnn-$_ROCDNN_VERSION/rocm/lib64 && \
-    ln -s /etc/alternatives/librocdnn_so /usr/local/rocdnn-$_ROCDNN_VERSION/rocm/lib64/librocdnn.so
-"""
+        RUN apt-get clean && apt-get update && apt-get install -y locales
+        RUN locale-gen en_US.UTF-8
+        RUN update-locale LANG=en_US.UTF-8
+        ENV LC_ALL C.UTF-8
+        ENV LANG C.UTF-8
+
+        # Install rocm
+        RUN apt-get update && apt-get install -y gnupg2 --no-install-recommends curl && \
+        curl -sL http://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
+        sh -c 'echo deb [arch=amd64] http://repo.radeon.com/rocm/apt/${ROCM_VERSION}/ ubuntu main > /etc/apt/sources.list.d/rocm.list'
+
+        RUN apt-get update &&\
+            apt-get install -y sudo git bash build-essential rocm-dev python3-dev python3-pip miopen-hip \
+            rocblas half aria2 libnuma-dev pkg-config
+
+        RUN aria2c -q -d /tmp -o cmake-3.27.3-linux-x86_64.tar.gz \
+        https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.tar.gz &&\
+        tar -zxf /tmp/cmake-3.27.3-linux-x86_64.tar.gz --strip=1 -C /usr
+
+        # Install rbuild
+        RUN pip3 install https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz numpy yapf==0.28.0
+
+        ENV PATH /opt/miniconda/bin:/code/cmake-3.27.3-linux-x86_64/bin:${PATH}
+        # Install rocm ep dependencies
+        RUN apt-get update &&\
+            apt-get install -y rocrand rccl hipsparse hipfft hipcub hipblas rocthrust
+        """
+
+        if FLAGS.enable_migraphx:
+            df += """
+            # Install MIGraphX from source
+            RUN mkdir -p /migraphx
+            RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCmSoftwarePlatform/AMDMIGraphX src
+            RUN cd /migraphx && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3
+            RUN dpkg -i /migraphx/build/*.deb
+            RUN rm -rf /migraphx
+            """
 
 
     if FLAGS.ort_openvino is not None:
@@ -233,10 +262,16 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
 
     if FLAGS.ort_rocm: 
         ep_flags = "--use_rocm"
+        if FLAGS.rocm_version is not None:
+            ep_flags += ' --rocm_version "{}"'.format(FLAGS.rocm_version)
+        if FLAGS.rocm_home is not None:
+            ep_flags += ' --rocm_home "{}"'.format(FLAGS.rocm_home)
         if FLAGS.ort_migraphx:
+            if FLAGS.migraphx_version is not None:
+                ep_flags += ' --migraphx_version "{}"'.format(FLAGS.migraphx_version)
             ep_flags += " --use_migraphx"
-            if FLAGS.tensorrt_home is not None:
-                ep_flags += ' --migraphx_home "{}"'.format(FLAGS.tensorrt_home)
+            if FLAGS.migraphx_home is not None:
+                ep_flags += ' --migraphx_home "{}"'.format(FLAGS.migraphx_home)
        
 
     if os.name == "posix":
@@ -442,10 +477,10 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
             ep_flags += ' --rocm_version "{}"'.format(FLAGS.rocm_version)
         if FLAGS.rocm_home is not None:
             ep_flags += ' --rocm_home "{}"'.format(FLAGS.rocm_home)
-        if FLAGS.rocdnn_home is not None:
-            ep_flags += ' --rocdnn_home "{}"'.format(FLAGS.rocdnn_home)
         if FLAGS.ort_migraphx:
             ep_flags += " --use_migraphx"
+            if FLAGS.migraphx_version is not None:
+                ep_flags += ' --migraphx_version "{}"'.format(FLAGS.migraphx_version)
             if FLAGS.migraphx_home is not None:
                 ep_flags += ' --migraphx_home "{}"'.format(FLAGS.migraphx_home)
 
@@ -494,6 +529,14 @@ WORKDIR /opt/onnxruntime/bin
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\opt\\onnxruntime\\bin
 """
 
+    if FLAGS.enable_rocm:
+        df += """
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_rocm.lib \\opt\\onnxruntime\\lib
+WORKDIR /opt/onnxruntime/bin
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_rocm.dll \\opt\\onnxruntime\\bin
+"""
+
     if FLAGS.ort_tensorrt:
         df += """
 # TensorRT specific headers and libraries
@@ -505,6 +548,19 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dl
 
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.lib \\opt\\onnxruntime\\lib
+"""
+
+    if FLAGS.ort_migraphx:
+        df += """
+# MIGraphX specific headers and libraries
+WORKDIR /opt/onnxruntime/include
+RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\migraphx\\migraphx_provider_factory.h \\opt\\onnxruntime\\include
+
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_migraphx.dll \\opt\\onnxruntime\\bin
+
+WORKDIR /opt/onnxruntime/lib
+RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_migraphx.lib \\opt\\onnxruntime\\lib
 """
     with open(output_file, "w") as dfile:
         dfile.write(df)
@@ -555,6 +611,13 @@ def preprocess_gpu_flags():
 
         if FLAGS.tensorrt_home is None:
             FLAGS.tensorrt_home = "/usr/src/tensorrt"
+            
+        if FLAGS.rocm_home is None:
+            FLAGS.rocm_home = "/opt/rocm/"
+
+        if FLAGS.migraphx_home is None:
+            FLAGS.migraphx_home = "/opt/rocm/"
+
 
 
 if __name__ == "__main__":
@@ -594,6 +657,13 @@ if __name__ == "__main__":
         "--cuda-home", type=str, required=False, help="Home directory for CUDA."
     )
     parser.add_argument(
+        "--rocm-version", type=str, required=False, help="Version for ROCM."
+    )
+    parser.add_argument(
+        "--rocm-home", type=str, required=False, help="Home directory for ROCM."
+    )
+
+    parser.add_argument(
         "--cudnn-home", type=str, required=False, help="Home directory for CUDNN."
     )
     parser.add_argument(
@@ -615,6 +685,17 @@ if __name__ == "__main__":
         "--onnx-tensorrt-tag", type=str, default="", help="onnx-tensorrt repo tag."
     )
     parser.add_argument("--trt-version", type=str, default="", help="TRT version.")
+
+    parser.add_argument(
+        "--ort-migraphx",
+        action="store_true",
+        required=False,
+        help="Enable MIGraphX execution provider.",
+    )
+    parser.add_argument(
+        "--migraphx-home", type=str, required=False, help="Home directory for MIGraphX."
+    )
+    parser.add_argument("--migraphx-version", type=str, default="", help="MIGraphX version.")
 
     FLAGS = parser.parse_args()
     if FLAGS.enable_gpu:
