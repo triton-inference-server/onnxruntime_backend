@@ -124,45 +124,61 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
     ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 """
 
-    if FLAGS.enable_rocm:        
+    if FLAGS.enable_rocm:
+        if FLAGS.rocm_version is not None:
+            df += """ARG ROCM_VERSION={}""".format(FLAGS.rocm_version)
+        else:
+            df += """ARG ROCM_VERSION=5.7"""
+
         df += """
-        RUN apt-get clean && apt-get update && apt-get install -y locales
-        RUN locale-gen en_US.UTF-8
-        RUN update-locale LANG=en_US.UTF-8
-        ENV LC_ALL C.UTF-8
-        ENV LANG C.UTF-8
+RUN apt-get clean && apt-get update && apt-get install -y locales
+RUN locale-gen en_US.UTF-8
+RUN update-locale LANG=en_US.UTF-8
+ENV LC_ALL C.UTF-8
+ENV LANG C.UTF-8
 
-        # Install rocm
-        RUN apt-get update && apt-get install -y gnupg2 --no-install-recommends curl && \
-        curl -sL http://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
-        sh -c 'echo deb [arch=amd64] http://repo.radeon.com/rocm/apt/${ROCM_VERSION}/ ubuntu main > /etc/apt/sources.list.d/rocm.list'
+# Support multiarch
+RUN dpkg --add-architecture i386
 
-        RUN apt-get update &&\
-            apt-get install -y sudo git bash build-essential rocm-dev python3-dev python3-pip miopen-hip \
-            rocblas half aria2 libnuma-dev pkg-config
+# Install rocm
+RUN apt-get update && apt-get install -y gnupg2 --no-install-recommends curl && \
+curl -sL http://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
+sh -c 'echo deb [arch=amd64] http://repo.radeon.com/rocm/apt/${ROCM_VERSION}/ ubuntu main > /etc/apt/sources.list.d/rocm.list'
 
-        RUN aria2c -q -d /tmp -o cmake-3.27.3-linux-x86_64.tar.gz \
-        https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.tar.gz &&\
-        tar -zxf /tmp/cmake-3.27.3-linux-x86_64.tar.gz --strip=1 -C /usr
+# From docs.amd.com for installing rocm. Needed to install properly
+RUN sh -c \"echo 'Package: *\\nPin: release o=repo.radeon.com\\nPin-priority: 600' > /etc/apt/preferences.d/rocm-pin-600\"
 
-        # Install rbuild
-        RUN pip3 install https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz numpy yapf==0.28.0
+RUN apt-get update &&\
+    apt-get install -y sudo git bash build-essential rocm-dev python3-dev python3-pip miopen-hip \
+    rocblas half aria2 libnuma-dev pkg-config
 
-        ENV PATH /opt/miniconda/bin:/code/cmake-3.27.3-linux-x86_64/bin:${PATH}
-        # Install rocm ep dependencies
-        RUN apt-get update &&\
-            apt-get install -y rocrand rccl hipsparse hipfft hipcub hipblas rocthrust
-        """
+RUN aria2c -q -d /tmp -o cmake-3.27.3-linux-x86_64.tar.gz \
+https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.tar.gz &&\
+tar -zxf /tmp/cmake-3.27.3-linux-x86_64.tar.gz --strip=1 -C /usr
+
+# Install rbuild
+RUN pip3 install https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz numpy yapf==0.28.0
+
+ENV PATH /opt/miniconda/bin:/code/cmake-3.27.3-linux-x86_64/bin:${PATH}
+# Install rocm ep dependencies
+RUN apt-get update &&\
+    apt-get install -y rocrand rccl hipsparse hipfft hipcub hipblas rocthrust
+"""
 
         if FLAGS.ort_migraphx:
+            if FLAGS.migraphx_version is not None:
+                df+= """ARG MIGRAPHX_VERSION={}""".format(FLAGS.migraphx_version)
+            else:
+                df+= """ARG MIGRAPHX_VERSION=develop"""
+
             df += """
-            # Install MIGraphX from source
-            RUN mkdir -p /migraphx
-            RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCmSoftwarePlatform/AMDMIGraphX src
-            RUN cd /migraphx && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3
-            RUN dpkg -i /migraphx/build/*.deb
-            RUN rm -rf /migraphx
-            """
+# Install MIGraphX from source
+RUN mkdir -p /migraphx
+RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCmSoftwarePlatform/AMDMIGraphX src
+RUN cd /migraphx && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3
+RUN dpkg -i /migraphx/build/*.deb
+RUN rm -rf /migraphx
+"""
 
 
     if FLAGS.ort_openvino is not None:
@@ -267,8 +283,6 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
         if FLAGS.rocm_home is not None:
             ep_flags += ' --rocm_home "{}"'.format(FLAGS.rocm_home)
         if FLAGS.ort_migraphx:
-            if FLAGS.migraphx_version is not None:
-                ep_flags += ' --migraphx_version "{}"'.format(FLAGS.migraphx_version)
             ep_flags += " --use_migraphx"
             if FLAGS.migraphx_home is not None:
                 ep_flags += ' --migraphx_home "{}"'.format(FLAGS.migraphx_home)
