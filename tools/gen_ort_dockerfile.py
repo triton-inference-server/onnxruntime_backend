@@ -154,7 +154,7 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
             apt-get install -y rocrand rccl hipsparse hipfft hipcub hipblas rocthrust
         """
 
-        if FLAGS.enable_migraphx:
+        if FLAGS.ort_migraphx:
             df += """
             # Install MIGraphX from source
             RUN mkdir -p /migraphx
@@ -260,7 +260,7 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
 
-    if FLAGS.ort_rocm: 
+    if FLAGS.enable_rocm: 
         ep_flags = "--use_rocm"
         if FLAGS.rocm_version is not None:
             ep_flags += ' --rocm_version "{}"'.format(FLAGS.rocm_version)
@@ -635,6 +635,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--enable-gpu", action="store_true", required=False, help="Enable GPU support"
+    )
+    parser.add_argument(
+        "--enable-rocm", action="store_true", required=False, help="Enable GPU support"
     )
     parser.add_argument(
         "--ort-build-config",
