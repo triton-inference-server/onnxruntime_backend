@@ -227,9 +227,7 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
         ep_flags += " --use_openvino CPU_FP32"
 
     if target_platform() == "igpu":
-        ep_flags += (
-            " --skip_tests --cmake_extra_defines 'onnxruntime_BUILD_UNIT_TESTS=OFF'"
-        )
+        ep_flags += " --skip_tests --cmake_extra_defines 'onnxruntime_BUILD_UNIT_TESTS=OFF'"
         cuda_archs = "53;62;72;87"
     else:
         cuda_archs = "60;61;70;75;80;86;90"
