@@ -167,7 +167,7 @@ Details regarding when to use these options and what to expect from them can be 
 * `inter_op_thread_count`: Sets the number of threads used to parallelize the execution of the graph (across nodes). If sequential execution is enabled this value is ignored. 
 A value of 0 means ORT will pick a default which is number of cores.
 * `execution_mode`: Controls whether operators in the graph are executed sequentially or in parallel. Usually when the model has many branches, setting this option to 1 .i.e. "parallel" will give you better performance. Default is 0 which is "sequential execution."
-* `level`: Refers to the graph optimization level. By default all optimizations are enabled. Allowed values are -1 and 1. -1 refers to BASIC optimizations and 1 refers to basic plus extended optimizations like fusions. Please find the details [here](https://onnxruntime.ai/docs/performance/graph-optimizations.html)
+* `level`: Refers to the graph optimization level. By default all optimizations are enabled. Allowed values are -1, 1 and 2. -1 refers to BASIC optimizations, 1 refers to basic plus extended optimizations like fusions and 2 refers to all optimizations being disabled. Please find the details [here](https://onnxruntime.ai/docs/performance/graph-optimizations.html).
 
 ```
 optimization {
