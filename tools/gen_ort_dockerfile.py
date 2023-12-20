@@ -174,8 +174,8 @@ RUN apt-get update &&\
             df += """
 # Install MIGraphX from source
 RUN mkdir -p /migraphx
-RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCmSoftwarePlatform/AMDMIGraphX src
-RUN cd /migraphx && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3
+RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCm/AMDMIGraphX src
+RUN cd /migraphx && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3 -DGPU_TARGETS=gfx1100
 RUN dpkg -i /migraphx/build/*.deb
 RUN rm -rf /migraphx
 """
@@ -278,8 +278,8 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
 
     if FLAGS.enable_rocm: 
         ep_flags = "--use_rocm"
-        if FLAGS.rocm_version is not None:
-            ep_flags += ' --rocm_version "{}"'.format(FLAGS.rocm_version)
+        #if FLAGS.rocm_version is not None:
+        #ep_flags += ' --rocm_version "{}"'.format(FLAGS.rocm_version)
         if FLAGS.rocm_home is not None:
             ep_flags += ' --rocm_home "{}"'.format(FLAGS.rocm_home)
         if FLAGS.ort_migraphx:
@@ -487,16 +487,16 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 
     if FLAGS.enable_rocm:
         ep_flags = "--use_rocm"
-        if FLAGS.rocm_version is not None:
-            ep_flags += ' --rocm_version "{}"'.format(FLAGS.rocm_version)
+        #if FLAGS.rocm_version is not None:
+        #    ep_flags += ' --rocm_version={}'.format(FLAGS.rocm_version)
         if FLAGS.rocm_home is not None:
-            ep_flags += ' --rocm_home "{}"'.format(FLAGS.rocm_home)
+            ep_flags += ' --rocm_home {}'.format(FLAGS.rocm_home)
         if FLAGS.ort_migraphx:
             ep_flags += " --use_migraphx"
             if FLAGS.migraphx_version is not None:
-                ep_flags += ' --migraphx_version "{}"'.format(FLAGS.migraphx_version)
+                ep_flags += ' --migraphx_version {}'.format(FLAGS.migraphx_version)
             if FLAGS.migraphx_home is not None:
-                ep_flags += ' --migraphx_home "{}"'.format(FLAGS.migraphx_home)
+                ep_flags += ' --migraphx_home {}'.format(FLAGS.migraphx_home)
 
     if FLAGS.ort_openvino is not None:
         ep_flags += " --use_openvino CPU_FP32"
