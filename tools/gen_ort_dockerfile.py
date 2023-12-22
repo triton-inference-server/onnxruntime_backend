@@ -601,7 +601,7 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.li
         df += """
 # MIGraphX specific headers and libraries
 WORKDIR /opt/onnxruntime/include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\migraphx\\migraphx_provider_factory.h \\opt\\onnxruntime\\include
+RUN copy \\workspace\\onnxruntime\\onnxruntime\\core\\providers\\migraphx\\migraphx_provider_factory.h \\opt\\onnxruntime\\include
 
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_migraphx.dll \\opt\\onnxruntime\\bin
