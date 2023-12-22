@@ -162,7 +162,7 @@ RUN pip3 install https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.
 ENV PATH /opt/miniconda/bin:/code/cmake-3.27.3-linux-x86_64/bin:${PATH}
 # Install rocm ep dependencies
 RUN apt-get update &&\
-    apt-get install -y rocrand rccl hipsparse hipfft hipcub hipblas rocthrust
+    apt-get install -y rocrand rccl hipsparse hipfft hipcub hipblas rocthrust hip-base rocm-device-libs hipify-clang  miopen-hip-dev rocm-cmake
 """
 
         if FLAGS.ort_migraphx:
@@ -173,9 +173,10 @@ RUN apt-get update &&\
 
             df += """
 # Install MIGraphX from source
+ARG GPU_TARGETS='gfx908;gfx90a;gfx1030;gfx1100;gfx1101;gfx1102;gfx940;gfx941;gfx942'
 RUN mkdir -p /migraphx
 RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCm/AMDMIGraphX src
-RUN cd /migraphx && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3 -DGPU_TARGETS=gfx1100
+RUN cd /migraphx && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3 -DGPU_TARGETS=${GPU_TARGETS}
 RUN dpkg -i /migraphx/build/*.deb
 RUN rm -rf /migraphx
 """
@@ -239,16 +240,30 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
         (cd onnxruntime && git submodule update --init --recursive)
 
        """
-    else:
+    elif FLAGS.enable_rocm is not None:
         df += """
     #
-    # ONNX Runtime build
+    # onnx runtime build
     #
     ARG ONNXRUNTIME_VERSION
     ARG ONNXRUNTIME_REPO
     ARG ONNXRUNTIME_BUILD_CONFIG
 
-    RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+    run git clone -b ${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+        (cd onnxruntime && git submodule update --init --recursive)
+
+        """
+
+    else:
+        df += """
+    #
+    # onnx runtime build
+    #
+    arg onnxruntime_version
+    arg onnxruntime_repo
+    arg onnxruntime_build_config
+
+    run git clone -b rel-${onnxruntime_version} --recursive ${onnxruntime_repo} onnxruntime && \
         (cd onnxruntime && git submodule update --init --recursive)
 
         """
@@ -275,9 +290,16 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
                 ep_flags += " --use_tensorrt_builtin_parser"
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
+        cmake_defs = "CMAKE_CUDA_ARCHITECTURES"
+        cuda_archs = "\'60;61;70;75;80;86;90\'"
 
     if FLAGS.enable_rocm: 
         ep_flags = "--use_rocm"
+        ep_flags += " --allow_running_as_root"
+        df += """
+RUN export PATH="/opt/cmake/bin:$PATH"
+RUN export CXXFLAGS="-D__HIP_PLATFORM_AMD__=1 -w"
+        """
         #if FLAGS.rocm_version is not None:
         #ep_flags += ' --rocm_version "{}"'.format(FLAGS.rocm_version)
         if FLAGS.rocm_home is not None:
@@ -286,7 +308,9 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
             ep_flags += " --use_migraphx"
             if FLAGS.migraphx_home is not None:
                 ep_flags += ' --migraphx_home "{}"'.format(FLAGS.migraphx_home)
-       
+        cmake_defs = "CMAKE_HIP_COMPILER"
+        cuda_archs = "/opt/rocm/llvm/bin/clang++"
+        ep_flags += " --allow_running_as_root"
 
     if os.name == "posix":
         if os.getuid() == 0:
@@ -295,13 +319,13 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     if FLAGS.ort_openvino is not None:
         ep_flags += " --use_openvino CPU_FP32"
 
-    cuda_archs = "60;61;70;75;80;86;90"
 
     df += """
 WORKDIR /workspace/onnxruntime
 ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
-    --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
+    --build_dir /workspace/build --cmake_extra_defines {}={} "
 """.format(
+        cmake_defs,
         cuda_archs
     )
 
@@ -460,7 +484,7 @@ SHELL ["cmd", "/S", "/C"]
 #
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
-RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
+RUN git clone -b %ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
 """
 
@@ -473,7 +497,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 
     ep_flags = ""
     if FLAGS.enable_gpu:
-        ep_flags = "--use_cuda"
+        ep_flags = "--use_cuda --cmake_extra_defines \"CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86;90\" "
         if FLAGS.cuda_version is not None:
             ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
         if FLAGS.cuda_home is not None:
@@ -486,7 +510,13 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
 
     if FLAGS.enable_rocm:
-        ep_flags = "--use_rocm"
+        df += """
+RUN sed -i 's/list(APPEND HIP_CLANG_FLAGS --amdgpu-target=gfx906 --amdgpu-target=gfx908)/list(APPEND HIP_CLANG_FLAGS --amdgpu-target=gfx906 --amdgpu-target=gfx908 --amdgpu-target=gfx1030)/g'  onnxruntime/cmake/onnxruntime_providers.cmake && \
+    sed -i 's/Version(torch.__version__) >= Version("1.11.0")/Version(torch.__version__).release >= Version("1.11.0").release/g' /workspace/onnxruntime/onnxruntime/python/tools/transformers/torch_onnx_export_helper.py; \
+RUN export PATH="/opt/cmake/bin:$PATH"
+RUN export CXXFLAGS="-D__HIP_PLATFORM_AMD__=1 -w"
+        """
+        ep_flags = "--cmake_extra_defines CMAKE_HIP_COMPILER=/opt/rocm/llvm/bin/clang++ --use_rocm --skip_tests"
         #if FLAGS.rocm_version is not None:
         #    ep_flags += ' --rocm_version={}'.format(FLAGS.rocm_version)
         if FLAGS.rocm_home is not None:
@@ -498,14 +528,17 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
             if FLAGS.migraphx_home is not None:
                 ep_flags += ' --migraphx_home {}'.format(FLAGS.migraphx_home)
 
+        ep_flags += " --allow_running_as_root"
+
     if FLAGS.ort_openvino is not None:
         ep_flags += " --use_openvino CPU_FP32"
+
 
     df += """
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --skip_submodule_sync --parallel --build_shared_lib --update --build --build_dir /workspace/build {}
 """.format(
         ep_flags
     )
