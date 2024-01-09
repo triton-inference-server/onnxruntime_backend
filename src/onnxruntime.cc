@@ -227,6 +227,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
           optimization_level = GraphOptimizationLevel::ORT_ENABLE_BASIC;
         } else if (graph_level == 1) {
           optimization_level = GraphOptimizationLevel::ORT_ENABLE_EXTENDED;
+        } else if (graph_level == 2) {
+          optimization_level = GraphOptimizationLevel::ORT_DISABLE_ALL;
         }
       }
     }

@@ -78,6 +78,10 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #     version that is compatible with the specified version of ONNX
 #     Runtime.
 #
+#   - Optionally set TRITON_BUILD_TARGET_PLATFORM to either linux, windows or
+#     igpu. If not set, the current platform will be used. If building on
+#     Jetpack, always set to igpu to avoid misdetection.
+#
 #   - If you want to disable GPU usage, set TRITON_ENABLE_GPU=OFF.
 #    This will make builds with CUDA and TensorRT flags to fail.
 #
@@ -91,6 +95,7 @@ set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for b
 set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
 set(TRITON_BUILD_ONNXRUNTIME_VERSION "" CACHE STRING "ONNXRuntime version to build")
 set(TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION "" CACHE STRING "ONNXRuntime OpenVINO version to build")
+set(TRITON_BUILD_TARGET_PLATFORM "" CACHE STRING "Target platform for ONNXRuntime build")
 set(TRITON_BUILD_CUDA_VERSION "" CACHE STRING "Version of CUDA install")
 set(TRITON_BUILD_CUDA_HOME "" CACHE PATH "Path to CUDA install")
 set(TRITON_BUILD_CUDNN_HOME "" CACHE PATH "Path to CUDNN install")
@@ -226,7 +231,7 @@ target_compile_options(
   triton-onnxruntime-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
     -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
-  $<$<CXX_COMPILER_ID:MSVC>:/Wall /D_WIN32_WINNT=0x0A00 /EHsc>
+  $<$<CXX_COMPILER_ID:MSVC>:/Wall /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor>
 )
 
 if(${TRITON_ENABLE_GPU})
@@ -313,6 +318,9 @@ endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 #
 if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   set(_GEN_FLAGS "")
+  if(NOT ${TRITON_BUILD_TARGET_PLATFORM} STREQUAL "")
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--target-platform=${TRITON_BUILD_TARGET_PLATFORM}")
+  endif() # TRITON_BUILD_TARGET_PLATFORM
   if(NOT ${TRITON_BUILD_CUDA_VERSION} STREQUAL "")
     set(_GEN_FLAGS ${_GEN_FLAGS} "--cuda-version=${TRITON_BUILD_CUDA_VERSION}")
   endif() # TRITON_BUILD_CUDA_VERSION

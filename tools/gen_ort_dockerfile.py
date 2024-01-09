@@ -101,16 +101,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install dependencies from
 # onnxruntime/dockerfiles/scripts/install_common_deps.sh.
-RUN apt update && apt install -y gpg wget && \
-        wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
-            gpg --dearmor - |  \
-            tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null && \
-        . /etc/os-release && \
-        echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ $UBUNTU_CODENAME main" | \
-        tee /etc/apt/sources.list.d/kitware.list >/dev/null && \
-        apt-get update && \
-        apt-get install -y --no-install-recommends cmake cmake-data && \
-        cmake --version
+RUN apt update -q=2 \\
+    && apt install -y gpg wget \\
+    && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - |  tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null \\
+    && . /etc/os-release \\
+    && echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ $UBUNTU_CODENAME main" | tee /etc/apt/sources.list.d/kitware.list >/dev/null \\
+    && apt-get update -q=2 \\
+    && apt-get install -y --no-install-recommends cmake=3.27.7* cmake-data=3.27.7* \\
+    && cmake --version
 
 """
     if FLAGS.enable_gpu:
@@ -284,6 +282,8 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
             ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
         if FLAGS.cudnn_home is not None:
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
+        elif target_platform() == "igpu":
+            ep_flags += ' --cudnn_home "/usr/lib/aarch64-linux-gnu"'
         if FLAGS.ort_tensorrt:
             ep_flags += " --use_tensorrt"
             if FLAGS.ort_version >= "1.12.1":
@@ -319,6 +319,13 @@ RUN export CXXFLAGS="-D__HIP_PLATFORM_AMD__=1 -w"
     if FLAGS.ort_openvino is not None:
         ep_flags += " --use_openvino CPU_FP32"
 
+    if target_platform() == "igpu":
+        ep_flags += (
+            " --skip_tests --cmake_extra_defines 'onnxruntime_BUILD_UNIT_TESTS=OFF'"
+        )
+        cuda_archs = "53;62;72;87"
+    else:
+        cuda_archs = "60;61;70;75;80;86;90"
 
     df += """
 WORKDIR /workspace/onnxruntime
@@ -359,7 +366,13 @@ RUN mkdir -p /opt/onnxruntime/lib && \
        /opt/onnxruntime/lib && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so \
        /opt/onnxruntime/lib
-
+"""
+    if target_platform() == "igpu":
+        df += """
+RUN mkdir -p /opt/onnxruntime/bin
+"""
+    else:
+        df += """
 RUN mkdir -p /opt/onnxruntime/bin && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnxruntime_perf_test \
        /opt/onnxruntime/bin && \
@@ -367,6 +380,7 @@ RUN mkdir -p /opt/onnxruntime/bin && \
        /opt/onnxruntime/bin && \
     (cd /opt/onnxruntime/bin && chmod a+x *)
 """
+
     if FLAGS.enable_gpu:
         df += """
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_cuda.so \
@@ -444,6 +458,13 @@ RUN cd /opt/onnxruntime/lib && \
     done
 
 # For testing copy ONNX custom op library and model
+"""
+    if target_platform() == "igpu":
+        df += """
+RUN mkdir -p /opt/onnxruntime/test
+"""
+    else:
+        df += """
 RUN mkdir -p /opt/onnxruntime/test && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libcustom_op_library.so \
        /opt/onnxruntime/test && \
@@ -697,7 +718,7 @@ if __name__ == "__main__":
         "--target-platform",
         required=False,
         default=None,
-        help='Target for build, can be "ubuntu", "windows" or "jetpack". If not specified, build targets the current platform.',
+        help='Target for build, can be "linux", "windows" or "igpu". If not specified, build targets the current platform.',
     )
 
     parser.add_argument(
