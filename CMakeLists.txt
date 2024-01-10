@@ -82,15 +82,36 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #     igpu. If not set, the current platform will be used. If building on
 #     Jetpack, always set to igpu to avoid misdetection.
 #
+#   - If you want ROCm support set
+#     TRITON_ENABLE_ONNXRUNTIME_ROCM=ON and set
+#     TRITON_BUILD_ONNXRUNTIME_ROCM_VERSION to the ROCm stack
+#     version that is compatible with the specified version of ONNX
+#     Runtime.
+#
+#   - If you want MIGraphX support set
+#     TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX=ON and set
+#     TRITON_BUILD_ONNXRUNTIME_MIGRAPHX_VERSION to the MIGraphX
+#     version that is compatible with the specified version of ONNX
+#     Runtime. Requires that ROCm Support also be set
+#
 #   - If you want to disable GPU usage, set TRITON_ENABLE_GPU=OFF.
 #    This will make builds with CUDA and TensorRT flags to fail.
 #
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
+option(TRITON_ENABLE_ROCM "Enable AMD GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 option(TRITON_ENABLE_ONNXRUNTIME_TENSORRT
   "Enable TensorRT execution provider for ONNXRuntime backend in server" OFF)
+option(TRITON_ENABLE_ONNXRUNTIME_ROCM
+  "Enable ROCm execution provider for ONNXRuntime backend in server" OFF)
+option(TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX
+  "Enable MIGraphX execution provider for ONNXRuntime backend in server" OFF)
 option(TRITON_ENABLE_ONNXRUNTIME_OPENVINO
   "Enable OpenVINO execution provider for ONNXRuntime backend in server" OFF)
+set(TRITON_BUILD_ROCM_VERSION "" CACHE STRING "Version of ROCm install")
+set(TRITON_BUILD_ROCM_HOME "" CACHE PATH "Path to ROCm install")
+set(TRITON_BUILD_MIGRAPHX_VERSION "" CACHE STRING "Version of MIGraphX install")
+set(TRITON_BUILD_MIGRAPHX_HOME "" CACHE PATH "Path to MIGraphX install")
 set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
 set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
 set(TRITON_BUILD_ONNXRUNTIME_VERSION "" CACHE STRING "ONNXRuntime version to build")
@@ -121,6 +142,12 @@ if (NOT TRITON_ENABLE_GPU)
     message(FATAL_ERROR "TRITON_ENABLE_ONNXRUNTIME_TENSORRT=ON requires TRITON_ENABLE_GPU=ON")
   endif() # TRITON_ENABLE_ONNXRUNTIME_TENSORRT
 endif() # NOT TRITON_ENABLE_GPU
+
+if (NOT TRITON_ENABLE_ROCM)
+  if (TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX)
+    message(FATAL_ERROR "TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX=ON requires TRITON_ENABLE_ROCM=ON")
+  endif() # TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX
+endif() # NOT TRITON_ENABLE_ROCM
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -202,6 +229,13 @@ if(${TRITON_ENABLE_GPU})
 endif() # TRITON_ENABLE_GPU
 
 #
+# ROCM
+#
+if(${TRITON_ENABLE_ROCM})
+  find_package(HIPToolkit REQUIRED)
+endif() # TRITON_ENABLE_ROCM
+
+#
 # Shared library implementing the Triton Backend API
 #
 configure_file(src/libtriton_onnxruntime.ldscript libtriton_onnxruntime.ldscript COPYONLY)
@@ -234,6 +268,13 @@ target_compile_options(
   $<$<CXX_COMPILER_ID:MSVC>:/Wall /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor>
 )
 
+if(${TRITON_ENABLE_ROCM})
+  target_compile_definitions(
+    triton-onnxruntime-backend
+    PRIVATE TRITON_ENABLE_ROCM=1
+  )
+endif() # TRITON_ENABLE_ROCM
+
 if(${TRITON_ENABLE_GPU})
   target_compile_definitions(
     triton-onnxruntime-backend
@@ -252,6 +293,20 @@ if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     PRIVATE TRITON_ENABLE_ONNXRUNTIME_OPENVINO=1
   )
 endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+
+if(${TRITON_ENABLE_ONNXRUNTIME_ROCM})
+  target_compile_definitions(
+    triton-onnxruntime-backend
+    PRIVATE TRITON_ENABLE_ONNXRUNTIME_ROCM=1
+  )
+endif() # TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX
+
+if(${TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX})
+  target_compile_definitions(
+    triton-onnxruntime-backend
+    PRIVATE TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX=1
+  )
+endif() # TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX
 
 if (WIN32)
 set_target_properties(
@@ -305,6 +360,14 @@ if(${TRITON_ENABLE_GPU})
   )
 endif() # TRITON_ENABLE_GPU
 
+if(${TRITON_ENABLE_ROCM})
+  target_link_libraries(
+    triton-onnxruntime-backend
+    PRIVATE
+      CUDA::hiprt
+  )
+endif()  TRITON_ENABLE_ROCM
+
 if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
   target_link_libraries(
     triton-onnxruntime-backend
@@ -339,6 +402,24 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-openvino=${TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION}")
   endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
+  if(NOT ${TRITON_BUILD_ROCM_VERSION} STREQUAL "")
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--rocm-version=${TRITON_BUILD_ROCM_VERSION}")
+  endif() # TRITON_BUILD_ROCM_VERSION
+  if(NOT ${TRITON_BUILD_ROCM_HOME} STREQUAL "")
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--migraphx-home=${TRITON_BUILD_ROCM_HOME}")
+  endif() # TRITON_BUILD_ROCM_HOME
+  if(${TRITON_ENABLE_ONNXRUNTIME_ROCM})
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--enable-rocm")
+  endif() # TRITON_ENABLE_ONNXRUNTIME_ROCM
+  if(NOT ${TRITON_BUILD_MIGRAPHX_VERSION} STREQUAL "")
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--migraphx-version=${TRITON_BUILD_MIGRAPHX_VERSION}")
+  endif() # TRITON_BUILD_MIGRAPHX_VERSION
+  if(NOT ${TRITON_BUILD_MIGRAPHX_HOME} STREQUAL "")
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--migraphx-home=${TRITON_BUILD_MIGRAPHX_HOME}")
+  endif() # TRITON_BUILD_MIGRAPHX_HOME
+  if(${TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX})
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-migraphx")
+  endif() # TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX
 
   set(ENABLE_GPU_EXTRA_ARGS "")
   if(${TRITON_ENABLE_GPU})
