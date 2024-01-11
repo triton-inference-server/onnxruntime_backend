@@ -109,6 +109,9 @@ set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
 
+# Use C++17 standard as Triton's minimum required.
+set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
+
 if (WIN32)
   if(TRITON_ENABLE_ONNXRUNTIME_OPENVINO)
     message(FATAL_ERROR
@@ -226,7 +229,7 @@ target_include_directories(
     ${TRITON_ONNXRUNTIME_INCLUDE_PATHS}
 )
 
-target_compile_features(triton-onnxruntime-backend PRIVATE cxx_std_11)
+target_compile_features(triton-onnxruntime-backend PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 target_compile_options(
   triton-onnxruntime-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
