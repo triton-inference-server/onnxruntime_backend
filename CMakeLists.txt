@@ -364,7 +364,7 @@ if(${TRITON_ENABLE_ROCM})
   target_link_libraries(
     triton-onnxruntime-backend
     PRIVATE
-      CUDA::hiprt
+      hiprtc::hiprtc
   )
 endif()  TRITON_ENABLE_ROCM
 
@@ -395,10 +395,9 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   endif() # TRITON_BUILD_CUDNN_HOME
   if(NOT ${TRITON_BUILD_TENSORRT_HOME} STREQUAL "")
     set(_GEN_FLAGS ${_GEN_FLAGS} "--tensorrt-home=${TRITON_BUILD_TENSORRT_HOME}")
-    set(_GEN_FLAGS ${_GEN_FLAGS} "--trt-version="${TRT_VERSION}" --onnx-tensorrt-tag="${TRITON_ONNX_TENSORRT_REPO_TAG}") 
   endif() # TRITON_BUILD_TENSORRT_HOME
   if(${TRITON_ENABLE_ONNXRUNTIME_TENSORRT})
-    set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-tensorrt")
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-tensorrt --trt-version="${TRT_VERSION}" --onnx-tensorrt-tag="${TRITON_ONNX_TENSORRT_REPO_TAG}")
   endif() # TRITON_ENABLE_ONNXRUNTIME_TENSORRT
   if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
     set(_GEN_FLAGS ${_GEN_FLAGS} "--ort-openvino=${TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION}")
