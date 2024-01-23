@@ -433,28 +433,10 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
             if (name == kTensorRTExecutionAccelerator) {
               // create tensorrt options with default values
+              OrtTensorRTProviderOptionsV2* trt_options;
+              THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->CreateTensorRTProviderOptions(&trt_options));
               std::string int8_calibration_table_name;
               std::string trt_engine_cache_path;
-              OrtTensorRTProviderOptions trt_options{
-                  instance_group_device_id,
-                  stream != nullptr ? 1 : 0,
-                  stream != nullptr ? (void*)stream : nullptr,
-                  1000,     // trt_max_partition_iterations
-                  1,        // trt_min_subgraph_size
-                  1 << 30,  // max_workspace_size
-                  0,        // trt_fp16_enable
-                  0,        // trt_int8_enable
-                  nullptr,  // trt_int8_calibration_table_name
-                  0,        // trt_int8_use_native_calibration_table
-                  0,        // trt_dla_enable
-                  0,        // trt_dla_core
-                  0,        // trt_dump_subgraphs
-                  0,        // trt_engine_cache_enable
-                  nullptr,  // trt_engine_cache_path
-                  0,        // trt_engine_decryption_enable
-                  nullptr,  // trt_engine_decryption_lib_path
-                  0         // trt_force_sequential_engine_build
-              };
               // Validate and set parameters
               triton::common::TritonJson::Value params;
               if (ea.Find("parameters", &params)) {
@@ -520,11 +502,17 @@ ModelState::LoadModel(
                 }
               }
 
+              std::unique_ptr<OrtTensorRTProviderOptionsV2, decltype(ort_api->ReleaseTensorRTProviderOptions)> rel_trt_options(
+                 tensorrt_options, ort_api->ReleaseTensorRTProviderOptions);
+              RETURN_IF_ORT_ERROR(
+                  ort_api->SessionOptionsAppendExecutionProvider_TensorRT_V2(
+                      static_cast<OrtSessionOptions*>(soptions),
+                                                        rel_trt_options.get()));
               RETURN_IF_ORT_ERROR(
                   ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
                       soptions, &trt_options));
               LOG_MESSAGE(
-                  TRITONSERVER_LOG_VERBOSE,
+                  TRITONSERVER_LOG_INFO,
                   (std::string("TensorRT Execution Accelerator is set for '") +
                    Name() + "' on device " +
                    std::to_string(instance_group_device_id))
