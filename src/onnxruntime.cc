@@ -512,7 +512,7 @@ ModelState::LoadModel(
                   ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
                       soptions, &trt_options));
               LOG_MESSAGE(
-                  TRITONSERVER_LOG_INFO,
+                  TRITONSERVER_LOG_VERBOSE,
                   (std::string("TensorRT Execution Accelerator is set for '") +
                    Name() + "' on device " +
                    std::to_string(instance_group_device_id))
