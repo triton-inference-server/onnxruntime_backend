@@ -435,7 +435,7 @@ ModelState::LoadModel(
               // create tensorrt options with default values
               OrtTensorRTProviderOptionsV2* trt_options;
               THROW_IF_BACKEND_MODEL_ORT_ERROR(
-                 ort_api->CreateTensorRTProviderOptions(&trt_options));
+                  ort_api->CreateTensorRTProviderOptions(&trt_options));
               std::string int8_calibration_table_name;
               std::string trt_engine_cache_path;
               // Validate and set parameters
@@ -504,15 +504,15 @@ ModelState::LoadModel(
               }
 
               std::unique_ptr<
-                 OrtTensorRTProviderOptionsV2,
-                 decltype(ort_api->ReleaseTensorRTProviderOptions)>
-                 rel_trt_options(
-                    tensorrt_options, 
-                    ort_api->ReleaseTensorRTProviderOptions);
+                  OrtTensorRTProviderOptionsV2,
+                  decltype(ort_api->ReleaseTensorRTProviderOptions)>
+                  rel_trt_options(
+                      tensorrt_options,
+                      ort_api->ReleaseTensorRTProviderOptions);
               RETURN_IF_ORT_ERROR(
                   ort_api->SessionOptionsAppendExecutionProvider_TensorRT_V2(
-                     static_cast<OrtSessionOptions*>(soptions),
-                     rel_trt_options.get()));
+                      static_cast<OrtSessionOptions*>(soptions),
+                      rel_trt_options.get()));
               RETURN_IF_ORT_ERROR(
                   ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
                       soptions, &trt_options));
