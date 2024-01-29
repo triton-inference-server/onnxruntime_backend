@@ -508,8 +508,7 @@ ModelState::LoadModel(
                   OrtTensorRTProviderOptionsV2,
                   decltype(ort_api->ReleaseTensorRTProviderOptions)>
                   rel_trt_options(
-                      trt_options,
-                      ort_api->ReleaseTensorRTProviderOptions);
+                      trt_options, ort_api->ReleaseTensorRTProviderOptions);
               RETURN_IF_ORT_ERROR(
                   ort_api->SessionOptionsAppendExecutionProvider_TensorRT_V2(
                       static_cast<OrtSessionOptions*>(soptions),
