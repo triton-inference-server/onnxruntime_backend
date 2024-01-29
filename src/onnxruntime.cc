@@ -41,6 +41,7 @@
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
+#include <tensorrt_provider_options.h>
 #endif  // TRITON_ENABLE_GPU
 
 //
