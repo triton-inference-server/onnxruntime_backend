@@ -510,12 +510,11 @@ ModelState::LoadModel(
                   keys.push_back(key.c_str());
                   values.push_back(value.c_str());
                 }
-                RETURN_IF_ORT_ERROR(
-                    ort_api->UpdateTensorRTProviderOptions(
-                        rel_trt_options.get(), keys.data(), values.data(),
-                        keys.size()));
+                RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
+                    rel_trt_options.get(), keys.data(), values.data(),
+                    keys.size()));
               }
-              
+
               RETURN_IF_ORT_ERROR(
                   ort_api->SessionOptionsAppendExecutionProvider_TensorRT_V2(
                       static_cast<OrtSessionOptions*>(soptions),
