@@ -446,8 +446,7 @@ ModelState::LoadModel(
               // Validate and set parameters
               triton::common::TritonJson::Value params;
               if (ea.Find("parameters", &params)) {
-                std::vector<std::string> param_keys;
-                std::vector<const char*> keys, values;
+                std::vector<std::string> param_keys, keys, values;
                 RETURN_IF_ERROR(params.Members(&param_keys));
                 for (const auto& param_key : param_keys) {
                   std::string value_string, key, value;
@@ -507,12 +506,21 @@ ModelState::LoadModel(
                             "Accelerator")
                             .c_str());
                   }
-                  keys.push_back(key.c_str());
-                  values.push_back(value.c_str());
+                  if (!key.empty() && !value.empty()) {
+                    keys.push_back(key);
+                    values.push_back(value);
+                  }
                 }
-                RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
-                    rel_trt_options.get(), keys.data(), values.data(),
-                    keys.size()));
+                std::vector<const char*> c_keys, c_values;
+                if (!keys.empty() && !values.empty()) {
+                  for (size_t i = 0; i < keys.size(); ++i) {
+                    c_keys.push_back(keys[i].c_str());
+                    c_values.push_back(values[i].c_str());
+                  }
+                  RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
+                      rel_trt_options.get(), c_keys.data(), c_values.data(),
+                      keys.size()));
+                }
               }
 
               RETURN_IF_ORT_ERROR(
