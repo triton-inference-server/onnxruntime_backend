@@ -451,6 +451,7 @@ ModelState::LoadModel(
                 RETURN_IF_ERROR(params.Members(&param_keys));
                 for (const auto& param_key : param_keys) {
                   std::string value_string, key, value;
+                  std::cout << param_key << std::endl;
                   if (param_key == "precision_mode") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
@@ -525,6 +526,7 @@ ModelState::LoadModel(
                   }
                   if (!key.empty() && !value.empty()) {
                     keys.push_back(key.c_str());
+                    std::cout << "push_back<-" << key << ": " << value << std::endl;
                     values.push_back(value.c_str());
                   }
                 }
