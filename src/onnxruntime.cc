@@ -41,7 +41,6 @@
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
-#include <tensorrt_provider_options.h>
 #endif  // TRITON_ENABLE_GPU
 
 //
@@ -457,10 +456,10 @@ ModelState::LoadModel(
                         param_key.c_str(), &value_string));
                     if (value_string == "FP16") {
                       key = "trt_fp16_enable";
-                      value = "1"
+                      value = "1";
                     } else if (value_string == "INT8") {
                       key = "trt_int8_enable";
-                      value = "1"
+                      value = "1";
                     } else if (value_string != "FP32") {
                       RETURN_ERROR_IF_FALSE(
                           false, TRITONSERVER_ERROR_INVALID_ARG,
@@ -476,15 +475,15 @@ ModelState::LoadModel(
                     key = "trt_max_workspace_size";
                     value = value_string;
                   } else if (param_key == "int8_calibration_table_name") {
-                    RETURN_IF_ERROR(params.MemberAsString(
-                        param_key.c_str(), &value));
+                    RETURN_IF_ERROR(
+                       params.MemberAsString(param_key.c_str(), &value));
                     key = "trt_int8_calibration_table_name";
                   } else if (param_key == "int8_use_native_calibration_table") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
                     bool use_native_calibration_table;
                     RETURN_IF_ERROR(ParseBoolValue(
-                       value_string, &use_native_calibration_table));
+                        value_string, &use_native_calibration_table));
                     key = "trt_int8_use_native_calibration_table";
                     value = value_string;
                   } else if (param_key == "trt_engine_cache_enable") {
@@ -496,7 +495,8 @@ ModelState::LoadModel(
                     key = "trt_engine_cache_enable";
                     value = value_string;
                   } else if (param_key == "trt_engine_cache_path") {
-                    RETURN_IF_ERROR(params.MemberAsString(param_key.c_str(), &value));
+                    RETURN_IF_ERROR(
+                       params.MemberAsString(param_key.c_str(), &value));
                     key = "trt_engine_cache_path";
                   } else {
                     return TRITONSERVER_ErrorNew(
@@ -512,7 +512,7 @@ ModelState::LoadModel(
                 }
                 ort_api->UpdateTensorRTProviderOptions(
                     rel_trt_options.get(), keys.data(), values.data(),
-                    keys.size())
+                    keys.size());
               }
               
               RETURN_IF_ORT_ERROR(
