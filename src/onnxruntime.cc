@@ -450,7 +450,6 @@ ModelState::LoadModel(
                 RETURN_IF_ERROR(params.Members(&param_keys));
                 for (const auto& param_key : param_keys) {
                   std::string value_string, key, value;
-                  std::cout << param_key << std::endl;
                   if (param_key == "precision_mode") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
@@ -525,25 +524,22 @@ ModelState::LoadModel(
                   }
                   if (!key.empty() && !value.empty()) {
                     keys.push_back(key);
-                    std::cout << "push_back<-" << key << ": " << value << std::endl;
                     values.push_back(value);
                   }
                 }
-                std::cout << "keys.size()=" << keys.size() << " and values.size()=" << values.size() << std::endl;
                 std::vector<const char*> c_keys, c_values;
-                
+
                 if (!keys.empty() && !values.empty()) {
-                    for (size_t i = 0; i < keys.size(); ++i) {
-                        std::cout << keys[i] << ": " << values[i] << std::endl;
-                        c_keys.push_back(keys[i].c_str());
-                        c_values.push_back(values[i].c_str());
-                    }
-                    RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
-                        rel_trt_options.get(), c_keys.data(), c_values.data(),
-                        keys.size()));
+                  for (size_t i = 0; i < keys.size(); ++i) {
+                    c_keys.push_back(keys[i].c_str());
+                    c_values.push_back(values[i].c_str());
+                  }
+                  RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
+                      rel_trt_options.get(), c_keys.data(), c_values.data(),
+                      keys.size()));
                 }
               }
-              
+
               RETURN_IF_ORT_ERROR(
                   ort_api->SessionOptionsAppendExecutionProvider_TensorRT_V2(
                       static_cast<OrtSessionOptions*>(soptions),
