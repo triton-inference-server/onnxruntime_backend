@@ -498,6 +498,22 @@ ModelState::LoadModel(
                     RETURN_IF_ERROR(
                         params.MemberAsString(param_key.c_str(), &value));
                     key = "trt_engine_cache_path";
+                  } else if (param_key == "trt_timing_cache_enable") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool enable_cache;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &enable_cache));
+                    key = "trt_timing_cache_enable";
+                    value = value_string;
+                  } else if (param_key == "trt_dump_subgraphs") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool dump_subgraphs;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &dump_subgraphs));
+                    key = "trt_dump_subgraphs";
+                    value = value_string;
                   } else {
                     return TRITONSERVER_ErrorNew(
                         TRITONSERVER_ERROR_INVALID_ARG,
@@ -512,8 +528,8 @@ ModelState::LoadModel(
                 }
                 RETURN_IF_ORT_ERROR(
                     ort_api->UpdateTensorRTProviderOptions(
-                        rel_trt_options.get(), keys.data(), values.data(),
-                        keys.size()));
+                    rel_trt_options.get(), keys.data(), values.data(),
+                    keys.size()));
               }
               
               RETURN_IF_ORT_ERROR(
