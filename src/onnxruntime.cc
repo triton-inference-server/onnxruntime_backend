@@ -476,7 +476,7 @@ ModelState::LoadModel(
                     value = value_string;
                   } else if (param_key == "int8_calibration_table_name") {
                     RETURN_IF_ERROR(
-                       params.MemberAsString(param_key.c_str(), &value));
+                        params.MemberAsString(param_key.c_str(), &value));
                     key = "trt_int8_calibration_table_name";
                   } else if (param_key == "int8_use_native_calibration_table") {
                     RETURN_IF_ERROR(params.MemberAsString(
@@ -496,7 +496,7 @@ ModelState::LoadModel(
                     value = value_string;
                   } else if (param_key == "trt_engine_cache_path") {
                     RETURN_IF_ERROR(
-                       params.MemberAsString(param_key.c_str(), &value));
+                        params.MemberAsString(param_key.c_str(), &value));
                     key = "trt_engine_cache_path";
                   } else {
                     return TRITONSERVER_ErrorNew(
@@ -510,9 +510,10 @@ ModelState::LoadModel(
                   keys.push_back(key.c_str());
                   values.push_back(value.c_str());
                 }
-                ort_api->UpdateTensorRTProviderOptions(
-                    rel_trt_options.get(), keys.data(), values.data(),
-                    keys.size());
+                RETURN_IF_ORT_ERROR(
+                    ort_api->UpdateTensorRTProviderOptions(
+                        rel_trt_options.get(), keys.data(), values.data(),
+                        keys.size()));
               }
               
               RETURN_IF_ORT_ERROR(
