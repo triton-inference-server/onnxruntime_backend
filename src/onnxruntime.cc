@@ -530,11 +530,9 @@ ModelState::LoadModel(
                     values.push_back(value.c_str());
                   }
                 }
-                for (const char* str : keys) {
-                  std::cout << str << std::endl;
-                }
-                for (const char* str : values) {
-                  std::cout << str << std::endl;
+                std::cout << "keys.size()=" << keys.size() << " and values.size()=" << values.size() << std::endl;
+                for (size_t i = 0; i < keys.size(); ++i) {
+                  std::cout << keys[i] << ": " << values[i] << std::endl;
                 }
                 if (!keys.empty() && !values.empty()) {
                     RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
