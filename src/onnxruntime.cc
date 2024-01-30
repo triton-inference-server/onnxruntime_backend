@@ -446,8 +446,7 @@ ModelState::LoadModel(
               // Validate and set parameters
               triton::common::TritonJson::Value params;
               if (ea.Find("parameters", &params)) {
-                std::vector<std::string> param_keys;
-                std::vector<const char*> keys, values;
+                std::vector<std::string> param_keys, keys, values;
                 RETURN_IF_ERROR(params.Members(&param_keys));
                 for (const auto& param_key : param_keys) {
                   std::string value_string, key, value;
@@ -525,18 +524,22 @@ ModelState::LoadModel(
                             .c_str());
                   }
                   if (!key.empty() && !value.empty()) {
-                    keys.push_back(key.c_str());
+                    keys.push_back(key);
                     std::cout << "push_back<-" << key << ": " << value << std::endl;
-                    values.push_back(value.c_str());
+                    values.push_back(value);
                   }
                 }
                 std::cout << "keys.size()=" << keys.size() << " and values.size()=" << values.size() << std::endl;
-                for (size_t i = 0; i < keys.size(); ++i) {
-                  std::cout << keys[i] << ": " << values[i] << std::endl;
-                }
+                std::vector<const char*> c_keys, c_values;
+                
                 if (!keys.empty() && !values.empty()) {
+                    for (size_t i = 0; i < keys.size(); ++i) {
+                        std::cout << keys[i] << ": " << values[i] << std::endl;
+                        c_keys.push_back(keys[i].c_str());
+                        c_values.push_back(values[i].c_str());
+                    }
                     RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
-                        rel_trt_options.get(), keys.data(), values.data(),
+                        rel_trt_options.get(), c_keys.data(), c_values.data(),
                         keys.size()));
                 }
               }
