@@ -523,13 +523,16 @@ ModelState::LoadModel(
                             "Accelerator")
                             .c_str());
                   }
-                  keys.push_back(key.c_str());
-                  values.push_back(value.c_str());
+                  if (!key.empty() && !value.empty()) {
+                    keys.push_back(key.c_str());
+                    values.push_back(value.c_str());
+                  }
                 }
-                RETURN_IF_ORT_ERROR(
-                    ort_api->UpdateTensorRTProviderOptions(
-                    rel_trt_options.get(), keys.data(), values.data(),
-                    keys.size()));
+                if (!keys.empty() && !values.empty()) {
+                    RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
+                        rel_trt_options.get(), keys.data(), values.data(),
+                        keys.size()));
+                }
               }
               
               RETURN_IF_ORT_ERROR(
