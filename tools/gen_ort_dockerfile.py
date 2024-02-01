@@ -296,9 +296,7 @@ RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_cud
     if FLAGS.ort_tensorrt:
         df += """
 # TensorRT specific headers and libraries
-RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/tensorrt/tensorrt_provider_factory.h \
-       /opt/onnxruntime/include && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_tensorrt.so \
+RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_tensorrt.so \
        /opt/onnxruntime/lib
 """
 
@@ -468,9 +466,6 @@ RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_cuda.dll \\
     if FLAGS.ort_tensorrt:
         df += """
 # TensorRT specific headers and libraries
-WORKDIR /opt/onnxruntime/include
-RUN copy \\workspace\\onnxruntime\\include\\onnxruntime\\core\\providers\\tensorrt\\tensorrt_provider_factory.h \\opt\\onnxruntime\\include
-
 WORKDIR /opt/onnxruntime/lib
 RUN copy \\workspace\\build\\Release\\Release\\onnxruntime_providers_tensorrt.dll \\opt\\onnxruntime\\bin
 
