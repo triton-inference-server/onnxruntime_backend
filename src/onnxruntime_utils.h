@@ -27,7 +27,6 @@
 #pragma once
 
 #include <onnxruntime_c_api.h>
-#include <regex>
 #include <set>
 #include <string>
 #include <unordered_map>

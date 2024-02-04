@@ -117,10 +117,10 @@ class ModelState : public BackendModel {
 
   // Indicate if an onnxrt session should be shared or not. This is a model
   // global and applies to all instances. So, storing it in the model state
-  bool share_session_;
+  bool share_session_between_instances_;
 
   // maintain a map of group id to onnx_rt session. This is only useful if
-  // share_session is set to true in parameters. share_session is a global model
+  // share_session_between_instances is set to true in parameters. share_session_between_instances is a global model
   // config and the user should be careful when setting this. There is no way to
   // set this per instance group.
   std::unordered_map<std::string, std::shared_ptr<OrtSession>>
@@ -203,7 +203,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model), share_session_(false)
+    : BackendModel(triton_model), share_session_between_instances_(false)
 {
   // Create session options that will be cloned and used for each
   // instance when creating that instance's session.
@@ -358,13 +358,13 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   // If this value is set all instances within an instance group will share
   // the ort session
   {
-    bool share_session;
+    bool share_session_between_instances;
     triton::common::TritonJson::Value params;
     if (ModelConfig().Find("parameters", &params)) {
       THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
-          params, "share_session", &share_session, false));
+          params, "share_session_between_instances", &share_session_between_instances, false));
     }
-    share_session_ = share_session;
+    share_session_between_instances_ = share_session_between_instances;
   }
 }
 
@@ -405,7 +405,7 @@ ModelState::LoadModel(
 
   // Check is we are sharing the session. If so get the session pointer and
   // return
-  if (share_session_) {
+  if (share_session_between_instances_) {
     if (GetSessionForGroup(instance_group_name, session) == nullptr) {
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO,
@@ -689,7 +689,7 @@ ModelState::LoadModel(
 
     session = std::shared_ptr<OrtSession>(session_ptr, SessionDeleter());
 
-    if (share_session_) {
+    if (share_session_between_instances_) {
       // The session was created fine this is not a critical error
       LOG_IF_ERROR(
           SetSessionForGroup(instance_group_name, session),
@@ -938,14 +938,14 @@ ModelState::GetSessionForGroup(
 {
   RETURN_ERROR_IF_TRUE(
       group_name.empty(), TRITONSERVER_ERROR_INVALID_ARG,
-      std::string("Invalid group name"));
+      std::string("Invalid group name: ") + group_name);
   {
     std::unordered_map<std::string, std::shared_ptr<OrtSession>>::iterator
         sessionEntry;
     sessionEntry = groupInstanceSessionMap_.find(group_name);
     RETURN_ERROR_IF_TRUE(
         (sessionEntry == groupInstanceSessionMap_.end()),
-        TRITONSERVER_ERROR_NOT_FOUND, std::string("No such group"));
+        TRITONSERVER_ERROR_NOT_FOUND, std::string("No such group") + group_name);
 
     session = sessionEntry->second;
   }
@@ -958,7 +958,7 @@ ModelState::SetSessionForGroup(
 {
   RETURN_ERROR_IF_TRUE(
       group_name.empty(), TRITONSERVER_ERROR_INVALID_ARG,
-      std::string("Invalid group name"));
+      std::string("Invalid group name") + group_name);
 
   groupInstanceSessionMap_[group_name] = session;
   return nullptr;
@@ -1050,7 +1050,7 @@ class ModelInstanceState : public BackendModelInstance {
 
   // Onnx Runtime variables that are used across runs on this
   // instance.
-  std::shared_ptr<OrtSession> session_;
+  std::unique_ptr<OrtSession> session_;
   OrtAllocator* default_allocator_;
   OrtMemoryInfo* cuda_allocator_info_;
   const OrtMemoryInfo* cpu_allocator_info_;

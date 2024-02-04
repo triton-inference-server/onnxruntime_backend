@@ -168,6 +168,7 @@ Details regarding when to use these options and what to expect from them can be 
 A value of 0 means ORT will pick a default which is number of cores.
 * `execution_mode`: Controls whether operators in the graph are executed sequentially or in parallel. Usually when the model has many branches, setting this option to 1 .i.e. "parallel" will give you better performance. Default is 0 which is "sequential execution."
 * `level`: Refers to the graph optimization level. By default all optimizations are enabled. Allowed values are -1 and 1. -1 refers to BASIC optimizations and 1 refers to basic plus extended optimizations like fusions. Please find the details [here](https://onnxruntime.ai/docs/performance/graph-optimizations.html)
+* `share_session_between_instances`: Boolean flag to enable share session between instances. If not specified, share_session_between_instances is disabled. This is a global parameter and cannot be defined per instance group. The user should determine if the parameter makes sense for their setup.
 
 ```
 optimization {
@@ -178,6 +179,7 @@ optimization {
 parameters { key: "intra_op_thread_count" value: { string_value: "0" } }
 parameters { key: "execution_mode" value: { string_value: "0" } }
 parameters { key: "inter_op_thread_count" value: { string_value: "0" } }
+parameters { key: "share_session_between_instances" value: {string_value: "true"} }
 
 ```
 * `enable_mem_arena`: Use 1 to enable the arena and 0 to disable. See [this](https://onnxruntime.ai/docs/api/c/struct_ort_api.html#a0bbd62df2b3c119636fba89192240593) for more information.
