@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "onnxruntime_utils.h"
+#include <regex>
 
 namespace triton { namespace backend { namespace onnxruntime {
 
@@ -550,5 +551,22 @@ CompareDimsSupported(
   return nullptr;  // success
 }
 
+std::string
+GetInstanceGroupName(
+    const std::string& model_name, const std::string& instance_name)
+{
+  std::regex group_name_regex('(' + model_name + '_' + "[0-9]" + ')');
+  std::smatch group_name;
+
+  if (model_name.empty() || instance_name.empty()) {
+    return "";
+  }
+
+  if (std::regex_search(instance_name, group_name, group_name_regex)) {
+    return group_name.str(1);
+  }
+
+  return "";
+}
 
 }}}  // namespace triton::backend::onnxruntime
