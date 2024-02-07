@@ -433,42 +433,32 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_ONNXRUNTIME_TENSORRT
             if (name == kTensorRTExecutionAccelerator) {
               // create tensorrt options with default values
+              OrtTensorRTProviderOptionsV2* trt_options;
+              THROW_IF_BACKEND_MODEL_ORT_ERROR(
+                  ort_api->CreateTensorRTProviderOptions(&trt_options));
+              std::unique_ptr<
+                  OrtTensorRTProviderOptionsV2,
+                  decltype(ort_api->ReleaseTensorRTProviderOptions)>
+                  rel_trt_options(
+                      trt_options, ort_api->ReleaseTensorRTProviderOptions);
               std::string int8_calibration_table_name;
               std::string trt_engine_cache_path;
-              OrtTensorRTProviderOptions trt_options{
-                  instance_group_device_id,
-                  stream != nullptr ? 1 : 0,
-                  stream != nullptr ? (void*)stream : nullptr,
-                  1000,     // trt_max_partition_iterations
-                  1,        // trt_min_subgraph_size
-                  1 << 30,  // max_workspace_size
-                  0,        // trt_fp16_enable
-                  0,        // trt_int8_enable
-                  nullptr,  // trt_int8_calibration_table_name
-                  0,        // trt_int8_use_native_calibration_table
-                  0,        // trt_dla_enable
-                  0,        // trt_dla_core
-                  0,        // trt_dump_subgraphs
-                  0,        // trt_engine_cache_enable
-                  nullptr,  // trt_engine_cache_path
-                  0,        // trt_engine_decryption_enable
-                  nullptr,  // trt_engine_decryption_lib_path
-                  0         // trt_force_sequential_engine_build
-              };
               // Validate and set parameters
               triton::common::TritonJson::Value params;
               if (ea.Find("parameters", &params)) {
-                std::vector<std::string> param_keys;
+                std::vector<std::string> param_keys, keys, values;
                 RETURN_IF_ERROR(params.Members(&param_keys));
                 for (const auto& param_key : param_keys) {
-                  std::string value_string;
+                  std::string value_string, key, value;
                   if (param_key == "precision_mode") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
                     if (value_string == "FP16") {
-                      trt_options.trt_fp16_enable = 1;
+                      key = "trt_fp16_enable";
+                      value = "1";
                     } else if (value_string == "INT8") {
-                      trt_options.trt_int8_enable = 1;
+                      key = "trt_int8_enable";
+                      value = "1";
                     } else if (value_string != "FP32") {
                       RETURN_ERROR_IF_FALSE(
                           false, TRITONSERVER_ERROR_INVALID_ARG,
@@ -481,33 +471,32 @@ ModelState::LoadModel(
                     size_t max_workspace_size_bytes;
                     RETURN_IF_ERROR(ParseUnsignedLongLongValue(
                         value_string, &max_workspace_size_bytes));
-                    trt_options.trt_max_workspace_size =
-                        max_workspace_size_bytes;
+                    key = "trt_max_workspace_size";
+                    value = value_string;
                   } else if (param_key == "int8_calibration_table_name") {
-                    RETURN_IF_ERROR(params.MemberAsString(
-                        param_key.c_str(), &int8_calibration_table_name));
-                    trt_options.trt_int8_calibration_table_name =
-                        int8_calibration_table_name.c_str();
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_int8_calibration_table_name";
                   } else if (param_key == "int8_use_native_calibration_table") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
-                    int use_native_calibration_table;
-                    RETURN_IF_ERROR(ParseIntValue(
+                    bool use_native_calibration_table;
+                    RETURN_IF_ERROR(ParseBoolValue(
                         value_string, &use_native_calibration_table));
-                    trt_options.trt_int8_use_native_calibration_table =
-                        use_native_calibration_table;
+                    key = "trt_int8_use_native_calibration_table";
+                    value = value_string;
                   } else if (param_key == "trt_engine_cache_enable") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
                     bool enable_cache;
                     RETURN_IF_ERROR(
                         ParseBoolValue(value_string, &enable_cache));
-                    trt_options.trt_engine_cache_enable = enable_cache;
+                    key = "trt_engine_cache_enable";
+                    value = value_string;
                   } else if (param_key == "trt_engine_cache_path") {
-                    RETURN_IF_ERROR(params.MemberAsString(
-                        param_key.c_str(), &trt_engine_cache_path));
-                    trt_options.trt_engine_cache_path =
-                        trt_engine_cache_path.c_str();
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_engine_cache_path";
                   } else {
                     return TRITONSERVER_ErrorNew(
                         TRITONSERVER_ERROR_INVALID_ARG,
@@ -517,12 +506,27 @@ ModelState::LoadModel(
                             "Accelerator")
                             .c_str());
                   }
+                  if (!key.empty() && !value.empty()) {
+                    keys.push_back(key);
+                    values.push_back(value);
+                  }
+                }
+                std::vector<const char*> c_keys, c_values;
+                if (!keys.empty() && !values.empty()) {
+                  for (size_t i = 0; i < keys.size(); ++i) {
+                    c_keys.push_back(keys[i].c_str());
+                    c_values.push_back(values[i].c_str());
+                  }
+                  RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
+                      rel_trt_options.get(), c_keys.data(), c_values.data(),
+                      keys.size()));
                 }
               }
 
               RETURN_IF_ORT_ERROR(
-                  ort_api->SessionOptionsAppendExecutionProvider_TensorRT(
-                      soptions, &trt_options));
+                  ort_api->SessionOptionsAppendExecutionProvider_TensorRT_V2(
+                      static_cast<OrtSessionOptions*>(soptions),
+                      rel_trt_options.get()));
               LOG_MESSAGE(
                   TRITONSERVER_LOG_VERBOSE,
                   (std::string("TensorRT Execution Accelerator is set for '") +
