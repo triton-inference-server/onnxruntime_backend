@@ -513,6 +513,9 @@ ModelState::LoadModel(
                         ParseBoolValue(value_string, &dump_subgraphs));
                     key = "trt_dump_subgraphs";
                     value = value_string;
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_engine_cache_path";
                   } else {
                     return TRITONSERVER_ErrorNew(
                         TRITONSERVER_ERROR_INVALID_ARG,
@@ -528,7 +531,6 @@ ModelState::LoadModel(
                   }
                 }
                 std::vector<const char*> c_keys, c_values;
-
                 if (!keys.empty() && !values.empty()) {
                   for (size_t i = 0; i < keys.size(); ++i) {
                     c_keys.push_back(keys[i].c_str());
