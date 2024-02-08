@@ -93,7 +93,7 @@ TensorRT can be used in conjunction with an ONNX model to further optimize the p
 * `trt_engine_cache_enable`: Enable engine caching.
 * `trt_engine_cache_path`: Specify engine cache path.
 
-For more option usage, follow the mapping table below and check [here](https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html#execution-provider-options) for more detail.
+To explore the usage of more parameters, follow the mapping table below and check [ONNX Runtime doc](https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html#execution-provider-options) for detail.
 
 ### Parameter mapping between ONNX Runtime and Triton-ort
 
