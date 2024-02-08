@@ -473,6 +473,22 @@ ModelState::LoadModel(
                         value_string, &max_workspace_size_bytes));
                     key = "trt_max_workspace_size";
                     value = value_string;
+                  } else if (param_key == "trt_max_partition_iterations") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    int trt_max_partition_iterations;
+                    RETURN_IF_ERROR(ParseIntValue(
+                        value_string, &trt_max_partition_iterations));
+                    key = "trt_max_partition_iterations";
+                    value = value_string;
+                  } else if (param_key == "trt_min_subgraph_size") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    int trt_min_subgraph_size;
+                    RETURN_IF_ERROR(
+                        ParseIntValue(value_string, &trt_min_subgraph_size));
+                    key = "trt_min_subgraph_size";
+                    value = value_string;
                   } else if (param_key == "int8_calibration_table_name") {
                     RETURN_IF_ERROR(
                         params.MemberAsString(param_key.c_str(), &value));
@@ -484,6 +500,21 @@ ModelState::LoadModel(
                     RETURN_IF_ERROR(ParseBoolValue(
                         value_string, &use_native_calibration_table));
                     key = "trt_int8_use_native_calibration_table";
+                    value = value_string;
+                  } else if (param_key == "trt_dla_enable") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_dla_enable;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &trt_dla_enable));
+                    key = "trt_dla_enable";
+                    value = value_string;
+                  } else if (param_key == "trt_dla_core") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    int trt_dla_core;
+                    RETURN_IF_ERROR(ParseIntValue(value_string, &trt_dla_core));
+                    key = "trt_dla_core";
                     value = value_string;
                   } else if (param_key == "trt_engine_cache_enable") {
                     RETURN_IF_ERROR(params.MemberAsString(
@@ -497,14 +528,10 @@ ModelState::LoadModel(
                     RETURN_IF_ERROR(
                         params.MemberAsString(param_key.c_str(), &value));
                     key = "trt_engine_cache_path";
-                  } else if (param_key == "trt_timing_cache_enable") {
-                    RETURN_IF_ERROR(params.MemberAsString(
-                        param_key.c_str(), &value_string));
-                    bool enable_cache;
+                  } else if (param_key == "trt_engine_cache_prefix") {
                     RETURN_IF_ERROR(
-                        ParseBoolValue(value_string, &enable_cache));
-                    key = "trt_timing_cache_enable";
-                    value = value_string;
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_engine_cache_prefix";
                   } else if (param_key == "trt_dump_subgraphs") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
@@ -513,9 +540,114 @@ ModelState::LoadModel(
                         ParseBoolValue(value_string, &dump_subgraphs));
                     key = "trt_dump_subgraphs";
                     value = value_string;
+                  } else if (param_key == "trt_force_sequential_engine_build") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_force_sequential_engine_build;
+                    RETURN_IF_ERROR(ParseBoolValue(
+                        value_string, &trt_force_sequential_engine_build));
+                    key = "trt_force_sequential_engine_build";
+                    value = value_string;
+                  } else if (param_key == "trt_context_memory_sharing_enable") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_context_memory_sharing_enable;
+                    RETURN_IF_ERROR(ParseBoolValue(
+                        value_string, &trt_context_memory_sharing_enable));
+                    key = "trt_context_memory_sharing_enable";
+                    value = value_string;
+                  } else if (param_key == "trt_layer_norm_fp32_fallback") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_layer_norm_fp32_fallback;
+                    RETURN_IF_ERROR(ParseBoolValue(
+                        value_string, &trt_layer_norm_fp32_fallback));
+                    key = "trt_layer_norm_fp32_fallback";
+                    value = value_string;
+                  } else if (param_key == "trt_timing_cache_enable") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_timing_cache_enable;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &trt_timing_cache_enable));
+                    key = "trt_timing_cache_enable";
+                    value = value_string;
+                  } else if (param_key == "trt_force_timing_cache") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_force_timing_cache;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &trt_force_timing_cache));
+                    key = "trt_force_timing_cache";
+                    value = value_string;
+                  } else if (param_key == "trt_detailed_build_log") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_detailed_build_log;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &trt_detailed_build_log));
+                    key = "trt_detailed_build_log";
+                    value = value_string;
+                  } else if (param_key == "trt_build_heuristics_enable") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_build_heuristics_enable;
+                    RETURN_IF_ERROR(ParseBoolValue(
+                        value_string, &trt_build_heuristics_enable));
+                    key = "trt_build_heuristics_enable";
+                    value = value_string;
+                  } else if (param_key == "trt_sparsity_enable") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_sparsity_enable;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &trt_sparsity_enable));
+                    key = "trt_sparsity_enable";
+                    value = value_string;
+                  } else if (param_key == "trt_builder_optimization_level") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    int trt_builder_optimization_level;
+                    RETURN_IF_ERROR(ParseIntValue(
+                        value_string, &trt_builder_optimization_level));
+                    key = "trt_builder_optimization_level";
+                    value = value_string;
+                  } else if (param_key == "trt_auxiliary_streams") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    int trt_auxiliary_streams;
+                    RETURN_IF_ERROR(
+                        ParseIntValue(value_string, &trt_auxiliary_streams));
+                    key = "trt_auxiliary_streams";
+                    value = value_string;
+                  } else if (param_key == "trt_tactic_sources") {
                     RETURN_IF_ERROR(
                         params.MemberAsString(param_key.c_str(), &value));
-                    key = "trt_engine_cache_path";
+                    key = "trt_tactic_sources";
+                  } else if (param_key == "trt_extra_plugin_lib_paths") {
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_extra_plugin_lib_paths";
+                  } else if (param_key == "trt_profile_min_shapes") {
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_profile_min_shapes";
+                  } else if (param_key == "trt_profile_max_shapes") {
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_profile_max_shapes";
+                  } else if (param_key == "trt_profile_opt_shapes") {
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_profile_opt_shapes";
+                  } else if (param_key == "trt_cuda_graph_enable") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_cuda_graph_enable;
+                    RETURN_IF_ERROR(
+                        ParseBoolValue(value_string, &trt_cuda_graph_enable));
+                    key = "trt_cuda_graph_enable";
+                    value = value_string;
                   } else {
                     return TRITONSERVER_ErrorNew(
                         TRITONSERVER_ERROR_INVALID_ARG,

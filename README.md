@@ -93,6 +93,41 @@ TensorRT can be used in conjunction with an ONNX model to further optimize the p
 * `trt_engine_cache_enable`: Enable engine caching.
 * `trt_engine_cache_path`: Specify engine cache path.
 
+For more option usage, follow the mapping table below and check [here](https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html#execution-provider-options) for more detail.
+
+### Parameter mapping between ONNX Runtime and Triton-ort
+
+| TensorRT Session Options in ONNX Runtime | Type   | Parameter: key in Triton model config | Parameter: value in Triton model config |
+| :--------------------------------------- | :----- | ------------------------------------- | --------------------------------------- |
+| trt_max_workspace_size                   | int    | max_workspace_size_bytes              | e.g: 4294967296                         |
+| trt_max_partition_iterations             | int    | trt_max_partition_iterations          | e.g: 1000                               |
+| trt_min_subgraph_size                    | int    | trt_min_subgraph_size                 | e.g: 1                                  |
+| trt_fp16_enable                          | bool   | precision_mode                        | FP16                                    |
+| trt_int8_enable                          | bool   | precision_mode                        | INT8                                    |
+| trt_int8_calibration_table_name          | string | int8_calibration_table_name           |                                         |
+| trt_int8_use_native_calibration_table    | bool   | int8_calibration_table_name           |                                         |
+| trt_dla_enable                           | bool   | trt_dla_enable                        |                                         |
+| trt_dla_core                             | int    | trt_dla_core                          | e.g: 0                                  |
+| trt_engine_cache_enable                  | bool   | trt_engine_cache_enable               |                                         |
+| trt_engine_cache_path                    | string | trt_engine_cache_path                 |                                         |
+| trt_engine_cache_prefix                  | string | trt_engine_cache_prefix               |                                         |
+| trt_dump_subgraphs                       | bool   | trt_dump_subgraphs                    |                                         |
+| trt_force_sequential_engine_build        | bool   | trt_force_sequential_engine_build     |                                         |
+| trt_context_memory_sharing_enable        | bool   | trt_context_memory_sharing_enable     |                                         |
+| trt_layer_norm_fp32_fallback             | bool   | trt_layer_norm_fp32_fallback          |                                         |
+| trt_timing_cache_enable                  | bool   | trt_timing_cache_enable               |                                         |
+| trt_force_timing_cache                   | bool   | trt_force_timing_cache                |                                         |
+| trt_detailed_build_log                   | bool   | trt_detailed_build_log                |                                         |
+| trt_build_heuristics_enable              | bool   | trt_build_heuristics_enable           |                                         |
+| trt_sparsity_enable                      | bool   | trt_sparsity_enable                   |                                         |
+| trt_builder_optimization_level           | int    | trt_builder_optimization_level        | e.g: 3                                  |
+| trt_auxiliary_streams                    | int    | trt_auxiliary_streams                 | e.g: -1                                 |
+| trt_tactic_sources                       | string | trt_tactic_sources                    | e.g. “-CUDNN,+CUBLAS”                   |
+| trt_extra_plugin_lib_paths               | string | trt_extra_plugin_lib_paths            |                                         |
+| trt_profile_min_shapes                   | string | trt_profile_min_shapes                |                                         |
+| trt_profile_max_shapes                   | string | trt_profile_max_shapes                |                                         |
+| trt_profile_opt_shapes                   | string | trt_profile_opt_shapes                |                                         |
+| trt_cuda_graph_enable                    | bool   | trt_cuda_graph_enable                 |                                         |
 The section of model config file specifying these parameters will look like:
 
 ```
