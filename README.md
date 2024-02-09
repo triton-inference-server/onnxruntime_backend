@@ -95,6 +95,8 @@ TensorRT can be used in conjunction with an ONNX model to further optimize the p
 
 To explore the usage of more parameters, follow the mapping table below and check [ONNX Runtime doc](https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html#execution-provider-options) for detail.
 
+> Please link to the latest ONNX Runtime binaries in CMake or build from [main branch of ONNX Runtime](https://github.com/microsoft/onnxruntime/tree/main) to enable latest options.
+
 ### Parameter mapping between ONNX Runtime and Triton-ort
 
 | Parameter: key in Triton model config | Parameter: value in Triton model config                      | Corresponding TensorRT EP option in ONNX Runtime | Type   |
@@ -116,13 +118,14 @@ To explore the usage of more parameters, follow the mapping table below and chec
 | trt_context_memory_sharing_enable     | e.g: "1" or "true", "0" or "false"                           | trt_context_memory_sharing_enable                | bool   |
 | trt_layer_norm_fp32_fallback          | e.g: "1" or "true", "0" or "false"                           | trt_layer_norm_fp32_fallback                     | bool   |
 | trt_timing_cache_enable               | e.g: "1" or "true", "0" or "false"                           | trt_timing_cache_enable                          | bool   |
+| trt_timing_cache_path                 |                                                              | trt_timing_cache_path                            | string |
 | trt_force_timing_cache                | e.g: "1" or "true", "0" or "false"                           | trt_force_timing_cache                           | bool   |
 | trt_detailed_build_log                | e.g: "1" or "true", "0" or "false"                           | trt_detailed_build_log                           | bool   |
 | trt_build_heuristics_enable           | e.g: "1" or "true", "0" or "false"                           | trt_build_heuristics_enable                      | bool   |
 | trt_sparsity_enable                   | e.g: "1" or "true", "0" or "false"                           | trt_sparsity_enable                              | bool   |
 | trt_builder_optimization_level        | e.g: "3"                                                     | trt_builder_optimization_level                   | int    |
 | trt_auxiliary_streams                 | e.g: "-1"                                                    | trt_auxiliary_streams                            | int    |
-| trt_tactic_sources                    | e.g: "-CUDNN,+CUBLAS"; <br />Available keys: "CUBLAS", "CUBLAS_LT", "CUDNN" or "EDGE_MASK_CONVOLUTIONS". | trt_tactic_sources                               | string |
+| trt_tactic_sources                    | e.g: "-CUDNN,+CUBLAS";                                       | trt_tactic_sources                               | string |
 | trt_extra_plugin_lib_paths            |                                                              | trt_extra_plugin_lib_paths                       | string |
 | trt_profile_min_shapes                | e.g: "input1:dim1xdimd2...,input2:dim1xdim2...,..."          | trt_profile_min_shapes                           | string |
 | trt_profile_max_shapes                | e.g: "input1:dim1xdimd2...,input2:dim1xdim2...,..."          | trt_profile_max_shapes                           | string |
