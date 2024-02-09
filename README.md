@@ -105,21 +105,21 @@ To explore the usage of more parameters, follow the mapping table below and chec
 | precision_mode                        | "FP16"                                  | trt_fp16_enable                                  | bool   |
 | precision_mode                        | "INT8"                                  | trt_int8_enable                                  | bool   |
 | int8_calibration_table_name           |                                         | trt_int8_calibration_table_name                  | string |
-| int8_use_native_calibration_table     | e.g: true or false                      | trt_int8_use_native_calibration_table            | bool   |
+| int8_use_native_calibration_table     | e.g: "1" or "true", "0" or "false"      | trt_int8_use_native_calibration_table            | bool   |
 | trt_dla_enable                        |                                         | trt_dla_enable                                   | bool   |
 | trt_dla_core                          | e.g: "0"                                | trt_dla_core                                     | int    |
-| trt_engine_cache_enable               | e.g: true or false                      | trt_engine_cache_enable                          | bool   |
+| trt_engine_cache_enable               | e.g: "1" or "true", "0" or "false"      | trt_engine_cache_enable                          | bool   |
 | trt_engine_cache_path                 |                                         | trt_engine_cache_path                            | string |
 | trt_engine_cache_prefix               |                                         | trt_engine_cache_prefix                          | string |
-| trt_dump_subgraphs                    | e.g: true or false                      | trt_dump_subgraphs                               | bool   |
-| trt_force_sequential_engine_build     | e.g: true or false                      | trt_force_sequential_engine_build                | bool   |
-| trt_context_memory_sharing_enable     | e.g: true or false                      | trt_context_memory_sharing_enable                | bool   |
-| trt_layer_norm_fp32_fallback          | e.g: true or false                      | trt_layer_norm_fp32_fallback                     | bool   |
-| trt_timing_cache_enable               | e.g: true or false                      | trt_timing_cache_enable                          | bool   |
-| trt_force_timing_cache                | e.g: true or false                      | trt_force_timing_cache                           | bool   |
-| trt_detailed_build_log                | e.g: true or false                      | trt_detailed_build_log                           | bool   |
-| trt_build_heuristics_enable           | e.g: true or false                      | trt_build_heuristics_enable                      | bool   |
-| trt_sparsity_enable                   | e.g: true or false                      | trt_sparsity_enable                              | bool   |
+| trt_dump_subgraphs                    | e.g: "1" or "true", "0" or "false"      | trt_dump_subgraphs                               | bool   |
+| trt_force_sequential_engine_build     | e.g: "1" or "true", "0" or "false"      | trt_force_sequential_engine_build                | bool   |
+| trt_context_memory_sharing_enable     | e.g: "1" or "true", "0" or "false"      | trt_context_memory_sharing_enable                | bool   |
+| trt_layer_norm_fp32_fallback          | e.g: "1" or "true", "0" or "false"      | trt_layer_norm_fp32_fallback                     | bool   |
+| trt_timing_cache_enable               | e.g: "1" or "true", "0" or "false"      | trt_timing_cache_enable                          | bool   |
+| trt_force_timing_cache                | e.g: "1" or "true", "0" or "false"      | trt_force_timing_cache                           | bool   |
+| trt_detailed_build_log                | e.g: "1" or "true", "0" or "false"      | trt_detailed_build_log                           | bool   |
+| trt_build_heuristics_enable           | e.g: "1" or "true", "0" or "false"      | trt_build_heuristics_enable                      | bool   |
+| trt_sparsity_enable                   | e.g: "1" or "true", "0" or "false"      | trt_sparsity_enable                              | bool   |
 | trt_builder_optimization_level        | e.g: "3"                                | trt_builder_optimization_level                   | int    |
 | trt_auxiliary_streams                 | e.g: "-1"                               | trt_auxiliary_streams                            | int    |
 | trt_tactic_sources                    | e.g. "-CUDNN,+CUBLAS"                   | trt_tactic_sources                               | string |
@@ -127,7 +127,7 @@ To explore the usage of more parameters, follow the mapping table below and chec
 | trt_profile_min_shapes                |                                         | trt_profile_min_shapes                           | string |
 | trt_profile_max_shapes                |                                         | trt_profile_max_shapes                           | string |
 | trt_profile_opt_shapes                |                                         | trt_profile_opt_shapes                           | string |
-| trt_cuda_graph_enable                 | e.g: true or false                      | trt_cuda_graph_enable                            | bool   |
+| trt_cuda_graph_enable                 | e.g: "1" or "true", "0" or "false"      | trt_cuda_graph_enable                            | bool   |
 
 The section of model config file specifying these parameters will look like:
 
