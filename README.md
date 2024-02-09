@@ -116,7 +116,6 @@ To explore the usage of more parameters, follow the mapping table below and chec
 | trt_context_memory_sharing_enable     | e.g: "1" for True, "0" for False        | trt_context_memory_sharing_enable                | bool   |
 | trt_layer_norm_fp32_fallback          | e.g: "1" for True, "0" for False        | trt_layer_norm_fp32_fallback                     | bool   |
 | trt_timing_cache_enable               | e.g: "1" for True, "0" for False        | trt_timing_cache_enable                          | bool   |
-| trt_timing_cache_path                 |                                         | trt_timing_cache_path                            | string |
 | trt_force_timing_cache                | e.g: "1" for True, "0" for False        | trt_force_timing_cache                           | bool   |
 | trt_detailed_build_log                | e.g: "1" for True, "0" for False        | trt_detailed_build_log                           | bool   |
 | trt_build_heuristics_enable           | e.g: "1" for True, "0" for False        | trt_build_heuristics_enable                      | bool   |

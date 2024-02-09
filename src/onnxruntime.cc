@@ -572,10 +572,6 @@ ModelState::LoadModel(
                         ParseBoolValue(value_string, &trt_timing_cache_enable));
                     key = "trt_timing_cache_enable";
                     value = value_string;
-                  } else if (param_key == "trt_timing_cache_path") {
-                    RETURN_IF_ERROR(
-                        params.MemberAsString(param_key.c_str(), &value));
-                    key = "trt_timing_cache_path";
                   } else if (param_key == "trt_force_timing_cache") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
