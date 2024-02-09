@@ -648,6 +648,26 @@ ModelState::LoadModel(
                         ParseBoolValue(value_string, &trt_cuda_graph_enable));
                     key = "trt_cuda_graph_enable";
                     value = value_string;
+                  } else if (param_key == "trt_dump_ep_context_model") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool trt_dump_ep_context_model;
+                    RETURN_IF_ERROR(ParseBoolValue(
+                        value_string, &trt_dump_ep_context_model));
+                    key = "trt_dump_ep_context_model";
+                    value = value_string;
+                  } else if (param_key == "trt_ep_context_file_path") {
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_ep_context_file_path";
+                  } else if (param_key == "trt_ep_context_embed_mode") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    int trt_ep_context_embed_mode;
+                    RETURN_IF_ERROR(ParseIntValue(
+                        value_string, &trt_ep_context_embed_mode));
+                    key = "trt_ep_context_embed_mode";
+                    value = value_string;
                   } else {
                     return TRITONSERVER_ErrorNew(
                         TRITONSERVER_ERROR_INVALID_ARG,
