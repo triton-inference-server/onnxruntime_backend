@@ -122,7 +122,7 @@ To explore the usage of more parameters, follow the mapping table below and chec
 | trt_sparsity_enable                   | e.g: "1" or "true", "0" or "false"                           | trt_sparsity_enable                              | bool   |
 | trt_builder_optimization_level        | e.g: "3"                                                     | trt_builder_optimization_level                   | int    |
 | trt_auxiliary_streams                 | e.g: "-1"                                                    | trt_auxiliary_streams                            | int    |
-| trt_tactic_sources                    | e.g: "-CUDNN,+CUBLAS"; <br />Available keys: “CUBLAS”, “CUBLAS_LT”, “CUDNN” or “EDGE_MASK_CONVOLUTIONS”. | trt_tactic_sources                               | string |
+| trt_tactic_sources                    | e.g: "-CUDNN,+CUBLAS"; <br />Available keys: "CUBLAS", "CUBLAS_LT", "CUDNN" or "EDGE_MASK_CONVOLUTIONS". | trt_tactic_sources                               | string |
 | trt_extra_plugin_lib_paths            |                                                              | trt_extra_plugin_lib_paths                       | string |
 | trt_profile_min_shapes                | e.g: "input1:dim1xdimd2...,input2:dim1xdim2...,..."          | trt_profile_min_shapes                           | string |
 | trt_profile_max_shapes                | e.g: "input1:dim1xdimd2...,input2:dim1xdim2...,..."          | trt_profile_max_shapes                           | string |
