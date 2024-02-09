@@ -129,18 +129,18 @@ ARG ONNXRUNTIME_OPENVINO_VERSION
 ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
 
 # Step 1: Download and install core components
-# Ref: https://docs.openvino.ai/2023.0/openvino_docs_install_guides_installing_openvino_from_archive_linux.html#step-1-download-and-install-the-openvino-core-components
-RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2023.0/linux/l_openvino_toolkit_ubuntu22_2023.0.0.10926.b4452d56304_x86_64.tgz --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
+# Ref: https://docs.openvino.ai/2023.3/openvino_docs_install_guides_installing_openvino_from_archive_linux.html#step-1-download-and-install-the-openvino-core-components
+RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2023.3/linux/l_openvino_toolkit_ubuntu22_2023.3.0.13775.ceeafaf64f3_x86_64.tgz --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     tar -xf openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     mkdir -p ${INTEL_OPENVINO_DIR} && \
-    mv l_openvino_toolkit_ubuntu22_2023.0.0.10926.b4452d56304_x86_64/* ${INTEL_OPENVINO_DIR} && \
+    mv l_openvino_toolkit_ubuntu22_2023.3.0.13775.ceeafaf64f3_x86_64/* ${INTEL_OPENVINO_DIR} && \
     rm openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     (cd ${INTEL_OPENVINO_DIR}/install_dependencies && \
         ./install_openvino_dependencies.sh -y) && \
     ln -s ${INTEL_OPENVINO_DIR} ${INTEL_OPENVINO_DIR}/../openvino_`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,0,4)}'`
 
 # Step 2: Configure the environment
-# Ref: https://docs.openvino.ai/2023.0/openvino_docs_install_guides_installing_openvino_from_archive_linux.html#step-2-configure-the-environment
+# Ref: https://docs.openvino.ai/2023.3/openvino_docs_install_guides_installing_openvino_from_archive_linux.html#step-2-configure-the-environment
 ENV InferenceEngine_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV ngraph_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
