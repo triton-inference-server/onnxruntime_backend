@@ -364,7 +364,7 @@ if(${TRITON_ENABLE_ROCM})
   target_link_libraries(
     triton-onnxruntime-backend
     PRIVATE
-      hiprtc::hiprtc
+      hip::host
   )
 endif() #TRITON_ENABLE_ROCM
 
