@@ -231,9 +231,9 @@ endif() # TRITON_ENABLE_GPU
 #
 # ROCM
 #
-if(${TRITON_ENABLE_ROCM})
-  find_package(HIPToolkit REQUIRED)
-endif() # TRITON_ENABLE_ROCM
+#if(${TRITON_ENABLE_ROCM})
+#  find_package(HIPToolkit REQUIRED)
+#endif() # TRITON_ENABLE_ROCM
 
 #
 # Shared library implementing the Triton Backend API
