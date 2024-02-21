@@ -238,7 +238,7 @@ RUN mkdir -p /migraphx
             (cd onnxruntime && git submodule update --init --recursive)
 
         """
-        elif FLAGS.enable_rocm is not None:
+        elif FLAGS.enable_rocm:
             df += """
         #
         # onnx runtime build

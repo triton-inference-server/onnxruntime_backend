@@ -366,7 +366,7 @@ if(${TRITON_ENABLE_ROCM})
     PRIVATE
       hiprtc::hiprtc
   )
-endif()  TRITON_ENABLE_ROCM
+endif() #TRITON_ENABLE_ROCM
 
 if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
   target_link_libraries(
