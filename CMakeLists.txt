@@ -452,6 +452,8 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
       COMMAND docker rm onnxruntime_backend_ort || echo 'error ignored...' || true
       COMMAND docker create --name onnxruntime_backend_ort ${TRITON_ONNXRUNTIME_DOCKER_IMAGE}
       COMMAND rm -fr onnxruntime
+      COMMAND docker list 
+      COMMAND docker ps
       COMMAND docker cp onnxruntime_backend_ort:/opt/onnxruntime onnxruntime
       COMMAND docker rm onnxruntime_backend_ort
       COMMENT "Building ONNX Runtime"
