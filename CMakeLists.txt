@@ -176,7 +176,9 @@ else()
   endif()
 
   if(NOT TRITON_BUILD_CONTAINER)
-    if (NOT TRITON_ENABLE_ROCM)
+    if (TRITON_ENABLE_ROCM)
+      set(TRITON_BUILD_CONTAINER "rocm/pytorch:rocm6.0.2_ubuntu22.04_py3.10_pytorch_2.1.2")
+    else()_
       set(TRITON_BUILD_CONTAINER "nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min")
     endif()
   endif()
