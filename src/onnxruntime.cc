@@ -43,6 +43,11 @@
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
+#ifdef TRITON_ENABLE_ROCM
+#include <hip_runtime_api.h>
+#endif  // TRITON_ENABLE_ROCM
+
+
 //
 // ONNX Runtime Backend that implements the TRITONBACKEND API.
 //
