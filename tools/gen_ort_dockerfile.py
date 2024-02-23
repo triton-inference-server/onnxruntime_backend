@@ -174,7 +174,7 @@ RUN apt-get update &&\
 ARG GPU_TARGETS='gfx908;gfx90a;gfx1030;gfx1100;gfx1101;gfx1102;gfx940;gfx941;gfx942'
 RUN mkdir -p /migraphx
     RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCm/AMDMIGraphX src
-    RUN cd /migraphx && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3 -DGPU_TARGETS=${GPU_TARGETS}
+    RUN rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3 -DGPU_TARGETS=${GPU_TARGETS}
     RUN dpkg -i /migraphx/build/*.deb
     RUN rm -rf /migraphx
     """
