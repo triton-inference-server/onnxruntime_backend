@@ -640,28 +640,30 @@ RUN mkdir -p /migraphx
             if FLAGS.tensorrt_home is None:
                 FLAGS.tensorrt_home = "/tensorrt"
         else:
-            if "CUDNN_VERSION" in os.environ:
-                version = None
-                m = re.match(r"([0-9]\.[0-9])\.[0-9]\.[0-9]", os.environ["CUDNN_VERSION"])
-                if m:
-                    version = m.group(1)
-                if FLAGS.cudnn_home is None:
-                    FLAGS.cudnn_home = "/usr/local/cudnn-{}/cuda".format(version)
+            if FLAGS.enable_gpu:
+                if "CUDNN_VERSION" in os.environ:
+                    version = None
+                    m = re.match(r"([0-9]\.[0-9])\.[0-9]\.[0-9]", os.environ["CUDNN_VERSION"])
+                    if m:
+                        version = m.group(1)
+                    if FLAGS.cudnn_home is None:
+                        FLAGS.cudnn_home = "/usr/local/cudnn-{}/cuda".format(version)
 
-            if FLAGS.cuda_home is None:
-                FLAGS.cuda_home = "/usr/local/cuda"
+                if FLAGS.cuda_home is None:
+                    FLAGS.cuda_home = "/usr/local/cuda"
 
-            if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
-                print("error: linux build requires --cudnn-home and --cuda-home")
+                if (FLAGS.cuda_home is None) or (FLAGS.cudnn_home is None):
+                    print("error: linux build requires --cudnn-home and --cuda-home")
 
-            if FLAGS.tensorrt_home is None:
-                FLAGS.tensorrt_home = "/usr/src/tensorrt"
-                
-            if FLAGS.rocm_home is None:
-                FLAGS.rocm_home = "/opt/rocm/"
+                if FLAGS.tensorrt_home is None:
+                    FLAGS.tensorrt_home = "/usr/src/tensorrt"
 
-            if FLAGS.migraphx_home is None:
-                FLAGS.migraphx_home = "/opt/rocm/"
+            if FLAGS.enable_rocm:
+                if FLAGS.rocm_home is None:
+                    FLAGS.rocm_home = "/opt/rocm/"
+
+                if FLAGS.migraphx_home is None:
+                    FLAGS.migraphx_home = "/opt/rocm/"
 
 
 
@@ -746,7 +748,7 @@ RUN mkdir -p /migraphx
     parser.add_argument("--migraphx-version", type=str, default="", help="MIGraphX version.")
 
     FLAGS = parser.parse_args()
-    if FLAGS.enable_gpu:
+    if FLAGS.enable_gpu or FLAGS.enable_rocm:
         preprocess_gpu_flags()
 
     # if a tag is provided by the user, then simply use it
@@ -770,6 +772,11 @@ RUN mkdir -p /migraphx
         if FLAGS.ort_openvino is not None:
             print("warning: OpenVINO not supported for windows, ignoring")
             FLAGS.ort_openvino = None
+
+        print("Writing to output for Windows")
         dockerfile_for_windows(FLAGS.output)
+        print("Done")
     else:
+        print("Writing to output for Linux")
         dockerfile_for_linux(FLAGS.output)
+        print("Done")
