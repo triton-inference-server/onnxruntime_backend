@@ -140,27 +140,27 @@ RUN dpkg --add-architecture i386
 
 # Install rocm
 RUN apt-get update && apt-get install -y gnupg2 --no-install-recommends curl && \
-curl -sL http://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
-sh -c 'echo deb [arch=amd64] http://repo.radeon.com/rocm/apt/${ROCM_VERSION}/ ubuntu main > /etc/apt/sources.list.d/rocm.list'
+curl -fsSL http://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/rocm-keyring.gpg && \
+sh -c 'echo deb [arch=amd64] http://repo.radeon.com/rocm/apt/${ROCM_VERSION}/ jammy main > /etc/apt/sources.list.d/rocm.list'
 
 # From docs.amd.com for installing rocm. Needed to install properly
 RUN sh -c \"echo 'Package: *\\nPin: release o=repo.radeon.com\\nPin-priority: 600' > /etc/apt/preferences.d/rocm-pin-600\"
 
 RUN apt-get update &&\
-    apt-get install -y sudo git bash build-essential rocm-dev python3-dev python3-pip miopen-hip \
-    rocblas half aria2 libnuma-dev pkg-config
+    apt-get install -y sudo git apt-utils bash build-essential curl doxygen gdb rocm-dev python3-dev python3-pip miopen-hip \
+    rocblas half aria2 libnuma-dev pkg-config ccache software-properties-common wget libnuma-dev libssl-dev zlib1g-dev
 
 RUN aria2c -q -d /tmp -o cmake-3.27.3-linux-x86_64.tar.gz \
 https://github.com/Kitware/CMake/releases/download/v3.27.3/cmake-3.27.3-linux-x86_64.tar.gz &&\
 tar -zxf /tmp/cmake-3.27.3-linux-x86_64.tar.gz --strip=1 -C /usr
 
 # Install rbuild
-RUN pip3 install https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz numpy yapf==0.28.0
+RUN pip3 install https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz numpy yapf==0.28.0 asciidoc CppHeaderParser setuptools wheel
 
 ENV PATH /opt/miniconda/bin:/code/cmake-3.27.3-linux-x86_64/bin:${PATH}
 # Install rocm ep dependencies
 RUN apt-get update &&\
-    apt-get install -y rocrand rccl hipsparse hipfft hipcub hipblas rocthrust hip-base rocm-device-libs hipify-clang  miopen-hip-dev rocm-cmake
+    apt-get install -y rocrand rccl rccl-dev hipsparse hipfft hipcub hipblas rocthrust hip-base rocm-device-libs hipify-clang miopen-hip-dev rocm-cmake
 """
 
     if FLAGS.ort_migraphx:
@@ -172,11 +172,16 @@ RUN apt-get update &&\
         df += """
 # Install MIGraphX from source
 ARG GPU_TARGETS='gfx908;gfx90a;gfx1030;gfx1100;gfx1101;gfx1102;gfx940;gfx941;gfx942'
-RUN mkdir -p /migraphx
-    RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCm/AMDMIGraphX src
-    RUN rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -S /migraphx/src/ -DPYTHON_EXECUTABLE=/usr/bin/python3 -DGPU_TARGETS=${GPU_TARGETS}
-    RUN dpkg -i /migraphx/build/*.deb
-    RUN rm -rf /migraphx
+
+# Workaround broken rocm packages
+RUN ln -s /opt/rocm-* /opt/rocm
+RUN echo "/opt/rocm/lib" > /etc/ld.so.conf.d/rocm.conf
+RUN echo "/opt/rocm/llvm/lib" > /etc/ld.so.conf.d/rocm-llvm.conf
+RUN ldconfig
+
+RUN mkdir /migraphx
+RUN cd /migraphx && git clone --depth=1 --branch ${MIGRAPHX_VERSION} https://github.com/ROCm/AMDMIGraphX src && cd src && rbuild package --cxx /opt/rocm/llvm/bin/clang++ -d /migraphx/deps -B /migraphx/build -DPYTHON_EXECUTABLE=/usr/bin/python3 -DBUILD_DEV=On -DGPU_TARGETS=${GPU_TARGETS} && dpkg -i /migraphx/build/*.deb
+RUN cd / && rm -rf /migraphx
     """
 
 
