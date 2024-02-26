@@ -333,9 +333,9 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
         cuda_archs = "60;61;70;75;80;86;90"
 
         df += """
-    WORKDIR /onnxruntime
+    WORKDIR /workspace/onnxruntime
     ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
-        --build_dir /build --cmake_extra_defines {}={} "
+        --build_dir /workspace/build --cmake_extra_defines {}={} "
     """.format(
             cmake_defs,
             cuda_archs
@@ -354,22 +354,22 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     WORKDIR /opt/onnxruntime
 
     RUN mkdir -p /opt/onnxruntime && \
-        cp /onnxruntime/LICENSE /opt/onnxruntime && \
-        cat /onnxruntime/cmake/external/onnx/VERSION_NUMBER > /opt/onnxruntime/ort_onnx_version.txt
+        cp /workspace/onnxruntime/LICENSE /opt/onnxruntime && \
+        cat /workspace/onnxruntime/cmake/external/onnx/VERSION_NUMBER > /opt/onnxruntime/ort_onnx_version.txt
 
     # ONNX Runtime headers, libraries and binaries
     RUN mkdir -p /opt/onnxruntime/include && \
-        cp /onnxruntime/include/onnxruntime/core/session/onnxruntime_c_api.h \
+        cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_c_api.h \
         /opt/onnxruntime/include && \
-        cp /onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h \
+        cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h \
         /opt/onnxruntime/include && \
-        cp /onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h \
+        cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h \
         /opt/onnxruntime/include
 
     RUN mkdir -p /opt/onnxruntime/lib && \
-        cp /build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so \
+        cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so \
         /opt/onnxruntime/lib && \
-        cp /build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so \
+        cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so \
         /opt/onnxruntime/lib
 """
     if target_platform() == "igpu":
