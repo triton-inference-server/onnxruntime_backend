@@ -332,7 +332,7 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     elif not FLAGS.enable_rocm:
         cuda_archs = "60;61;70;75;80;86;90"
 
-        df += """
+    df += """
     WORKDIR /workspace/onnxruntime
     ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
         --build_dir /workspace/build --cmake_extra_defines {}={} "
