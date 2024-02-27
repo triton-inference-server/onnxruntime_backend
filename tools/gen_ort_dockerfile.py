@@ -341,13 +341,13 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
             cuda_archs
         )
 
-        df += """
+    df += """
     RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
     """.format(
             ep_flags
         )
 
-        df += """
+    df += """
     #
     # Copy all artifacts needed by the backend to /opt/onnxruntime
     #
