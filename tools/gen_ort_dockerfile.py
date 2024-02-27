@@ -335,7 +335,7 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     df += """
     WORKDIR /workspace/onnxruntime
     ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
-        --build_dir /workspace/build --cmake_extra_defines {}={} "
+    --build_dir /workspace/build --cmake_extra_defines {}={} "
     """.format(
             cmake_defs,
             cuda_archs
@@ -408,8 +408,8 @@ RUN mkdir -p /opt/onnxruntime/bin
 
         if FLAGS.ort_migraphx:
             df += """
-    # TensorRT specific headers and libraries
-    RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/migraphx/migraphx_provider_factory.h \
+    # MIGraphX specific headers and libraries
+    RUN cp /workspace/onnxruntime/onnxruntime/core/providers/migraphx/migraphx_provider_factory.h \
         /opt/onnxruntime/include && \
         cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_migraphx.so \
         /opt/onnxruntime/lib
