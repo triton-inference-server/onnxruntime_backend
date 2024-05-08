@@ -224,7 +224,7 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
             ep_flags += " --allow_running_as_root"
 
     if FLAGS.ort_openvino is not None:
-        ep_flags += " --use_openvino CPU_FP32"
+        ep_flags += " --use_openvino CPU"
 
     if target_platform() == "igpu":
         ep_flags += (
