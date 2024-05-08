@@ -418,7 +418,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
             if FLAGS.tensorrt_home is not None:
                 ep_flags += ' --tensorrt_home "{}"'.format(FLAGS.tensorrt_home)
     if FLAGS.ort_openvino is not None:
-        ep_flags += " --use_openvino CPU_FP32"
+        ep_flags += " --use_openvino CPU"
 
     df += """
 WORKDIR /workspace/onnxruntime
