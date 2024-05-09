@@ -783,7 +783,7 @@ ModelState::LoadModel(
               need_lock = true;
               OrtOpenVINOProviderOptions openvino_options;
               openvino_options.device_type =
-                  "CPU_FP32";  // device_type default is CPU_FP32
+                  "CPU";  // device_type default is CPU
 
               RETURN_IF_ORT_ERROR(
                   ort_api->SessionOptionsAppendExecutionProvider_OpenVINO(
