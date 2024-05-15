@@ -2825,7 +2825,7 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   RETURN_IF_ERROR(
       TRITONBACKEND_BackendConfig(backend, &backend_config_message));
 
-  LOG_JSON_MESSAGE(
+  LOG_SERVER_MESSAGE(
       TRITONSERVER_LOG_INFO, "backend configuration:", backend_config_message);
 
   const char* buffer;
