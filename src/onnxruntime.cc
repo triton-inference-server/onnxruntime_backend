@@ -936,11 +936,8 @@ ModelState::AutoCompleteConfig()
   }
 
   if (TRITONSERVER_LogIsEnabled(TRITONSERVER_LOG_VERBOSE)) {
-    triton::common::TritonJson::WriteBuffer buffer;
-    RETURN_IF_ERROR(ModelConfig().PrettyWrite(&buffer));
-    LOG_MESSAGE(
-        TRITONSERVER_LOG_INFO,
-        (std::string("post auto-complete:\n") + buffer.Contents()).c_str());
+    LOG_JSON_VALUE(
+        TRITONSERVER_LOG_VERBOSE, "post auto-complete:", ModelConfig());
   }
 
   return nullptr;  // success
@@ -2828,13 +2825,13 @@ TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
   RETURN_IF_ERROR(
       TRITONBACKEND_BackendConfig(backend, &backend_config_message));
 
+  LOG_JSON_MESSAGE(
+      TRITONSERVER_LOG_INFO, "backend configuration:", backend_config_message);
+
   const char* buffer;
   size_t byte_size;
   RETURN_IF_ERROR(TRITONSERVER_MessageSerializeToJson(
       backend_config_message, &buffer, &byte_size));
-  LOG_MESSAGE(
-      TRITONSERVER_LOG_INFO,
-      (std::string("backend configuration:\n") + buffer).c_str());
 
   triton::common::TritonJson::Value backend_config;
   TRITONSERVER_Error* err = nullptr;
