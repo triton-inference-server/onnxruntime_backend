@@ -44,10 +44,6 @@ ORT_TO_TRTPARSER_VERSION_MAP = {
 }
 
 OPENVINO_VERSION_MAP = {
-    "2023.3.0": (
-        "2023.3",  # OpenVINO short version
-        "2023.3.0.13775.ceeafaf64f3",  # OpenVINO version with build number
-    ),
     "2024.0.0": (
         "2024.0",  # OpenVINO short version
         "2024.0.0.14509.34caeefd078",  # OpenVINO version with build number
@@ -165,9 +161,6 @@ RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/$
 
 # Step 2: Configure the environment
 # Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-2-configure-the-environment
-# `InferenceEngine_DIR` and `ngraph_DIR` are required only for OV 2023.3.0. Can be removed for 2024.0.0 and above.
-ENV InferenceEngine_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
-ENV ngraph_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
 ENV PKG_CONFIG_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64/pkgconfig
