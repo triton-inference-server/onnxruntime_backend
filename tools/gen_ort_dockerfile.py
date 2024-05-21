@@ -165,6 +165,7 @@ RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/$
 
 # Step 2: Configure the environment
 # Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-2-configure-the-environment
+# `InferenceEngine_DIR` and `ngraph_DIR` are required only for OV 2023.3.0. Can be removed for 2024.0.0 and above.
 ENV InferenceEngine_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV ngraph_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
@@ -179,43 +180,40 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     # From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
         df += """
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
-    ARG ONNXRUNTIME_BUILD_CONFIG
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_BUILD_CONFIG
 
-    RUN git clone -b tensorrt-8.0 --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
-
+RUN git clone -b tensorrt-8.0 --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+    (cd onnxruntime && git submodule update --init --recursive)
        """
     # Use the tensorrt-8.5ea branch to use Tensor RT 8.5a to use the built-in tensorrt parser
     elif FLAGS.ort_version == "1.12.1":
         df += """
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
-    ARG ONNXRUNTIME_BUILD_CONFIG
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_BUILD_CONFIG
 
-    RUN git clone -b tensorrt-8.5ea --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
-
+RUN git clone -b tensorrt-8.5ea --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+    (cd onnxruntime && git submodule update --init --recursive)
        """
     else:
         df += """
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
-    ARG ONNXRUNTIME_BUILD_CONFIG
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_BUILD_CONFIG
 
-    RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
-
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+    (cd onnxruntime && git submodule update --init --recursive)
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
