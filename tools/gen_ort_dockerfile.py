@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -40,6 +40,17 @@ ORT_TO_TRTPARSER_VERSION_MAP = {
     "1.10.0": (
         "8.2",  # TensorRT version
         "release/8.2-GA",  # ONNX-Tensorrt parser version
+    ),
+}
+
+OPENVINO_VERSION_MAP = {
+    "2024.0.0": (
+        "2024.0",  # OpenVINO short version
+        "2024.0.0.14509.34caeefd078",  # OpenVINO version with build number
+    ),
+    "2024.1.0": (
+        "2024.1",  # OpenVINO short version
+        "2024.1.0.15008.f4afc983258",  # OpenVINO version with build number
     ),
 }
 
@@ -127,22 +138,29 @@ RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
 ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
+"""
+        df += """
+ARG OPENVINO_SHORT_VERSION={}
+ARG OPENVINO_VERSION_WITH_BUILD_NUMBER={}
+""".format(
+            OPENVINO_VERSION_MAP[FLAGS.ort_openvino][0],
+            OPENVINO_VERSION_MAP[FLAGS.ort_openvino][1],
+        )
 
+        df += """
 # Step 1: Download and install core components
-# Ref: https://docs.openvino.ai/2023.3/openvino_docs_install_guides_installing_openvino_from_archive_linux.html#step-1-download-and-install-the-openvino-core-components
-RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/2023.3/linux/l_openvino_toolkit_ubuntu22_2023.3.0.13775.ceeafaf64f3_x86_64.tgz --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
+# Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-1-download-and-install-the-openvino-core-components
+RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/${OPENVINO_SHORT_VERSION}/linux/l_openvino_toolkit_ubuntu22_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64.tgz --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     tar -xf openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     mkdir -p ${INTEL_OPENVINO_DIR} && \
-    mv l_openvino_toolkit_ubuntu22_2023.3.0.13775.ceeafaf64f3_x86_64/* ${INTEL_OPENVINO_DIR} && \
+    mv l_openvino_toolkit_ubuntu22_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64/* ${INTEL_OPENVINO_DIR} && \
     rm openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     (cd ${INTEL_OPENVINO_DIR}/install_dependencies && \
         ./install_openvino_dependencies.sh -y) && \
     ln -s ${INTEL_OPENVINO_DIR} ${INTEL_OPENVINO_DIR}/../openvino_`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,0,4)}'`
 
 # Step 2: Configure the environment
-# Ref: https://docs.openvino.ai/2023.3/openvino_docs_install_guides_installing_openvino_from_archive_linux.html#step-2-configure-the-environment
-ENV InferenceEngine_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
-ENV ngraph_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
+# Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-2-configure-the-environment
 ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
 ENV PKG_CONFIG_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64/pkgconfig
@@ -155,43 +173,40 @@ ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/
     # From ORT 1.9 onwards we will switch back to using rel-* branches
     if FLAGS.ort_version == "1.8.1":
         df += """
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
-    ARG ONNXRUNTIME_BUILD_CONFIG
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_BUILD_CONFIG
 
-    RUN git clone -b tensorrt-8.0 --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
-
+RUN git clone -b tensorrt-8.0 --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+    (cd onnxruntime && git submodule update --init --recursive)
        """
     # Use the tensorrt-8.5ea branch to use Tensor RT 8.5a to use the built-in tensorrt parser
     elif FLAGS.ort_version == "1.12.1":
         df += """
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
-    ARG ONNXRUNTIME_BUILD_CONFIG
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_BUILD_CONFIG
 
-    RUN git clone -b tensorrt-8.5ea --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
-
+RUN git clone -b tensorrt-8.5ea --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+    (cd onnxruntime && git submodule update --init --recursive)
        """
     else:
         df += """
-    #
-    # ONNX Runtime build
-    #
-    ARG ONNXRUNTIME_VERSION
-    ARG ONNXRUNTIME_REPO
-    ARG ONNXRUNTIME_BUILD_CONFIG
+#
+# ONNX Runtime build
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_BUILD_CONFIG
 
-    RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-        (cd onnxruntime && git submodule update --init --recursive)
-
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
+    (cd onnxruntime && git submodule update --init --recursive)
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
