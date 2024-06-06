@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -419,6 +419,7 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_GPU
   if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
       (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
+    std::map<std::string, std::string> cuda_options_map;
     triton::common::TritonJson::Value optimization;
     if (model_config_.Find("optimization", &optimization)) {
       triton::common::TritonJson::Value eas;
@@ -673,8 +674,13 @@ ModelState::LoadModel(
                     key = "trt_ep_context_embed_mode";
                     value = value_string;
                   } else {
-                    key = param_key;
-                    params.MemberAsString(param_key.c_str(), &value);
+                    return TRITONSERVER_ErrorNew(
+                        TRITONSERVER_ERROR_INVALID_ARG,
+                        std::string(
+                            "unknown parameter '" + param_key +
+                            "' is provided for TensorRT Execution "
+                            "Accelerator")
+                            .c_str());
                   }
                   if (!key.empty() && !value.empty()) {
                     keys.push_back(key);
@@ -687,25 +693,9 @@ ModelState::LoadModel(
                     c_keys.push_back(keys[i].c_str());
                     c_values.push_back(values[i].c_str());
                   }
-                  auto status = ort_api->UpdateTensorRTProviderOptions(
+                  RETURN_IF_ORT_ERROR(ort_api->UpdateTensorRTProviderOptions(
                       rel_trt_options.get(), c_keys.data(), c_values.data(),
-                      keys.size());
-                  if (status != nullptr) {
-                    OrtAllocator* allocator;
-                    char* options;
-                    RETURN_IF_ORT_ERROR(
-                        ort_api->GetAllocatorWithDefaultOptions(&allocator));
-                    RETURN_IF_ORT_ERROR(
-                        ort_api->GetTensorRTProviderOptionsAsString(
-                            rel_trt_options.get(), allocator, &options));
-                    return TRITONSERVER_ErrorNew(
-                        TRITONSERVER_ERROR_INVALID_ARG,
-                        (std::string("unknown parameters in config following "
-                                     "options are supported for TensorRT "
-                                     "Execution Provider: ") +
-                         std::string(options))
-                            .c_str());
-                  }
+                      keys.size()));
                 }
               }
 
@@ -722,11 +712,41 @@ ModelState::LoadModel(
               continue;
             }
 #endif  // TRITON_ENABLE_ONNXRUNTIME_TENSORRT
-            return TRITONSERVER_ErrorNew(
-                TRITONSERVER_ERROR_INVALID_ARG,
-                (std::string("unknown Execution Accelerator '") + name +
-                 "' is requested")
-                    .c_str());
+
+            if (name == "cuda") {
+              // Parse CUDA EP configurations
+              triton::common::TritonJson::Value params;
+              if (ea.Find("parameters", &params)) {
+                std::vector<std::string> param_keys;
+                RETURN_IF_ERROR(params.Members(&param_keys));
+                for (const auto& param_key : param_keys) {
+                  std::string value_string, key, value;
+                  // Special handling for boolean values
+                  if (param_key == "do_copy_in_default_stream" ||
+                      param_key == "use_ep_level_unified_stream") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    bool bool_value;
+                    RETURN_IF_ERROR(ParseBoolValue(value_string, &bool_value));
+                    key = param_key;
+                    value = value_string;
+                  } else {
+                    key = param_key;
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                  }
+                  if (!key.empty() && !value.empty()) {
+                    cuda_options_map[key] = value;
+                  }
+                }
+              }
+            } else {
+              return TRITONSERVER_ErrorNew(
+                  TRITONSERVER_ERROR_INVALID_ARG,
+                  (std::string("unknown Execution Accelerator '") + name +
+                   "' is requested")
+                      .c_str());
+            }
           }
         }
       }
@@ -740,44 +760,99 @@ ModelState::LoadModel(
     std::unique_ptr<
         OrtCUDAProviderOptionsV2, decltype(ort_api->ReleaseCUDAProviderOptions)>
         rel_cuda_options(cuda_options, ort_api->ReleaseCUDAProviderOptions);
-    std::map<std::string, std::string> options;
-    options["device_id"] = std::to_string(instance_group_device_id);
+    cuda_options_map["device_id"] = std::to_string(instance_group_device_id);
+    cuda_options_map["has_user_compute_stream"] = stream != nullptr ? "1" : "0";
+    RETURN_IF_ORT_ERROR(ort_api->UpdateCUDAProviderOptionsWithValue(
+        rel_cuda_options.get(), "default_memory_arena_cfg", nullptr));
     {
-      // Parse CUDA EP configurations
+      // Parse CUDA EP configurations directly from the parameters field.
+      // This is deprecated with adding support for CUDA EP in the
+      // gpu_execution_accelerator field. Keeping this for backward
+      // compatibility.
       triton::common::TritonJson::Value params;
       if (model_config_.Find("parameters", &params)) {
-        std::vector<std::string> members;
-        RETURN_IF_ERROR(params.Members(&members));
-        for (auto& m : members) {
-          const auto [it_value, success] = options.insert({m, ""});
-          if (success) {
-            params.MemberAsString(m.c_str(), &it_value->second);
+        triton::common::TritonJson::Value json_value;
+        if (params.Find("cudnn_conv_algo_search", &json_value)) {
+          int cudnn_conv_algo_search = 0;
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "cudnn_conv_algo_search", &cudnn_conv_algo_search, 0));
+          std::string string_value;
+          switch (cudnn_conv_algo_search) {
+            case 0:
+              string_value = "EXHAUSTIVE";
+              break;
+            case 1:
+              string_value = "HEURISTIC";
+              break;
+            case 2:
+              string_value = "DEFAULT";
+              break;
+            default:
+              return TRITONSERVER_ErrorNew(
+                  TRITONSERVER_ERROR_INVALID_ARG,
+                  (std::string("unsupported cudnn_conv_algo_search value '") +
+                   std::to_string(cudnn_conv_algo_search) + "' is requested")
+                      .c_str());
           }
+          cuda_options_map["cudnn_conv_algo_search"] = string_value;
+        } else {
+          cuda_options_map["cudnn_conv_algo_search"] = "EXHAUSTIVE";
+        }
+
+        if (params.Find("gpu_mem_limit", &json_value)) {
+          std::string string_value;
+          RETURN_IF_ERROR(
+              json_value.MemberAsString("string_value", &string_value));
+          cuda_options_map["gpu_mem_limit"] = string_value;
+        } else {
+          cuda_options_map["gpu_mem_limit"] =
+              std::to_string(std::numeric_limits<size_t>::max());
+        }
+
+        if (params.Find("arena_extend_strategy", &json_value)) {
+          int arena_extend_strategy = 0;
+          RETURN_IF_ERROR(TryParseModelStringParameter(
+              params, "arena_extend_strategy", &arena_extend_strategy, 0));
+          std::string string_value;
+          switch (arena_extend_strategy) {
+            case 0:
+              string_value = "kNextPowerOfTwo";
+              break;
+            case 1:
+              string_value = "kSameAsRequested";
+              break;
+            default:
+              return TRITONSERVER_ErrorNew(
+                  TRITONSERVER_ERROR_INVALID_ARG,
+                  (std::string("unsupported arena_extend_strategy value '") +
+                   std::to_string(arena_extend_strategy) + "' is requested")
+                      .c_str());
+          }
+          cuda_options_map["arena_extend_strategy"] = string_value;
+        } else {
+          cuda_options_map["arena_extend_strategy"] = "kNextPowerOfTwo";
+        }
+
+        if (params.Find("do_copy_in_default_stream", &json_value)) {
+          std::string string_value;
+          RETURN_IF_ERROR(
+              json_value.MemberAsString("string_value", &string_value));
+          cuda_options_map["do_copy_in_default_stream"] = string_value;
+        } else {
+          cuda_options_map["do_copy_in_default_stream"] = "1";
         }
       }
     }
 
     std::vector<const char*> option_names, option_values;
-    for (const auto& [key, value] : options) {
+    for (const auto& [key, value] : cuda_options_map) {
       option_names.push_back(key.c_str());
       option_values.push_back(value.c_str());
     }
-    auto status = ort_api->UpdateCUDAProviderOptions(
+
+    RETURN_IF_ORT_ERROR(ort_api->UpdateCUDAProviderOptions(
         rel_cuda_options.get(), option_names.data(), option_values.data(),
-        option_values.size());
-    if (status != nullptr) {
-      OrtAllocator* allocator;
-      char* options;
-      RETURN_IF_ORT_ERROR(ort_api->GetAllocatorWithDefaultOptions(&allocator));
-      RETURN_IF_ORT_ERROR(ort_api->GetCUDAProviderOptionsAsString(
-          rel_cuda_options.get(), allocator, &options));
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          (std::string("unknown parameters in config following options are "
-                       "supported for CUDA Execution Provider: ") +
-           std::string(options))
-              .c_str());
-    }
+        option_values.size()));
 
     if (stream != nullptr) {
       RETURN_IF_ORT_ERROR(ort_api->UpdateCUDAProviderOptionsWithValue(
@@ -785,10 +860,17 @@ ModelState::LoadModel(
     }
     RETURN_IF_ORT_ERROR(ort_api->SessionOptionsAppendExecutionProvider_CUDA_V2(
         soptions, cuda_options));
+
+    OrtAllocator* allocator;
+    char* options;
+    RETURN_IF_ORT_ERROR(ort_api->GetAllocatorWithDefaultOptions(&allocator));
+    RETURN_IF_ORT_ERROR(ort_api->GetCUDAProviderOptionsAsString(
+        rel_cuda_options.get(), allocator, &options));
     LOG_MESSAGE(
         TRITONSERVER_LOG_VERBOSE,
         (std::string("CUDA Execution Accelerator is set for '") + Name() +
-         "' on device " + std::to_string(instance_group_device_id))
+         "' on device " + std::to_string(instance_group_device_id) +
+         std::string(" with options: ") + std::string(options))
             .c_str());
   }
 #endif  // TRITON_ENABLE_GPU
