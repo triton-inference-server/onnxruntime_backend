@@ -1,5 +1,5 @@
 <!--
-# Copyright (c) 2020-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -155,7 +155,20 @@ optimization { execution_accelerators {
 ```
 
 ## ONNX Runtime with CUDA Execution Provider optimization
-When GPU is enabled for ORT, CUDA execution provider is enabled. If TensorRT is also enabled then CUDA EP is treated as a fallback option (only comes into picture for nodes which TensorRT cannot execute). If TensorRT is not enabled then CUDA EP is the primary EP which executes the models. ORT enabled configuring options for CUDA EP to further optimize based on the specific model and user scenarios. To enable CUDA EP optimization you must set the model configuration appropriately. There are several optimizations available, like selection of max mem, cudnn conv algorithm etc... The optimization parameters and their description are as follows.
+When GPU is enabled for ORT, CUDA execution provider is enabled. If TensorRT is also enabled then CUDA EP is treated as a fallback option (only comes into picture for nodes which TensorRT cannot execute). If TensorRT is not enabled then CUDA EP is the primary EP which executes the models. ORT enabled configuring options for CUDA EP to further optimize based on the specific model and user scenarios. There are several optimizations available, please refer to the [ONNX Runtime doc](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#cuda-execution-provider) for more details. To enable CUDA EP optimization you must set the model configuration appropriately:
+
+```
+optimization { execution_accelerators {
+  gpu_execution_accelerator : [ {
+    name : "cuda"
+    parameters { key: "cudnn_conv_use_max_workspace" value: "0" }
+    parameters { key: "use_ep_level_unified_stream" value: "1" }}
+  ]
+}}
+```
+
+### Deprecated Parameters
+The way to specify these specific parameters as shown below is deprecated. For backward compatibility, these parameters are still supported. Please use the above method to specify the parameters.
 
 * `cudnn_conv_algo_search`: CUDA Convolution algorithm search configuration. Available options are 0 - EXHAUSTIVE (expensive exhaustive benchmarking using cudnnFindConvolutionForwardAlgorithmEx). This is also the default option, 1 - HEURISTIC (lightweight heuristic based search using cudnnGetConvolutionForwardAlgorithm_v7), 2 - DEFAULT (default algorithm using CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM)
 
@@ -165,7 +178,7 @@ When GPU is enabled for ORT, CUDA execution provider is enabled. If TensorRT is 
 
 * `do_copy_in_default_stream`: Flag indicating if copying needs to take place on the same stream as the compute stream in the CUDA EP. Available options are: 0 = Use separate streams for copying and compute, 1 = Use the same stream for copying and compute. Defaults to 1.
 
-The section of model config file specifying these parameters will look like:
+In the model config file, specifying these parameters will look like:
 
 ```
 .
