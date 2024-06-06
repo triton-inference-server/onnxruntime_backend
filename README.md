@@ -1,5 +1,5 @@
 <!--
-# Copyright (c) 2020-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -83,7 +83,11 @@ $ make install
 
 
 ## ONNX Runtime with TensorRT optimization
-TensorRT can be used in conjunction with an ONNX model to further optimize the performance. To enable TensorRT optimization you must set the model configuration appropriately. There are several optimizations available for TensorRT, like selection of the compute precision and workspace size. The optimization parameters and their description are as follows.
+TensorRT can be used in conjunction with an ONNX model to further optimize the
+performance. To enable TensorRT optimization you must set the model configuration
+appropriately. There are several optimizations available for TensorRT, like
+selection of the compute precision and workspace size. The optimization
+parameters and their description are as follows.
 
 
 * `precision_mode`: The precision used for optimization. Allowed values are "FP32", "FP16" and "INT8". Default value is "FP32".
@@ -93,9 +97,11 @@ TensorRT can be used in conjunction with an ONNX model to further optimize the p
 * `trt_engine_cache_enable`: Enable engine caching.
 * `trt_engine_cache_path`: Specify engine cache path.
 
-To explore the usage of more parameters, follow the mapping table below and check [ONNX Runtime doc](https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html#execution-provider-options) for detail.
+To explore the usage of more parameters, follow the mapping table below and
+check [ONNX Runtime doc](https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html#execution-provider-options) for detail.
 
-> Please link to the latest ONNX Runtime binaries in CMake or build from [main branch of ONNX Runtime](https://github.com/microsoft/onnxruntime/tree/main) to enable latest options.
+> Please link to the latest ONNX Runtime binaries in CMake or build from
+[main branch of ONNX Runtime](https://github.com/microsoft/onnxruntime/tree/main) to enable latest options.
 
 ### Parameter mapping between ONNX Runtime and Triton ONNXRuntime Backend
 
@@ -155,17 +161,50 @@ optimization { execution_accelerators {
 ```
 
 ## ONNX Runtime with CUDA Execution Provider optimization
-When GPU is enabled for ORT, CUDA execution provider is enabled. If TensorRT is also enabled then CUDA EP is treated as a fallback option (only comes into picture for nodes which TensorRT cannot execute). If TensorRT is not enabled then CUDA EP is the primary EP which executes the models. ORT enabled configuring options for CUDA EP to further optimize based on the specific model and user scenarios. To enable CUDA EP optimization you must set the model configuration appropriately. There are several optimizations available, like selection of max mem, cudnn conv algorithm etc... The optimization parameters and their description are as follows.
+When GPU is enabled for ORT, CUDA execution provider is enabled. If TensorRT is
+also enabled then CUDA EP is treated as a fallback option (only comes into
+picture for nodes which TensorRT cannot execute). If TensorRT is not enabled
+then CUDA EP is the primary EP which executes the models. ORT enabled
+configuring options for CUDA EP to further optimize based on the specific model
+and user scenarios. There are several optimizations available, please refer to
+the [ONNX Runtime doc](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#cuda-execution-provider)
+for more details. To enable CUDA EP optimization you must set the model
+configuration appropriately:
 
-* `cudnn_conv_algo_search`: CUDA Convolution algorithm search configuration. Available options are 0 - EXHAUSTIVE (expensive exhaustive benchmarking using cudnnFindConvolutionForwardAlgorithmEx). This is also the default option, 1 - HEURISTIC (lightweight heuristic based search using cudnnGetConvolutionForwardAlgorithm_v7), 2 - DEFAULT (default algorithm using CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM)
+```
+optimization { execution_accelerators {
+  gpu_execution_accelerator : [ {
+    name : "cuda"
+    parameters { key: "cudnn_conv_use_max_workspace" value: "0" }
+    parameters { key: "use_ep_level_unified_stream" value: "1" }}
+  ]
+}}
+```
 
-* `gpu_mem_limit`: CUDA memory limit. To use all possible memory pass in maximum size_t. Defaults to SIZE_MAX.
+### Deprecated Parameters
+The way to specify these specific parameters as shown below is deprecated. For
+backward compatibility, these parameters are still supported. Please use the
+above method to specify the parameters.
 
-* `arena_extend_strategy`: Strategy used to grow the memory arena. Available options are: 0 = kNextPowerOfTwo, 1 = kSameAsRequested. Defaults to 0.
+* `cudnn_conv_algo_search`: CUDA Convolution algorithm search configuration.
+Available options are 0 - EXHAUSTIVE (expensive exhaustive benchmarking using
+cudnnFindConvolutionForwardAlgorithmEx). This is also the default option,
+1 - HEURISTIC (lightweight heuristic based search using
+cudnnGetConvolutionForwardAlgorithm_v7), 2 - DEFAULT (default algorithm using
+CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM)
 
-* `do_copy_in_default_stream`: Flag indicating if copying needs to take place on the same stream as the compute stream in the CUDA EP. Available options are: 0 = Use separate streams for copying and compute, 1 = Use the same stream for copying and compute. Defaults to 1.
+* `gpu_mem_limit`: CUDA memory limit. To use all possible memory pass in maximum
+size_t. Defaults to SIZE_MAX.
 
-The section of model config file specifying these parameters will look like:
+* `arena_extend_strategy`: Strategy used to grow the memory arena. Available
+options are: 0 = kNextPowerOfTwo, 1 = kSameAsRequested. Defaults to 0.
+
+* `do_copy_in_default_stream`: Flag indicating if copying needs to take place on
+the same stream as the compute stream in the CUDA EP. Available options are:
+0 = Use separate streams for copying and compute, 1 = Use the same stream for
+copying and compute. Defaults to 1.
+
+In the model config file, specifying these parameters will look like:
 
 ```
 .
@@ -203,14 +242,26 @@ optimization { execution_accelerators {
 
 ## Other Optimization Options with ONNX Runtime
 
-Details regarding when to use these options and what to expect from them can be found [here](https://onnxruntime.ai/docs/performance/tune-performance.html)
+Details regarding when to use these options and what to expect from them can be
+found [here](https://onnxruntime.ai/docs/performance/tune-performance.html)
 
 ### Model Config Options
-* `intra_op_thread_count`: Sets the number of threads used to parallelize the execution within nodes. A value of 0 means ORT will pick a default which is number of cores.
-* `inter_op_thread_count`: Sets the number of threads used to parallelize the execution of the graph (across nodes). If sequential execution is enabled this value is ignored.
+* `intra_op_thread_count`: Sets the number of threads used to parallelize the
+execution within nodes. A value of 0 means ORT will pick a default which is
+number of cores.
+* `inter_op_thread_count`: Sets the number of threads used to parallelize the
+execution of the graph (across nodes). If sequential execution is enabled this
+value is ignored.
 A value of 0 means ORT will pick a default which is number of cores.
-* `execution_mode`: Controls whether operators in the graph are executed sequentially or in parallel. Usually when the model has many branches, setting this option to 1 .i.e. "parallel" will give you better performance. Default is 0 which is "sequential execution."
-* `level`: Refers to the graph optimization level. By default all optimizations are enabled. Allowed values are -1, 1 and 2. -1 refers to BASIC optimizations, 1 refers to basic plus extended optimizations like fusions and 2 refers to all optimizations being disabled. Please find the details [here](https://onnxruntime.ai/docs/performance/graph-optimizations.html).
+* `execution_mode`: Controls whether operators in the graph are executed
+sequentially or in parallel. Usually when the model has many branches, setting
+this option to 1 .i.e. "parallel" will give you better performance. Default is
+0 which is "sequential execution."
+* `level`: Refers to the graph optimization level. By default all optimizations
+are enabled. Allowed values are -1, 1 and 2. -1 refers to BASIC optimizations,
+1 refers to basic plus extended optimizations like fusions and 2 refers to all
+optimizations being disabled. Please find the details
+[here](https://onnxruntime.ai/docs/performance/graph-optimizations.html).
 
 ```
 optimization {
@@ -223,15 +274,27 @@ parameters { key: "execution_mode" value: { string_value: "0" } }
 parameters { key: "inter_op_thread_count" value: { string_value: "0" } }
 
 ```
-* `enable_mem_arena`: Use 1 to enable the arena and 0 to disable. See [this](https://onnxruntime.ai/docs/api/c/struct_ort_api.html#a0bbd62df2b3c119636fba89192240593) for more information.
-* `enable_mem_pattern`: Use 1 to enable memory pattern and 0 to disable. See [this](https://onnxruntime.ai/docs/api/c/struct_ort_api.html#ad13b711736956bf0565fea0f8d7a5d75) for more information.
-* `memory.enable_memory_arena_shrinkage`: See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h) for more information.
+* `enable_mem_arena`: Use 1 to enable the arena and 0 to disable. See
+[this](https://onnxruntime.ai/docs/api/c/struct_ort_api.html#a0bbd62df2b3c119636fba89192240593)
+for more information.
+* `enable_mem_pattern`: Use 1 to enable memory pattern and 0 to disable.
+See [this](https://onnxruntime.ai/docs/api/c/struct_ort_api.html#ad13b711736956bf0565fea0f8d7a5d75)
+for more information.
+* `memory.enable_memory_arena_shrinkage`:
+See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h)
+for more information.
 
 ### Command line options
 
 #### Thread Pools
 
-When intra and inter op threads is set to 0 or a value higher than 1, by default ORT creates threadpool per session. This may not be ideal in every scenario, therefore ORT also supports global threadpools. When global threadpools are enabled ORT creates 1 global threadpool which is shared by every session. Use the backend config to enable global threadpool. When global threadpool is enabled, intra and inter op num threads config should also be provided via backend config. Config values provided in model config will be ignored.
+When intra and inter op threads is set to 0 or a value higher than 1, by default
+ORT creates threadpool per session. This may not be ideal in every scenario,
+therefore ORT also supports global threadpools. When global threadpools are
+enabled ORT creates 1 global threadpool which is shared by every session.
+Use the backend config to enable global threadpool. When global threadpool is
+enabled, intra and inter op num threads config should also be provided via
+backend config. Config values provided in model config will be ignored.
 
 ```
 --backend-config=onnxruntime,enable-global-threadpool=<0,1>, --backend-config=onnxruntime,intra_op_thread_count=<int> , --backend-config=onnxruntime,inter_op_thread_count=<int>
@@ -239,16 +302,20 @@ When intra and inter op threads is set to 0 or a value higher than 1, by default
 
 #### Default Max Batch Size
 
-The default-max-batch-size value is used for max_batch_size during [Autocomplete](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#auto-generated-model-configuration) when no
-other value is found. Assuming server was not launched with `--disable-auto-complete-config`
-command-line option, the onnxruntime backend will set the max_batch_size
-of the model to this default value under the following conditions:
+The default-max-batch-size value is used for max_batch_size during
+[Autocomplete](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#auto-generated-model-configuration)
+when no other value is found. Assuming server was not launched with
+`--disable-auto-complete-config` command-line option, the onnxruntime backend
+will set the max_batch_size of the model to this default value under the
+following conditions:
 
 1. Autocomplete has determined the model is capable of batching requests.
 2. max_batch_size is 0 in the model configuration or max_batch_size
    is omitted from the model configuration.
 
-If max_batch_size > 1 and no [scheduler](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#scheduling-and-batching) is provided, the dynamic batch scheduler will be used.
+If max_batch_size > 1 and no
+[scheduler](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#scheduling-and-batching)
+is provided, the dynamic batch scheduler will be used.
 
 ```
 --backend-config=onnxruntime,default-max-batch-size=<int>
