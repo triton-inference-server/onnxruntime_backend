@@ -872,7 +872,7 @@ ModelState::LoadModel(
          "' on device " + std::to_string(instance_group_device_id) +
          std::string(" with options: ") + std::string(options))
             .c_str());
-    ort_api->AllocatorFree(allocator, options);
+    RETURN_IF_ORT_ERROR(ort_api->AllocatorFree(allocator, options));
   }
 #endif  // TRITON_ENABLE_GPU
 
