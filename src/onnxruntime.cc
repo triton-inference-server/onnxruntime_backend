@@ -2477,6 +2477,7 @@ ModelInstanceState::SetStringInputBuffer(
     std::vector<TRITONBACKEND_Response*>* responses, char* input_buffer,
     std::vector<const char*>* string_ptrs)
 {
+  std::vector<std::pair<const char*, const uint32_t>> str_list;
   // offset for each response
   size_t buffer_copy_offset = 0;
   for (size_t idx = 0; idx < expected_byte_sizes.size(); idx++) {
@@ -2486,25 +2487,21 @@ ModelInstanceState::SetStringInputBuffer(
     size_t element_cnt = 0;
     if ((*responses)[idx] != nullptr) {
       char* data_content = input_buffer + buffer_copy_offset;
-
-      auto callback = [](std::vector<const char*>* string_ptrs,
-                         const size_t element_idx, const char* content,
-                         const uint32_t len) {
-        // Set string value
-        string_ptrs->push_back(content);
-      };
-      auto fn = std::bind(
-          callback, string_ptrs, std::placeholders::_1, std::placeholders::_2,
-          std::placeholders::_3);
-
       TRITONSERVER_Error* err = ValidateStringBuffer(
           data_content, expected_byte_size, expected_element_cnt,
-          input_name.c_str(), &element_cnt, fn, true);
+          input_name.c_str(), &str_list);
+      // Set string values.
+      for (const auto& [addr, len] : str_list) {
+        // Make first byte of size info 0, so that if there is string data
+        // in front of it, the data becomes valid C string.
+        *const_cast<char*>(addr - sizeof(uint32_t)) = 0;
+        string_ptrs->push_back(addr);
+      }
+      str_list.clear();
+
       if (err != nullptr) {
         RESPOND_AND_SET_NULL_IF_ERROR(&((*responses)[idx]), err);
-        if (element_cnt < expected_element_cnt) {
-          FillStringData(string_ptrs, expected_element_cnt - element_cnt);
-        }
+        FillStringData(string_ptrs, expected_element_cnt - element_cnt);
       }
     }
     buffer_copy_offset += expected_byte_size;
