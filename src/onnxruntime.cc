@@ -2484,7 +2484,6 @@ ModelInstanceState::SetStringInputBuffer(
     const size_t expected_byte_size = expected_byte_sizes[idx];
     const size_t expected_element_cnt = expected_element_cnts[idx];
 
-    size_t element_cnt = 0;
     if ((*responses)[idx] != nullptr) {
       char* data_content = input_buffer + buffer_copy_offset;
       TRITONSERVER_Error* err = ValidateStringBuffer(
@@ -2497,12 +2496,13 @@ ModelInstanceState::SetStringInputBuffer(
         *const_cast<char*>(addr - sizeof(uint32_t)) = 0;
         string_ptrs->push_back(addr);
       }
-      str_list.clear();
 
+      size_t element_cnt = str_list.size();
       if (err != nullptr) {
         RESPOND_AND_SET_NULL_IF_ERROR(&((*responses)[idx]), err);
         FillStringData(string_ptrs, expected_element_cnt - element_cnt);
       }
+      str_list.clear();
     }
     buffer_copy_offset += expected_byte_size;
   }
