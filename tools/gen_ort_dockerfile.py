@@ -94,6 +94,38 @@ ENV DEBIAN_FRONTEND=noninteractive
 # The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
 
+"""
+    # Consider moving rhel logic to its own function e.g., dockerfile_for_rhel
+    # if the changes become more substantial.
+    if target_platform() == "rhel":
+        df += """
+# The manylinux container defaults to Python 3.7, but some feature installation
+# requires a higher version.
+ARG PYVER=3.10
+ENV PYTHONPATH=/opt/python/v
+RUN ln -sf /opt/python/cp${PYVER/./}* ${PYTHONPATH}
+
+ENV PYBIN=${PYTHONPATH}/bin
+ENV PYTHON_BIN_PATH=${PYBIN}/python${PYVER} \
+    PATH=${PYBIN}:${PATH}
+
+RUN yum check-update || true
+RUN yum install -y \
+        wget \
+        zip \
+        ca-certificates \
+        curl \
+        patchelf \
+        python3-pip \
+        git \
+        gnupg \
+        gnupg1 \
+        openssl-devel
+
+"""
+    else: 
+        df += """
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
         wget \
