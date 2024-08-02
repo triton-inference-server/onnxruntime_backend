@@ -205,8 +205,11 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
+# [FIXME: DLIS-6856] WAR to cherry pick fix to build with CUDA 12.5, should be
+# removed once we advance to an ORT release that contains the fix.
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-    (cd onnxruntime && git submodule update --init --recursive)
+    (cd onnxruntime && git submodule update --init --recursive && \
+     git cherry-pick -n 362a62390545234d28661307c7a203f2546280ae)
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
