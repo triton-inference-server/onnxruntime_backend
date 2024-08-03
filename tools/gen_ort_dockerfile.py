@@ -109,7 +109,6 @@ ENV PYBIN=${PYTHONPATH}/bin
 ENV PYTHON_BIN_PATH=${PYBIN}/python${PYVER} \
     PATH=${PYBIN}:${PATH}
 
-RUN yum check-update || true
 RUN yum install -y \
         wget \
         zip \
