@@ -251,7 +251,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
 
     df += """
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
+ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel 4 --build_shared_lib \
     --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
 """.format(
         cuda_archs
@@ -440,7 +440,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --compile_no_warning_as_error --skip_tests --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=60;61;70;75;80;86;90" --skip_submodule_sync --parallel 4  --nvcc_threads 1 --build_shared_lib --compile_no_warning_as_error --skip_tests --update --build --build_dir /workspace/build {}
 """.format(
         ep_flags
     )
