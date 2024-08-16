@@ -352,7 +352,8 @@ RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{ split($0,a,"
     # Linking compiled ONNX Runtime libraries to their corresponding versioned libraries
     df += """
 RUN cd /opt/onnxruntime/lib \
-        && ln -s libonnxruntime.so libonnxruntime.so.${ONNXRUNTIME_VERSION}
+        && ln -s libonnxruntime.so libonnxruntime.so.1 \
+        && ln -s libonnxruntime.so.1 libonnxruntime.so.${ONNXRUNTIME_VERSION}
 """
     df += """
 RUN cd /opt/onnxruntime/lib && \
