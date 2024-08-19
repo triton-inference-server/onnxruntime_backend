@@ -122,7 +122,7 @@ RUN yum install -y \
         openssl-devel
 
 """
-    else: 
+    else:
         df += """
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
