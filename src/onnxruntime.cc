@@ -1248,7 +1248,6 @@ class ModelInstanceState : public BackendModelInstance {
       const std::vector<size_t>& expected_element_cnts,
       std::vector<TRITONBACKEND_Response*>* responses, char* input_buffer,
       std::vector<const char*>* string_ptrs);
-  void FillStringData(std::vector<const char*>* string_ptrs, size_t cnt);
   TRITONSERVER_Error* ReadOutputTensors(
       size_t total_batch_size, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
@@ -2500,21 +2499,10 @@ ModelInstanceState::SetStringInputBuffer(
       size_t element_cnt = str_list.size();
       if (err != nullptr) {
         RESPOND_AND_SET_NULL_IF_ERROR(&((*responses)[idx]), err);
-        FillStringData(string_ptrs, expected_element_cnt - element_cnt);
       }
       str_list.clear();
     }
     buffer_copy_offset += expected_byte_size;
-  }
-}
-
-void
-ModelInstanceState::FillStringData(
-    std::vector<const char*>* string_ptrs, size_t cnt)
-{
-  static const char* empty = "";
-  for (size_t c = 0; c < cnt; c++) {
-    string_ptrs->push_back(empty);
   }
 }
 
