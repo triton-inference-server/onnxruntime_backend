@@ -237,9 +237,7 @@ ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-    cd onnxruntime && git submodule update --init --recursive && \
-    git config --global user.email "you@example.com" && git config --global user.name "Your Name" && \
-    git cherry-pick 709368ea1443dc1ff68dece31d692ad065fb94d4
+    (cd onnxruntime && git submodule update --init --recursive)
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
