@@ -1,6 +1,6 @@
 if(WIN32)
 
-  message(NOTICE "Downloading onnxruntime")
+  message(NOTICE "Downloading onnxruntime: $ENV{TRITON_ONNXRUNTIME_PACKAGE_URL}")
 
   # Define the download and extraction paths)
   set(DOWNLOAD_PATH "${CMAKE_BINARY_DIR}/_deps/downloads/onnxruntime.zip")
@@ -19,12 +19,7 @@ if(WIN32)
       # Extract the downloaded file
       file(ARCHIVE_EXTRACT INPUT ${DOWNLOAD_PATH} DESTINATION ${EXTRACT_DIR} VERBOSE )
 
-      # Make the extracted directory searchable for CMake
-      list(APPEND CMAKE_PREFIX_PATH ${EXTRACT_DIR})
-
-      # Find a specific library in the extracted folder
-      # find_library(ONNXRUNTIME_LIBRARY onnxruntime NAMES onnxruntime.dll onnxruntime.so PATHS ${EXTRACT_DIR} PATH_SUFFIXES lib include NO_DEFAULT_PATH)
-
+      set(TRITON_ONNXRUNTIME_INCLUDE_PATHS ${EXTRACT_DIR}/include)
       set(TRITON_ONNXRUNTIME_LIB_PATHS ${EXTRACT_DIR}/lib)
 
   endif(NOT DOWNLOAD_RESULT EQUAL 0)
