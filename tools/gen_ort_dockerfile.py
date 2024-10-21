@@ -358,6 +358,10 @@ RUN cp -r ${INTEL_OPENVINO_DIR}/docs/licensing /opt/onnxruntime/LICENSE.openvino
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
+RUN ls -l /usr/lib/x86_64-linux-gnu/
+RUN ls -l /usr/lib/x86_64-linux-gnu/ | grep libtbb
+
+
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
     cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so.${ONNXRUNTIME_OPENVINO_VERSION} \
@@ -370,7 +374,7 @@ RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_ope
        /opt/onnxruntime/lib && \
     cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} \
        /opt/onnxruntime/lib && \
-    cp /usr/lib/x86_64-linux-gnu/libtbb.so.12 /opt/onnxruntime/lib
+    cp /usr/lib/x86_64-linux-gnu/libtbb.so.* /opt/onnxruntime/lib
 
 RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{ split($0,a,"."); print substr(a[1],3) a[2] a[3] }'` && \
     (cd /opt/onnxruntime/lib && \
