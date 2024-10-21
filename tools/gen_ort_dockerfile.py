@@ -358,9 +358,9 @@ RUN cp -r ${INTEL_OPENVINO_DIR}/docs/licensing /opt/onnxruntime/LICENSE.openvino
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
+RUN apt-get update && apt-get install -y --no-install-recommends libtbb2 
 RUN ls -l /usr/lib/x86_64-linux-gnu/
 RUN ls -l /usr/lib/x86_64-linux-gnu/ | grep libtbb
-
 
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
