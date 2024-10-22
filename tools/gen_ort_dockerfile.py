@@ -52,6 +52,10 @@ OPENVINO_VERSION_MAP = {
         "2024.1",  # OpenVINO short version
         "2024.1.0.15008.f4afc983258",  # OpenVINO version with build number
     ),
+    "2024.4.0": (
+        "2024.4",  # OpenVINO short version
+        "2024.4.0.16579.c3152d32c9c",  # OpenVINO version with build number
+    ),
 }
 
 
@@ -354,6 +358,8 @@ RUN cp -r ${INTEL_OPENVINO_DIR}/docs/licensing /opt/onnxruntime/LICENSE.openvino
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
+RUN apt-get update && apt-get install -y --no-install-recommends libtbb2
+
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
     cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so.${ONNXRUNTIME_OPENVINO_VERSION} \
@@ -366,7 +372,7 @@ RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_ope
        /opt/onnxruntime/lib && \
     cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino_onnx_frontend.so.${ONNXRUNTIME_OPENVINO_VERSION} \
        /opt/onnxruntime/lib && \
-    cp /usr/lib/x86_64-linux-gnu/libtbb.so.12 /opt/onnxruntime/lib
+    cp /usr/lib/x86_64-linux-gnu/libtbb.so.* /opt/onnxruntime/lib
 
 RUN OV_SHORT_VERSION=`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{ split($0,a,"."); print substr(a[1],3) a[2] a[3] }'` && \
     (cd /opt/onnxruntime/lib && \
