@@ -1,26 +1,22 @@
 if(DEFINED TRITON_ONNXRUNTIME_PACKAGE_URL)
-  # Define the download and extraction paths)
+
   set(DOWNLOAD_PATH "${CMAKE_BINARY_DIR}/_deps/downloads/onnxruntime.zip")
   set(EXTRACT_DIR "${CMAKE_BINARY_DIR}/_deps/downloads/onnxruntime")
 
   message(NOTICE "Downloading onnxruntime: ${TRITON_ONNXRUNTIME_PACKAGE_URL}")
 
-  # Download the file
   file(DOWNLOAD ${TRITON_ONNXRUNTIME_PACKAGE_URL} ${DOWNLOAD_PATH} SHOW_PROGRESS STATUS DOWNLOAD_STATUS)
 
-  # Check the download status
+  # file() STATUS returns a list with 2 elements
   list(GET DOWNLOAD_STATUS 0 DOWNLOAD_RESULT)
 
-  # Extract the downloaded file if the download was successful
   if(NOT DOWNLOAD_RESULT EQUAL 0)
     message(NOTICE "Failed to download: ${TRITON_ONNXRUNTIME_PACKAGE_URL}")
   else()
     message(NOTICE "Download successful: ${DOWNLOAD_PATH}" )
 
-    # Extract the downloaded file
     file(ARCHIVE_EXTRACT INPUT ${DOWNLOAD_PATH} DESTINATION ${EXTRACT_DIR} VERBOSE )
 
-    # Update CMakeLists.txt configuration references with new values
     set(TRITON_ONNXRUNTIME_INCLUDE_PATHS ${EXTRACT_DIR}/include)
     set(TRITON_ONNXRUNTIME_LIB_PATHS ${EXTRACT_DIR}/lib)
 
