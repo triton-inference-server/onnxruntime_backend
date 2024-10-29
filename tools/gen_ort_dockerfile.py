@@ -156,7 +156,7 @@ RUN apt update -q=2 \\
     && apt-get install -y --no-install-recommends cmake=3.28.* cmake-data=3.28.* \\
     && cmake --version
 
-RUN python3 -m pip install --break-system-packages psutil
+RUN python3 -m pip install psutil
 
 """
     if FLAGS.enable_gpu:
