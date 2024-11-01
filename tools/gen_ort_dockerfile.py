@@ -361,6 +361,8 @@ RUN cp -r ${INTEL_OPENVINO_DIR}/docs/licensing /opt/onnxruntime/LICENSE.openvino
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
+RUN apt-get update && apt-get install -y --no-install-recommends libtbb2
+
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
     cp ${INTEL_OPENVINO_DIR}/runtime/lib/intel64/libopenvino.so.${ONNXRUNTIME_OPENVINO_VERSION} \
@@ -447,7 +449,7 @@ SHELL ["cmd", "/S", "/C"]
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
-    (cd onnxruntime && git submodule update --init --recursive)
+    cd onnxruntime && git submodule update --init --recursive
 """
 
     if FLAGS.onnx_tensorrt_tag != "":
