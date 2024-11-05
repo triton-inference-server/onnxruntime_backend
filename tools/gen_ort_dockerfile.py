@@ -106,7 +106,7 @@ ENV PIP_BREAK_SYSTEM_PACKAGES=1
         df += """
 # The manylinux container defaults to Python 3.7, but some feature installation
 # requires a higher version.
-ARG PYVER=3.10
+ARG PYVER=3.12
 ENV PYTHONPATH=/opt/python/v
 RUN ln -sf /opt/python/cp${PYVER/./}* ${PYTHONPATH}
 
@@ -202,7 +202,7 @@ RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/$
 ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV LD_LIBRARY_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
 ENV PKG_CONFIG_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64/pkgconfig
-ENV PYTHONPATH=$INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/python3:$PYTHONPATH
+ENV PYTHONPATH=$INTEL_OPENVINO_DIR/python/python3.12:$INTEL_OPENVINO_DIR/python/python3:$PYTHONPATH
 """
 
     ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
