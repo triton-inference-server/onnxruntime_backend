@@ -236,7 +236,7 @@ target_compile_features(triton-onnxruntime-backend PRIVATE cxx_std_${TRITON_MIN_
 target_compile_options(
   triton-onnxruntime-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
-    -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
+    -Wall -Wextra -Wno-unused-parameter -Wno-type-limits>
   $<$<CXX_COMPILER_ID:MSVC>:/Wall /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor>
 )
 
