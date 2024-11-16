@@ -157,8 +157,16 @@ RUN apt update -q=2 \\
     && apt-get install -y --no-install-recommends cmake=3.28.3* cmake-data=3.28.3* \\
     && cmake --version
 
-RUN python3 -m pip install psutil
-
+"""
+    if FLAGS.enable_gpu:
+        df += """
+# Allow configure to pick up cuDNN where it expects it.
+# (Note: $CUDNN_VERSION is defined by base image)
+RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
+    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
+    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 """
 
     if FLAGS.ort_openvino is not None:
@@ -387,7 +395,7 @@ RUN cd /opt/onnxruntime/lib \
 """
     df += """
 RUN cd /opt/onnxruntime/lib && \
-    for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\\.so*'`; do \
+    for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
         patchelf --set-rpath '$ORIGIN' $i; \
     done
 
@@ -468,7 +476,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 
     df += """
 WORKDIR /workspace/onnxruntime
-ARG VS_DEVCMD_BAT="\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat"
+ARG VS_DEVCMD_BAT="\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
 RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --compile_no_warning_as_error --skip_tests --update --build --build_dir /workspace/build {}
 """.format(
@@ -551,8 +559,12 @@ def preprocess_gpu_flags():
             FLAGS.tensorrt_home = "/tensorrt"
     else:
         if "CUDNN_VERSION" in os.environ:
+            version = None
+            m = re.match(r"([0-9]\.[0-9])\.[0-9]\.[0-9]", os.environ["CUDNN_VERSION"])
+            if m:
+                version = m.group(1)
             if FLAGS.cudnn_home is None:
-                FLAGS.cudnn_home = "/usr"
+                FLAGS.cudnn_home = "/usr/local/cudnn-{}/cuda".format(version)
 
         if FLAGS.cuda_home is None:
             FLAGS.cuda_home = "/usr/local/cuda"
