@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -136,6 +136,15 @@ include(cmake/download_onnxruntime.cmake)
 if(TRITON_ONNXRUNTIME_LIB_PATHS STREQUAL "")
   set(TRITON_ONNXRUNTIME_DOCKER_BUILD ON)
 endif()
+
+set(RHEL_BUILD OFF)
+if(LINUX)
+  file(STRINGS "/etc/os-release" DISTRO_ID_LIKE REGEX "ID_LIKE")
+  if(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
+    set(RHEL_BUILD ON)
+  endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
+endif(LINUX)
+set(TRITON_CORE_HEADERS_ONLY OFF)
 
 message(STATUS "Using Onnxruntime docker: ${TRITON_ONNXRUNTIME_DOCKER_BUILD}")
 
@@ -324,6 +333,9 @@ endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
 #
 if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   set(_GEN_FLAGS "")
+  if(${RHEL_BUILD} AND "${TRITON_BUILD_TENSORRT_HOME}" STREQUAL "")
+    set(TRITON_BUILD_TENSORRT_HOME "/usr/local/cuda/targets/${CMAKE_SYSTEM_PROCESSOR}-linux/")
+  endif(${RHEL_BUILD} AND "${TRITON_BUILD_TENSORRT_HOME}" STREQUAL "")
   if(NOT ${TRITON_BUILD_TARGET_PLATFORM} STREQUAL "")
     set(_GEN_FLAGS ${_GEN_FLAGS} "--target-platform=${TRITON_BUILD_TARGET_PLATFORM}")
   endif() # TRITON_BUILD_TARGET_PLATFORM

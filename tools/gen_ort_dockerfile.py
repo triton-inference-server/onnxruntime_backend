@@ -105,7 +105,7 @@ ENV DEBIAN_FRONTEND=noninteractive
         df += """
 # The manylinux container defaults to Python 3.7, but some feature installation
 # requires a higher version.
-ARG PYVER=3.10
+ARG PYVER=3.12
 ENV PYTHONPATH=/opt/python/v
 RUN ln -sf /opt/python/cp${PYVER/./}* ${PYTHONPATH}
 
@@ -602,9 +602,8 @@ if __name__ == "__main__":
         "--target-platform",
         required=False,
         default=None,
-        help='Target for build, can be "linux", "windows" or "igpu". If not specified, build targets the current platform.',
+        help='Target for build, can be "linux", "windows", "rhel", or "igpu". If not specified, build targets the current platform.',
     )
-
     parser.add_argument(
         "--cuda-version", type=str, required=False, help="Version for CUDA."
     )
