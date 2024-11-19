@@ -573,7 +573,7 @@ def preprocess_gpu_flags():
 
         if FLAGS.tensorrt_home is None:
             if target_platform() == "rhel":
-                if platform.machine() == "aarch64":
+                if platform.machine().lower() == "aarch64":
                     FLAGS.tensorrt_home = "/usr/local/cuda/targets/sbsa-linux/"
                 else:
                     FLAGS.tensorrt_home = "/usr/local/cuda/targets/x86_64-linux/"
