@@ -105,7 +105,7 @@ ENV DEBIAN_FRONTEND=noninteractive
         df += """
 # The manylinux container defaults to Python 3.7, but some feature installation
 # requires a higher version.
-ARG PYVER=3.10
+ARG PYVER=3.12
 ENV PYTHONPATH=/opt/python/v
 RUN ln -sf /opt/python/cp${PYVER/./}* ${PYTHONPATH}
 
@@ -572,7 +572,13 @@ def preprocess_gpu_flags():
             print("error: linux build requires --cudnn-home and --cuda-home")
 
         if FLAGS.tensorrt_home is None:
-            FLAGS.tensorrt_home = "/usr/src/tensorrt"
+            if target_platform() == "rhel":
+                if platform.machine().lower() == "aarch64":
+                    FLAGS.tensorrt_home = "/usr/local/cuda/targets/sbsa-linux/"
+                else:
+                    FLAGS.tensorrt_home = "/usr/local/cuda/targets/x86_64-linux/"
+            else:
+                FLAGS.tensorrt_home = "/usr/src/tensorrt"
 
 
 if __name__ == "__main__":
@@ -602,9 +608,8 @@ if __name__ == "__main__":
         "--target-platform",
         required=False,
         default=None,
-        help='Target for build, can be "linux", "windows" or "igpu". If not specified, build targets the current platform.',
+        help='Target for build, can be "linux", "windows", "rhel", or "igpu". If not specified, build targets the current platform.',
     )
-
     parser.add_argument(
         "--cuda-version", type=str, required=False, help="Version for CUDA."
     )
