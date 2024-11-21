@@ -259,8 +259,8 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
             ep_flags += ' --cuda_version "{}"'.format(FLAGS.cuda_version)
         if FLAGS.cuda_home is not None:
             ep_flags += ' --cuda_home "{}"'.format(FLAGS.cuda_home)
-        if FLAGS.cudnn_home is not None:
-            ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
+        # if FLAGS.cudnn_home is not None:
+        #     ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         elif target_platform() == "igpu":
             ep_flags += ' --cudnn_home "/usr/lib/aarch64-linux-gnu"'
         if FLAGS.ort_tensorrt:
@@ -292,19 +292,18 @@ ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_s
 """.format(
         cuda_archs
     )
-    
+
     df_temp = """
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 """.format(
         ep_flags
     )
-    if FLAGS.enable_gpu:
+    if FLAGS.enable_gpu and target_platform() != "igpu":
         df_temp = """
-        RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) & ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {} --cudnn_home /usr/local/cudnn-$_CUDNN_VERSION/cuda
+        RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {} --cudnn_home /usr/local/cudnn-$_CUDNN_VERSION/cuda
         """.format(
         ep_flags
     )
-
 
     df += df_temp
 
