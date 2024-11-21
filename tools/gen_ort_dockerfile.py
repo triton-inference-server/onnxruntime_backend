@@ -293,11 +293,15 @@ ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_s
         cuda_archs
     )
 
-    df += """
-RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
+    df_temp = """
+RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) & ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 """.format(
         ep_flags
     )
+    if FLAGS.enable_gpu:
+        df_temp += "--cudnn_home /usr/local/cudnn-$_CUDNN_VERSION/cuda"
+
+    df += df_temp
 
     df += """
 #
