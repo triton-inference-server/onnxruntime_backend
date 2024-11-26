@@ -94,6 +94,7 @@ def dockerfile_for_linux(output_file):
     df += """
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/master/dockerfiles
@@ -153,7 +154,7 @@ RUN apt update -q=2 \\
     && . /etc/os-release \\
     && echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ $UBUNTU_CODENAME main" | tee /etc/apt/sources.list.d/kitware.list >/dev/null \\
     && apt-get update -q=2 \\
-    && apt-get install -y --no-install-recommends cmake=3.27.7* cmake-data=3.27.7* \\
+    && apt-get install -y --no-install-recommends cmake=3.28.3* cmake-data=3.28.3* \\
     && cmake --version
 
 """
@@ -185,10 +186,10 @@ ARG OPENVINO_VERSION_WITH_BUILD_NUMBER={}
         df += """
 # Step 1: Download and install core components
 # Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-1-download-and-install-the-openvino-core-components
-RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/${OPENVINO_SHORT_VERSION}/linux/l_openvino_toolkit_ubuntu22_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64.tgz --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
+RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/${OPENVINO_SHORT_VERSION}/linux/l_openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64.tgz --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     tar -xf openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     mkdir -p ${INTEL_OPENVINO_DIR} && \
-    mv l_openvino_toolkit_ubuntu22_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64/* ${INTEL_OPENVINO_DIR} && \
+    mv l_openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64/* ${INTEL_OPENVINO_DIR} && \
     rm openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
     (cd ${INTEL_OPENVINO_DIR}/install_dependencies && \
         ./install_openvino_dependencies.sh -y) && \
@@ -197,9 +198,9 @@ RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/$
 # Step 2: Configure the environment
 # Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-2-configure-the-environment
 ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
-ENV LD_LIBRARY_PATH $INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
 ENV PKG_CONFIG_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64/pkgconfig
-ENV PYTHONPATH $INTEL_OPENVINO_DIR/python/python3.10:$INTEL_OPENVINO_DIR/python/python3:$PYTHONPATH
+ENV PYTHONPATH=$INTEL_OPENVINO_DIR/python/python3.12:$INTEL_OPENVINO_DIR/python/python3:$PYTHONPATH
 """
 
     ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
@@ -287,7 +288,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
     df += """
 WORKDIR /workspace/onnxruntime
 ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
-    --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
+    --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
 """.format(
         cuda_archs
     )
@@ -358,7 +359,7 @@ RUN cp -r ${INTEL_OPENVINO_DIR}/docs/licensing /opt/onnxruntime/LICENSE.openvino
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/providers/openvino/openvino_provider_factory.h \
        /opt/onnxruntime/include
 
-RUN apt-get update && apt-get install -y --no-install-recommends libtbb2
+RUN apt-get update && apt-get install -y --no-install-recommends libtbb12
 
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_openvino.so \
        /opt/onnxruntime/lib && \
