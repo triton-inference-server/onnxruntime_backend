@@ -277,7 +277,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
 
     df += """
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
+ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel 2 --build_shared_lib \
     --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
 """.format(
         cuda_archs
@@ -559,13 +559,13 @@ def preprocess_gpu_flags():
             print("error: linux build requires --cudnn-home and --cuda-home")
 
         if FLAGS.tensorrt_home is None:
-            if target_platform() == "rhel":
-                if platform.machine().lower() == "aarch64":
-                    FLAGS.tensorrt_home = "/usr/local/cuda/targets/sbsa-linux/"
-                else:
-                    FLAGS.tensorrt_home = "/usr/local/cuda/targets/x86_64-linux/"
-            else:
-                FLAGS.tensorrt_home = "/usr/src/tensorrt"
+          if target_platform() == "rhel":
+              if platform.machine().lower() == "aarch64":
+                  FLAGS.tensorrt_home = "/usr/local/cuda/targets/sbsa-linux/"
+              else:
+                  FLAGS.tensorrt_home = "/usr/local/cuda/targets/x86_64-linux/"
+          else:
+              FLAGS.tensorrt_home = "/usr/src/tensorrt"
 
 
 if __name__ == "__main__":
@@ -595,7 +595,7 @@ if __name__ == "__main__":
         "--target-platform",
         required=False,
         default=None,
-        help='Target for build, can be "linux", "windows", "rhel", or "igpu". If not specified, build targets the current platform.',
+        help='Target for build, can be "linux", "windows" or "igpu". If not specified, build targets the current platform.',
     )
 
     parser.add_argument(
