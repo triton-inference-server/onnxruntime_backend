@@ -157,8 +157,6 @@ RUN apt update -q=2 \\
     && apt-get install -y --no-install-recommends cmake=3.28.3* cmake-data=3.28.3* \\
     && cmake --version
 
-RUN python3 -m pip install psutil
-
 """
 
     if FLAGS.ort_openvino is not None:
@@ -279,7 +277,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
 
     df += """
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel 2 --build_shared_lib \
+ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
     --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}' "
 """.format(
         cuda_archs
