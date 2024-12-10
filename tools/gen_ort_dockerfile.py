@@ -559,13 +559,13 @@ def preprocess_gpu_flags():
             print("error: linux build requires --cudnn-home and --cuda-home")
 
         if FLAGS.tensorrt_home is None:
-          if target_platform() == "rhel":
-              if platform.machine().lower() == "aarch64":
-                  FLAGS.tensorrt_home = "/usr/local/cuda/targets/sbsa-linux/"
-              else:
-                  FLAGS.tensorrt_home = "/usr/local/cuda/targets/x86_64-linux/"
-          else:
-              FLAGS.tensorrt_home = "/usr/src/tensorrt"
+            if target_platform() == "rhel":
+                if platform.machine().lower() == "aarch64":
+                    FLAGS.tensorrt_home = "/usr/local/cuda/targets/sbsa-linux/"
+                else:
+                    FLAGS.tensorrt_home = "/usr/local/cuda/targets/x86_64-linux/"
+            else:
+                FLAGS.tensorrt_home = "/usr/src/tensorrt"
 
 
 if __name__ == "__main__":
