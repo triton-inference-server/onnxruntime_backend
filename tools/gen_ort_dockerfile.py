@@ -595,7 +595,7 @@ if __name__ == "__main__":
         "--target-platform",
         required=False,
         default=None,
-        help='Target for build, can be "linux", "windows" or "igpu". If not specified, build targets the current platform.',
+        help='Target for build, can be "linux", "windows", "rhel", or "igpu". If not specified, build targets the current platform.',
     )
 
     parser.add_argument(
