@@ -1,7 +1,7 @@
 if(DEFINED TRITON_ONNXRUNTIME_PACKAGE_URL)
 
   set(DOWNLOAD_PATH "${CMAKE_BINARY_DIR}/_deps/downloads/onnxruntime.zip")
-  set(EXTRACT_DIR "${CMAKE_BINARY_DIR}/onnxruntime")
+  set(EXTRACT_DIR "${CMAKE_BINARY_DIR}/_deps/downloads/onnxruntime")
 
   message(NOTICE "Downloading onnxruntime: ${TRITON_ONNXRUNTIME_PACKAGE_URL}")
 
