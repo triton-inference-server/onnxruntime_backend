@@ -162,16 +162,6 @@ RUN apt update -q=2 \\
     && cmake --version
 
 """
-    if FLAGS.enable_gpu:
-        df += """
-# Allow configure to pick up cuDNN where it expects it.
-# (Note: $CUDNN_VERSION is defined by base image)
-RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
-    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
-    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
-"""
 
     if FLAGS.ort_openvino is not None:
         df += """
@@ -611,6 +601,7 @@ if __name__ == "__main__":
         default=None,
         help='Target for build, can be "linux", "windows", "rhel", or "igpu". If not specified, build targets the current platform.',
     )
+
     parser.add_argument(
         "--cuda-version", type=str, required=False, help="Version for CUDA."
     )
