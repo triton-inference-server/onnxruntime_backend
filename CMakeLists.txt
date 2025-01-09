@@ -87,6 +87,7 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
+option(TRITON_ENABLE_NVTX "Include nvtx markers collection in backend." ON)
 option(TRITON_ENABLE_ONNXRUNTIME_TENSORRT
   "Enable TensorRT execution provider for ONNXRuntime backend in server" OFF)
 option(TRITON_ENABLE_ONNXRUNTIME_OPENVINO
@@ -206,6 +207,10 @@ FetchContent_MakeAvailable(repo-common repo-core repo-backend)
 if(${TRITON_ENABLE_GPU})
   find_package(CUDAToolkit REQUIRED)
 endif() # TRITON_ENABLE_GPU
+
+#if(${TRITON_ENABLE_NVTX})
+add_definitions(-DTRITON_ENABLE_NVTX=1)
+#endif() # TRITON_ENABLE_NVTX
 
 #
 # Shared library implementing the Triton Backend API

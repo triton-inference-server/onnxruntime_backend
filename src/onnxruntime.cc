@@ -38,6 +38,7 @@
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
 #include "triton/backend/device_memory_tracker.h"
+#include "triton/common/nvtx.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
@@ -1886,6 +1887,7 @@ void
 ModelInstanceState::ProcessRequests(
     TRITONBACKEND_Request** requests, const uint32_t request_count)
 {
+  NVTX_RANGE(nvtx_, "ONNX ProcessRequests " + Name());
   LOG_MESSAGE(
       TRITONSERVER_LOG_VERBOSE,
       (std::string("TRITONBACKEND_ModelExecute: Running ") + Name() + " with " +
@@ -2173,6 +2175,7 @@ ModelInstanceState::SetInputTensors(
     BackendInputCollector* collector, std::vector<const char*>* input_names,
     bool* cuda_copy)
 {
+  NVTX_RANGE(nvtx_, "ONNX SetInputTensors " + Name());
   const int max_batch_size = model_state_->MaxBatchSize();
 
   // All requests must have equally-sized input tensors so use any
@@ -2573,6 +2576,7 @@ ModelInstanceState::ReadOutputTensors(
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses)
 {
+  NVTX_RANGE(nvtx_, "ONNX ReadOutputTensors " + Name());
   BackendOutputResponder responder(
       requests, request_count, responses, model_state_->TritonMemoryManager(),
       model_state_->MaxBatchSize() > 0, model_state_->EnablePinnedInput(),
