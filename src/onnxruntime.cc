@@ -2162,6 +2162,7 @@ ModelInstanceState::OrtRun(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count)
 {
+  NVTX_RANGE(nvtx_, "ONNX OrtRun " + Name());
   RETURN_IF_ORT_ERROR(
       ort_api->RunWithBinding(session_, runOptions_, io_binding_));
   return nullptr;
