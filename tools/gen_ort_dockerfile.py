@@ -162,16 +162,16 @@ RUN apt update -q=2 \\
     && cmake --version
 
 """
-#     if FLAGS.enable_gpu:
-#         df += """
-# # Allow configure to pick up cuDNN where it expects it.
-# # (Note: $CUDNN_VERSION is defined by base image)
-# RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
-#     mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
-#     ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
-#     mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
-#     ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
-# """
+    if FLAGS.enable_gpu:
+        df += """
+# Allow configure to pick up cuDNN where it expects it.
+# (Note: $CUDNN_VERSION is defined by base image)
+RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
+    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
+    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
+"""
 
     if FLAGS.ort_openvino is not None:
         df += """
@@ -266,7 +266,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
         if FLAGS.cudnn_home is not None:
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         elif target_platform() == "igpu":
-            ep_flags += ' --cudnn_home "/usr/lib/aarch64-linux-gnu"'
+            ep_flags += ' --cudnn_home "/usr/include"'
         if FLAGS.ort_tensorrt:
             ep_flags += " --use_tensorrt"
             if FLAGS.ort_version >= "1.12.1":
