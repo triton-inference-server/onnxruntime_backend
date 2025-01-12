@@ -579,8 +579,8 @@ def preprocess_gpu_flags():
             #     version = m.group(1)
             if FLAGS.cudnn_home is None:
                 #FLAGS.cudnn_home = "/usr/local/cudnn-{}/cuda".format(version)
-                #FLAGS.cudnn_home = "/usr/include"
-                FLAGS.cudnn_home = "/usr/lib/x86_64-linux-gnu/"
+                FLAGS.cudnn_home = "/usr/include"
+                #FLAGS.cudnn_home = "/usr/lib/x86_64-linux-gnu/"
 
         if FLAGS.cuda_home is None:
             FLAGS.cuda_home = "/usr/local/cuda"
