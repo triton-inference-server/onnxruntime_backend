@@ -285,7 +285,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
         ep_flags += (
             " --skip_tests --cmake_extra_defines 'onnxruntime_BUILD_UNIT_TESTS=OFF'"
         )
-        cuda_archs = "53;62;72;87"
+        cuda_archs = "87;101"
     else:
         cuda_archs = "75;80;86;90;100;120"
 
