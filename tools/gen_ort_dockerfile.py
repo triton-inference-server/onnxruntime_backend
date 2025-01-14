@@ -287,7 +287,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
         )
         cuda_archs = "87;101"
     else:
-        cuda_archs = "75;80;86;90;100;120"
+        cuda_archs = "75;80;86;89;90;100;120"
 
     df += """
 WORKDIR /workspace/onnxruntime
