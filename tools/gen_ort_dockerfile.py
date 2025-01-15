@@ -395,8 +395,8 @@ RUN cd /opt/onnxruntime/lib \
 """
     df += """
 RUN cd /opt/onnxruntime/lib && \
-   for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \    
-       patchelf --set-rpath '$ORIGIN' $i; \
+    for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\.so*'`; do \
+        patchelf --set-rpath '$ORIGIN' $i; \
     done
 
 # For testing copy ONNX custom op library and model
