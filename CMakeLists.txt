@@ -418,7 +418,7 @@ install(
 # that tar file. We copy over the libraries and other requirements
 # prior to running this build and therefore these set of install
 # commands are not needed.
-if(TRITON_ONNXRUNTIME_DOCKER_BUILD OR DEFINED TRITON_ONNXRUNTIME_PACKAGE_URL)
+if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   install(
     DIRECTORY
       ${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/
