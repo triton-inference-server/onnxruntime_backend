@@ -150,8 +150,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gnupg \
         gnupg1
 
-RUN pip3 install --upgrade pip \
-    && pip3 install patchelf==0.17.2
+RUN pip3 install patchelf==0.17.2
 
 # Install dependencies from
 # onnxruntime/dockerfiles/scripts/install_common_deps.sh.
