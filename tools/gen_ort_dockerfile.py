@@ -123,13 +123,14 @@ RUN yum install -y \
         zip \
         ca-certificates \
         curl \
-        patchelf \
         python3-pip \
         git \
         gnupg \
         gnupg1 \
         openssl-devel
 
+RUN pip3 install --upgrade pip \
+    && pip3 install patchelf==0.17.2
 """
     else:
         df += """
@@ -143,12 +144,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         libcurl4-openssl-dev \
         libssl-dev \
-        patchelf \
         python3-dev \
         python3-pip \
         git \
         gnupg \
         gnupg1
+
+RUN pip3 install --upgrade pip \
+    && pip3 install patchelf==0.17.2
 
 # Install dependencies from
 # onnxruntime/dockerfiles/scripts/install_common_deps.sh.
