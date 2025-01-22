@@ -316,8 +316,9 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
 
         LOG_MESSAGE(
             TRITONSERVER_LOG_VERBOSE,
-            (std::string("Configuring ") +
-             use_device_allocator_for_initializers_key + " to " + string_value)
+            (std::string("Configuring '") +
+             use_device_allocator_for_initializers_key + "' to '" +
+             string_value + "' for '" + Name() + "'")
                 .c_str());
         THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
             soptions, use_device_allocator_for_initializers_key,
