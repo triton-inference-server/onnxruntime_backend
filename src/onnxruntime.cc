@@ -302,7 +302,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     }
   }
 
-  // Set use_device_allocator_for_initializers
+  // Enable/disable use_device_allocator_for_initializers
   {
     triton::common::TritonJson::Value params;
     if (ModelConfig().Find("parameters", &params)) {
