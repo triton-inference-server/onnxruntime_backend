@@ -1,5 +1,5 @@
 <!--
-# Copyright (c) 2020-2024, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2025, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -283,6 +283,7 @@ for more information.
 * `memory.enable_memory_arena_shrinkage`:
 See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h)
 for more information.
+* `session.use_device_allocator_for_initializers`: Use "1" to enable using device allocator for allocating initialized tensor memory and "0" to disable. The default is "0". See [this](https://onnxruntime.ai/docs/get-started/with-c.html) for more information.
 
 ### Command line options
 

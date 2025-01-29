@@ -1,4 +1,4 @@
-// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -298,6 +298,31 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
       if (inter_op_thread_count > 0) {
         THROW_IF_BACKEND_MODEL_ORT_ERROR(
             ort_api->SetInterOpNumThreads(soptions, inter_op_thread_count));
+      }
+    }
+  }
+
+  // Enable/disable use_device_allocator_for_initializers
+  {
+    triton::common::TritonJson::Value params;
+    if (ModelConfig().Find("parameters", &params)) {
+      triton::common::TritonJson::Value json_value;
+      const char* use_device_allocator_for_initializers_key =
+          "session.use_device_allocator_for_initializers";
+      if (params.Find(use_device_allocator_for_initializers_key, &json_value)) {
+        std::string string_value;
+        THROW_IF_BACKEND_MODEL_ERROR(
+            json_value.MemberAsString("string_value", &string_value));
+
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_VERBOSE,
+            (std::string("Configuring '") +
+             use_device_allocator_for_initializers_key + "' to '" +
+             string_value + "' for '" + Name() + "'")
+                .c_str());
+        THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
+            soptions, use_device_allocator_for_initializers_key,
+            string_value.c_str()));
       }
     }
   }
