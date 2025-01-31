@@ -123,13 +123,13 @@ RUN yum install -y \
         zip \
         ca-certificates \
         curl \
-        patchelf \
         python3-pip \
         git \
         gnupg \
         gnupg1 \
         openssl-devel
 
+RUN pip3 install patchelf==0.17.2
 """
     else:
         df += """
@@ -143,12 +143,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         libcurl4-openssl-dev \
         libssl-dev \
-        patchelf \
         python3-dev \
         python3-pip \
         git \
         gnupg \
         gnupg1
+
+RUN pip3 install patchelf==0.17.2
 
 # Install dependencies from
 # onnxruntime/dockerfiles/scripts/install_common_deps.sh.
@@ -256,7 +257,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
         if FLAGS.cudnn_home is not None:
             ep_flags += ' --cudnn_home "{}"'.format(FLAGS.cudnn_home)
         elif target_platform() == "igpu":
-            ep_flags += ' --cudnn_home "/usr/lib/aarch64-linux-gnu"'
+            ep_flags += ' --cudnn_home "/usr/include"'
         if FLAGS.ort_tensorrt:
             ep_flags += " --use_tensorrt"
             if FLAGS.ort_version >= "1.12.1":
@@ -275,9 +276,9 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
         ep_flags += (
             " --skip_tests --cmake_extra_defines 'onnxruntime_BUILD_UNIT_TESTS=OFF'"
         )
-        cuda_archs = "53;62;72;87"
+        cuda_archs = "87;101"
     else:
-        cuda_archs = "75;80;86;90"
+        cuda_archs = "75;80;86;89;90;100;120"
 
     df += """
 WORKDIR /workspace/onnxruntime
@@ -472,7 +473,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=75;80;86;90" --skip_submodule_sync --parallel --build_shared_lib --compile_no_warning_as_error --skip_tests --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=75;80;86;90;100;120" --skip_submodule_sync --parallel --build_shared_lib --compile_no_warning_as_error --skip_tests --update --build --build_dir /workspace/build {}
 """.format(
         ep_flags
     )
