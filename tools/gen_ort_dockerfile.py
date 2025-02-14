@@ -139,6 +139,7 @@ ENV CCACHE_REMOTE_STORAGE="{}"
 ENV CMAKE_CXX_COMPILER_LAUNCHER="ccache"
 ENV CMAKE_C_COMPILER_LAUNCHER="ccache"
 ENV CMAKE_CUDA_COMPILER_LAUNCHER="ccache"
+ENV VERBOSE=1
 RUN apt-get update \\
       && apt-get install -y --no-install-recommends ccache && ccache -p
 """.format( os.getenv("CCACHE_REMOTE_STORAGE") )
