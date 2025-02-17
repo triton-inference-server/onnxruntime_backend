@@ -186,7 +186,7 @@ ARG OPENVINO_VERSION_WITH_BUILD_NUMBER={}
         # Openvino changed the filename of the toolkit in 2025.0.0 so we need to detect this for 
         # the release we want to install
         openvino_toolkit_filename = "UNKNOWN"
-        if OPENVINO_VERSION_MAP[FLAGS.ort_openvino[0]].split(".")[0] >= "2025":
+        if OPENVINO_VERSION_MAP[FLAGS.ort_openvino][0].split(".")[0] >= "2025":
             openvino_toolkit_filename = "openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64.tgz"
         else:
             openvino_toolkit_filename = "l_openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64.tgz"
