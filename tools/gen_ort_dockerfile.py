@@ -194,14 +194,14 @@ ARG OPENVINO_VERSION_WITH_BUILD_NUMBER={}
         df += """
 # Step 1: Download and install core components
 # Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-1-download-and-install-the-openvino-core-components
-RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/${OPENVINO_SHORT_VERSION}/linux/{} --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
-    tar -xf openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
-    mkdir -p ${INTEL_OPENVINO_DIR} && \
-    mv {}/* ${INTEL_OPENVINO_DIR} && \
-    rm openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
-    (cd ${INTEL_OPENVINO_DIR}/install_dependencies && \
+RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/${{OPENVINO_SHORT_VERSION}}/linux/{} --output openvino_${{ONNXRUNTIME_OPENVINO_VERSION}}.tgz && \
+    tar -xf openvino_${{ONNXRUNTIME_OPENVINO_VERSION}}.tgz && \
+    mkdir -p ${{INTEL_OPENVINO_DIR}} && \
+    mv {}/* ${{INTEL_OPENVINO_DIR}} && \
+    rm openvino_${{ONNXRUNTIME_OPENVINO_VERSION}}.tgz && \
+    (cd ${{INTEL_OPENVINO_DIR}}/install_dependencies && \
         ./install_openvino_dependencies.sh -y) && \
-    ln -s ${INTEL_OPENVINO_DIR} ${INTEL_OPENVINO_DIR}/../openvino_`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,0,4)}'`
+    ln -s ${{INTEL_OPENVINO_DIR}} ${{INTEL_OPENVINO_DIR}}/../openvino_`echo ${{ONNXRUNTIME_OPENVINO_VERSION}} | awk '{{print substr($0,0,4)}}'`
 
 # Step 2: Configure the environment
 # Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-2-configure-the-environment
