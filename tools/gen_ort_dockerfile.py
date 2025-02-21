@@ -134,12 +134,13 @@ RUN pip3 install patchelf==0.17.2
     else:
         if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
             df += """
-ENV CCACHE_REMOTE_ONLY="true"
-ENV CCACHE_REMOTE_STORAGE="{}"
-ENV CMAKE_CXX_COMPILER_LAUNCHER="ccache"
-ENV CMAKE_C_COMPILER_LAUNCHER="ccache"
-ENV CMAKE_CUDA_COMPILER_LAUNCHER="ccache"
-ENV VERBOSE=1
+ENV CCACHE_REMOTE_ONLY="true" \\
+    CCACHE_REMOTE_STORAGE="{}" \\
+    CMAKE_CXX_COMPILER_LAUNCHER="ccache" \\
+    CMAKE_C_COMPILER_LAUNCHER="ccache" \\
+    CMAKE_CUDA_COMPILER_LAUNCHER="ccache" \\
+    VERBOSE=1
+
 RUN apt-get update \\
       && apt-get install -y --no-install-recommends ccache && ccache -p \\
       && rm -rf /var/lib/apt/lists/*
