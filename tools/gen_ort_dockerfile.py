@@ -144,7 +144,9 @@ ENV CCACHE_REMOTE_ONLY="true" \\
 RUN apt-get update \\
       && apt-get install -y --no-install-recommends ccache && ccache -p \\
       && rm -rf /var/lib/apt/lists/*
-""".format( os.getenv("CCACHE_REMOTE_STORAGE") )
+""".format(
+                os.getenv("CCACHE_REMOTE_STORAGE")
+            )
 
         df += """
 
