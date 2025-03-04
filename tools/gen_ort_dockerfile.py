@@ -64,7 +64,6 @@ OPENVINO_VERSION_MAP = {
         "2025.0",  # OpenVINO short version
         "2025.0.0.17942.1f68be9f594",  # OpenVINO version with build number
     ),
-
 }
 
 
@@ -183,12 +182,14 @@ ARG OPENVINO_VERSION_WITH_BUILD_NUMBER={}
             OPENVINO_VERSION_MAP[FLAGS.ort_openvino][1],
         )
 
-        # Openvino changed the filename of the toolkit in 2025.0.0 so we need to detect this for 
+        # Openvino changed the filename of the toolkit in 2025.0.0 so we need to detect this for
         # the release we want to install
         openvino_folder_name = "UNKNOWN_FOLDER_NAME"
         openvino_toolkit_filename = "UNKNOWN_FILENAME"
         if OPENVINO_VERSION_MAP[FLAGS.ort_openvino][0].split(".")[0] >= "2025":
-            openvino_folder_name = "openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64"
+            openvino_folder_name = (
+                "openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64"
+            )
             openvino_toolkit_filename = openvino_folder_name + ".tgz"
         else:
             openvino_folder_name = "l_openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64"
@@ -213,8 +214,7 @@ ENV LD_LIBRARY_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
 ENV PKG_CONFIG_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64/pkgconfig
 ENV PYTHONPATH=$INTEL_OPENVINO_DIR/python/python3.12:$INTEL_OPENVINO_DIR/python/python3:$PYTHONPATH
 """.format(
-            openvino_toolkit_filename,
-            openvino_folder_name
+            openvino_toolkit_filename, openvino_folder_name
         )
 
     ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
