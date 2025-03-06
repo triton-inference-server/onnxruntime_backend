@@ -60,6 +60,10 @@ OPENVINO_VERSION_MAP = {
         "2024.5",  # OpenVINO short version
         "2024.5.0.17288.7975fa5da0c",  # OpenVINO version with build number
     ),
+    "2025.0.0": (
+        "2025.0",  # OpenVINO short version
+        "2025.0.0.17942.1f68be9f594",  # OpenVINO version with build number
+    ),
 }
 
 
@@ -194,17 +198,30 @@ ARG OPENVINO_VERSION_WITH_BUILD_NUMBER={}
             OPENVINO_VERSION_MAP[FLAGS.ort_openvino][1],
         )
 
+        # Openvino changed the filename of the toolkit in 2025.0.0 so we need to detect this for
+        # the release we want to install
+        openvino_folder_name = "UNKNOWN_FOLDER_NAME"
+        openvino_toolkit_filename = "UNKNOWN_FILENAME"
+        if OPENVINO_VERSION_MAP[FLAGS.ort_openvino][0].split(".")[0] >= "2025":
+            openvino_folder_name = (
+                "openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64"
+            )
+            openvino_toolkit_filename = openvino_folder_name + ".tgz"
+        else:
+            openvino_folder_name = "l_openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64"
+            openvino_toolkit_filename = openvino_folder_name + ".tgz"
+
         df += """
 # Step 1: Download and install core components
 # Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-1-download-and-install-the-openvino-core-components
-RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/${OPENVINO_SHORT_VERSION}/linux/l_openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64.tgz --output openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
-    tar -xf openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
-    mkdir -p ${INTEL_OPENVINO_DIR} && \
-    mv l_openvino_toolkit_ubuntu24_${OPENVINO_VERSION_WITH_BUILD_NUMBER}_x86_64/* ${INTEL_OPENVINO_DIR} && \
-    rm openvino_${ONNXRUNTIME_OPENVINO_VERSION}.tgz && \
-    (cd ${INTEL_OPENVINO_DIR}/install_dependencies && \
+RUN curl -L https://storage.openvinotoolkit.org/repositories/openvino/packages/${{OPENVINO_SHORT_VERSION}}/linux/{} --output openvino_${{ONNXRUNTIME_OPENVINO_VERSION}}.tgz && \
+    tar -xf openvino_${{ONNXRUNTIME_OPENVINO_VERSION}}.tgz && \
+    mkdir -p ${{INTEL_OPENVINO_DIR}} && \
+    mv {}/* ${{INTEL_OPENVINO_DIR}} && \
+    rm openvino_${{ONNXRUNTIME_OPENVINO_VERSION}}.tgz && \
+    (cd ${{INTEL_OPENVINO_DIR}}/install_dependencies && \
         ./install_openvino_dependencies.sh -y) && \
-    ln -s ${INTEL_OPENVINO_DIR} ${INTEL_OPENVINO_DIR}/../openvino_`echo ${ONNXRUNTIME_OPENVINO_VERSION} | awk '{print substr($0,0,4)}'`
+    ln -s ${{INTEL_OPENVINO_DIR}} ${{INTEL_OPENVINO_DIR}}/../openvino_`echo ${{ONNXRUNTIME_OPENVINO_VERSION}} | awk '{{print substr($0,0,4)}}'`
 
 # Step 2: Configure the environment
 # Ref: https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html#step-2-configure-the-environment
@@ -212,7 +229,9 @@ ENV OpenVINO_DIR=$INTEL_OPENVINO_DIR/runtime/cmake
 ENV LD_LIBRARY_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64:$LD_LIBRARY_PATH
 ENV PKG_CONFIG_PATH=$INTEL_OPENVINO_DIR/runtime/lib/intel64/pkgconfig
 ENV PYTHONPATH=$INTEL_OPENVINO_DIR/python/python3.12:$INTEL_OPENVINO_DIR/python/python3:$PYTHONPATH
-"""
+""".format(
+            openvino_toolkit_filename, openvino_folder_name
+        )
 
     ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
     # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
