@@ -712,6 +712,11 @@ ModelState::LoadModel(
                     values.push_back(value);
                   }
                 }
+
+                // assign correct GPU to EP
+                keys.push_back(std::string("device_id"));
+                values.push_back(std::to_string(instance_group_device_id));
+
                 std::vector<const char*> c_keys, c_values;
                 if (!keys.empty() && !values.empty()) {
                   for (size_t i = 0; i < keys.size(); ++i) {
