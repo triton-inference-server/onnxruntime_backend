@@ -273,6 +273,9 @@ ARG ONNXRUNTIME_BUILD_CONFIG
 
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
     (cd onnxruntime && git submodule update --init --recursive)
+
+WORKDIR /workspace/onnxruntime
+RUN git fetch origin pull/24557/head && git cherry-pick 244e3cfe5b9952ea9421ea9404f6fd7e07cb39ec
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
