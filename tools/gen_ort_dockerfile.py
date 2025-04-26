@@ -275,7 +275,11 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
     (cd onnxruntime && git submodule update --init --recursive)
 
 WORKDIR /workspace/onnxruntime
-RUN git fetch origin pull/24557/head && git cherry-pick 244e3cfe5b9952ea9421ea9404f6fd7e07cb39ec
+RUN git config --global safe.directory "*" && \
+    git config --global user.email "noreply@nvidia.com" && \
+    git config --global user.name "NVIDIA" && \
+    git fetch origin pull/24557/head && \
+    git cherry-pick 244e3cfe5b9952ea9421ea9404f6fd7e07cb39ec
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
