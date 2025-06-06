@@ -275,8 +275,9 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-    (cd onnxruntime && git submodule update --init --recursive)
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime \\
+    && cd onnxruntime \\
+    && git cherry-pick 9dad9af9f9b48c05814d0c2d067d0565e8da6ce8
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
