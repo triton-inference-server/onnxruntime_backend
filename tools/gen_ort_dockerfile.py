@@ -275,8 +275,11 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-    (cd onnxruntime && git submodule update --init --recursive)
+# Cherry-pick commit: https://github.com/microsoft/onnxruntime/commit/9dad9af9f9b48c05814d0c2d067d0565e8da6ce8
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime \\
+    && cd onnxruntime \\
+    && git cherry-pick -n 9dad9af9f9b48c05814d0c2d067d0565e8da6ce8 \\
+    && sed -i 's/5ea4d05e62d7f954a46b3213f9b2535bdd866803/51982be81bbe52572b54180454df11a3ece9a934/g' cmake/deps.txt
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
