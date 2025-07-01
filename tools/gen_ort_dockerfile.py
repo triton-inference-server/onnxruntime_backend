@@ -177,19 +177,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gnupg \
         gnupg1
 
-RUN pip3 install patchelf==0.17.2
-
-# Install dependencies from
-# onnxruntime/dockerfiles/scripts/install_common_deps.sh.
-RUN apt update -q=2 \\
-    && apt install -y gpg wget \\
-    && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - |  tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null \\
-    && . /etc/os-release \\
-    && echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ $UBUNTU_CODENAME main" | tee /etc/apt/sources.list.d/kitware.list >/dev/null \\
-    && apt-get update -q=2 \\
-    && apt-get install -y --no-install-recommends cmake=3.28.3* cmake-data=3.28.3* \\
-    && cmake --version
-
+RUN pip3 install patchelf==0.17.2 cmake==4.0.3
 """
 
     if FLAGS.ort_openvino is not None:
@@ -279,11 +267,7 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-# Cherry-pick commit: https://github.com/microsoft/onnxruntime/commit/9dad9af9f9b48c05814d0c2d067d0565e8da6ce8
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime \\
-    && cd onnxruntime \\
-    && git cherry-pick -n 9dad9af9f9b48c05814d0c2d067d0565e8da6ce8 \\
-    && sed -i 's/5ea4d05e62d7f954a46b3213f9b2535bdd866803/51982be81bbe52572b54180454df11a3ece9a934/g' cmake/deps.txt
+RUN git clone -b main --recursive ${ONNXRUNTIME_REPO} onnxruntime
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
@@ -367,25 +351,19 @@ RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 # Copy all artifacts needed by the backend to /opt/onnxruntime
 #
 WORKDIR /opt/onnxruntime
-
-RUN mkdir -p /opt/onnxruntime && \
-    cp /workspace/onnxruntime/LICENSE /opt/onnxruntime && \
-    cat /workspace/onnxruntime/cmake/external/onnx/VERSION_NUMBER > /opt/onnxruntime/ort_onnx_version.txt
+RUN cp /workspace/onnxruntime/LICENSE . \\
+    && cat /workspace/onnxruntime/cmake/external/onnx/VERSION_NUMBER > ort_onnx_version.txt
 
 # ONNX Runtime headers, libraries and binaries
-RUN mkdir -p /opt/onnxruntime/include && \
-    cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_c_api.h \
-       /opt/onnxruntime/include && \
-    cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h \
-       /opt/onnxruntime/include && \
-    cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h \
-       /opt/onnxruntime/include
+WORKDIR /opt/onnxruntime/include
+RUN cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_c_api.h . \\
+    && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h . \\
+    && cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h . \\
+    && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_ep_c_api.h .
 
-RUN mkdir -p /opt/onnxruntime/lib && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so \
-       /opt/onnxruntime/lib && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so \
-       /opt/onnxruntime/lib
+WORKDIR /opt/onnxruntime/lib
+RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so . \\
+    && cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime.so .
 """
     if target_platform() == "igpu":
         df += """
@@ -393,12 +371,10 @@ RUN mkdir -p /opt/onnxruntime/bin
 """
     else:
         df += """
-RUN mkdir -p /opt/onnxruntime/bin && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnxruntime_perf_test \
-       /opt/onnxruntime/bin && \
-    cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnx_test_runner \
-       /opt/onnxruntime/bin && \
-    (cd /opt/onnxruntime/bin && chmod a+x *)
+WORKDIR /opt/onnxruntime/bin
+RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnxruntime_perf_test . \\
+    && cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/onnx_test_runner . \\
+    && chmod a+x *
 """
 
     if FLAGS.enable_gpu:
