@@ -196,7 +196,7 @@ RUN apt update -q=2 \\
         df += """
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
-ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
+ENV INTEL_OPENVINO_DIR=/opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
 """
         df += """
 ARG OPENVINO_SHORT_VERSION={}
