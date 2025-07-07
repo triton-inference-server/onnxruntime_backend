@@ -196,7 +196,7 @@ RUN apt update -q=2 \\
         df += """
 # Install OpenVINO
 ARG ONNXRUNTIME_OPENVINO_VERSION
-ENV INTEL_OPENVINO_DIR /opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
+ENV INTEL_OPENVINO_DIR=/opt/intel/openvino_${ONNXRUNTIME_OPENVINO_VERSION}
 """
         df += """
 ARG OPENVINO_SHORT_VERSION={}
@@ -322,9 +322,31 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
         ep_flags += (
             " --skip_tests --cmake_extra_defines 'onnxruntime_BUILD_UNIT_TESTS=OFF'"
         )
-        cuda_archs = "87;101"
+        if os.getenv("CUDA_ARCH_LIST") is not None:
+            print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
+            cuda_archs = (
+                os.getenv("CUDA_ARCH_LIST")
+                .replace("PTX", "")
+                .replace(" ", "-real;")
+                .replace(".", "")
+            )
+            cuda_archs = re.sub(r"-real;$", "", cuda_archs)
+            print(f"[INFO] Set ONNX Runtime to use CUDA architectures to: {cuda_archs}")
+        else:
+            cuda_archs = "87"
     else:
-        cuda_archs = "75;80;86;89;90;100;120"
+        if os.getenv("CUDA_ARCH_LIST") is not None:
+            print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
+            cuda_archs = (
+                os.getenv("CUDA_ARCH_LIST")
+                .replace("PTX", "")
+                .replace(" ", "-real;")
+                .replace(".", "")
+            )
+            cuda_archs = re.sub(r"-real;$", "", cuda_archs)
+            print(f"[INFO] Set ONNX Runtime to use CUDA architectures to: {cuda_archs}")
+        else:
+            cuda_archs = "75;80;86;90;100;120"
 
     df += """
 WORKDIR /workspace/onnxruntime
