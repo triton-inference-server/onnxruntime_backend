@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -177,18 +177,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gnupg \
         gnupg1
 
-RUN pip3 install patchelf==0.17.2
-
-# Install dependencies from
-# onnxruntime/dockerfiles/scripts/install_common_deps.sh.
-RUN apt update -q=2 \\
-    && apt install -y gpg wget \\
-    && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - |  tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null \\
-    && . /etc/os-release \\
-    && echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ $UBUNTU_CODENAME main" | tee /etc/apt/sources.list.d/kitware.list >/dev/null \\
-    && apt-get update -q=2 \\
-    && apt-get install -y --no-install-recommends cmake=3.28.3* cmake-data=3.28.3* \\
-    && cmake --version
+RUN pip3 install patchelf==0.17.2 cmake==4.0.3
 
 """
 
