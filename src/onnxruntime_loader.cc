@@ -42,6 +42,7 @@ OnnxLoader::~OnnxLoader()
 {
   if (env_ != nullptr) {
     ort_api->ReleaseEnv(env_);
+    loader.release();
   }
 }
 
@@ -144,10 +145,6 @@ OnnxLoader::Stop()
   if (loader != nullptr) {
     loader->closing_ = true;
     TryRelease(false);
-  } else {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNAVAILABLE,
-        "OnnxLoader singleton has not been initialized");
   }
 
   return nullptr;  // success
