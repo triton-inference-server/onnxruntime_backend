@@ -323,7 +323,9 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
         else:
             cuda_archs = "87"
     else:
-        if os.getenv("CUDA_ARCH_LIST") is not None:
+        if os.uname().machine != "x86_64":
+            cuda_archs = "all-major"
+        elif os.getenv("CUDA_ARCH_LIST") is not None:
             print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
             cuda_archs = (
                 os.getenv("CUDA_ARCH_LIST")
