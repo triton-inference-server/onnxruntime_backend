@@ -186,7 +186,6 @@ RUN pip3 install \\
        numpy \\
        packaging \\
        patchelf==0.17.2 \\
-       psutil \\
        wheel>=0.35.1
 """
 
@@ -346,15 +345,14 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
 
     df += """
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --build_shared_lib \
+ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --parallel --skip_submodule_sync --build_shared_lib \
     --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}'  --cmake_extra_defines CMAKE_POLICY_VERSION_MINIMUM=3.5 --build_wheel"
 """.format(
         cuda_archs
     )
 
     df += """
-RUN N_PARALLEL_JOBS=$( [[ $(nproc --all) < 64 ]] &&  echo $(nproc --all)  || echo 64 ) && \\
-    ./build.sh ${{COMMON_BUILD_ARGS}} --parallel  ${{N_PARALLEL_JOBS}} --update --build {}
+RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 """.format(
         ep_flags
     )
