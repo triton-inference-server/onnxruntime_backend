@@ -353,7 +353,7 @@ ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_s
     )
 
     df += """
-RUN ./build.sh ${{COMMON_BUILD_ARGS}} --parallel  $(( nproc --all )) --update --build {}
+RUN ./build.sh ${{COMMON_BUILD_ARGS}} --parallel  $( nproc --all ) --update --build {}
 """.format(
         ep_flags
     )
