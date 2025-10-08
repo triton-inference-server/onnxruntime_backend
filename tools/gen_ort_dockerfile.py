@@ -134,16 +134,16 @@ ENV PYBIN=${PYTHONPATH}/bin
 ENV PYTHON_BIN_PATH=${PYBIN}/python${PYVER} \
     PATH=${PYBIN}:${PATH}
 
-RUN yum install -y \
-        wget \
-        zip \
-        ca-certificates \
-        curl \
-        python3-pip \
-        git \
-        gnupg \
+RUN yum install -y \\
+        ca-certificates \\
+        curl \\
+        git \\
+        gnupg \\
         gnupg1 \
-        openssl-devel
+        openssl-devel \\
+        python3-pip \
+        wget \\
+        zip
 
 RUN pip3 install patchelf==0.17.2
 """
@@ -166,22 +166,28 @@ RUN apt-get update \\
 
         df += """
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        software-properties-common \
-        wget \
-        zip \
-        ca-certificates \
-        build-essential \
-        curl \
-        libcurl4-openssl-dev \
-        libssl-dev \
-        python3-dev \
-        python3-pip \
-        git \
-        gnupg \
-        gnupg1
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+        build-essential \\
+        ca-certificates \\
+        curl \\
+        git \\
+        gnupg \\
+        gnupg1 \\
+        libcurl4-openssl-dev \\
+        libssl-dev \\
+        python3-dev \\
+        python3-pip \\
+        software-properties-common \\
+        wget \\
+        zip
 
-RUN pip3 install patchelf==0.17.2 cmake==4.0.3
+RUN pip3 install \\
+       cmake==4.0.3 \\
+       numpy \\
+       packaging \\
+       patchelf==0.17.2 \\
+       psutil \\
+       wheel>=0.35.1
 """
 
     if FLAGS.ort_openvino is not None:
