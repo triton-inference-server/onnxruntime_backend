@@ -354,7 +354,7 @@ ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_s
 
     df += """
 RUN N_PARALLEL_JOBS=$( [[ $(nproc --all) < 64 ]] &&  echo $(nproc --all)  || echo 64 ) && \\
-    ./build.sh ${{COMMON_BUILD_ARGS}} --parallel  ${N_PARALLEL_JOBS} --update --build {}
+    ./build.sh ${{COMMON_BUILD_ARGS}} --parallel  ${{N_PARALLEL_JOBS}} --update --build {}
 """.format(
         ep_flags
     )
