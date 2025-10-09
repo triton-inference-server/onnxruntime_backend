@@ -134,16 +134,16 @@ ENV PYBIN=${PYTHONPATH}/bin
 ENV PYTHON_BIN_PATH=${PYBIN}/python${PYVER} \
     PATH=${PYBIN}:${PATH}
 
-RUN yum install -y \
-        wget \
-        zip \
-        ca-certificates \
-        curl \
-        python3-pip \
-        git \
-        gnupg \
+RUN yum install -y \\
+        ca-certificates \\
+        curl \\
+        git \\
+        gnupg \\
         gnupg1 \
-        openssl-devel
+        openssl-devel \\
+        python3-pip \
+        wget \\
+        zip
 
 RUN pip3 install patchelf==0.17.2
 """
@@ -166,22 +166,29 @@ RUN apt-get update \\
 
         df += """
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        software-properties-common \
-        wget \
-        zip \
-        ca-certificates \
-        build-essential \
-        curl \
-        libcurl4-openssl-dev \
-        libssl-dev \
-        python3-dev \
-        python3-pip \
-        git \
-        gnupg \
-        gnupg1
+RUN apt-get update && apt-get install -y --no-install-recommends \\
+        build-essential \\
+        ca-certificates \\
+        curl \\
+        git \\
+        gnupg \\
+        gnupg1 \\
+        libcurl4-openssl-dev \\
+        libssl-dev \\
+        python3-dev \\
+        python3-pip \\
+        software-properties-common \\
+        wget \\
+        zip
 
-RUN pip3 install patchelf==0.17.2 cmake==4.0.3
+RUN pip3 install \\
+       cmake==4.0.3 \\
+       numpy \\
+       packaging \\
+       patchelf==0.17.2 \\
+       wheel>=0.35.1
+
+ENV VERBOSE=1
 """
 
     if FLAGS.ort_openvino is not None:
@@ -340,8 +347,8 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
 
     df += """
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --parallel --build_shared_lib \
-    --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}'  --cmake_extra_defines CMAKE_POLICY_VERSION_MINIMUM=3.5 "
+ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --parallel --skip_submodule_sync --build_shared_lib \
+    --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}'  --cmake_extra_defines CMAKE_POLICY_VERSION_MINIMUM=3.5 --build_wheel"
 """.format(
         cuda_archs
     )
@@ -523,7 +530,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=75;80;86;90;100;120" --skip_submodule_sync --parallel --build_shared_lib --compile_no_warning_as_error --skip_tests --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=75;80;86;90;100;120" --skip_submodule_sync --parallel --build_shared_lib --compile_no_warning_as_error --skip_tests --build_wheel --update --build --build_dir /workspace/build {}
 """.format(
         ep_flags
     )
