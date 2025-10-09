@@ -187,6 +187,8 @@ RUN pip3 install \\
        packaging \\
        patchelf==0.17.2 \\
        wheel>=0.35.1
+
+ENV VERBOSE=1
 """
 
     if FLAGS.ort_openvino is not None:
