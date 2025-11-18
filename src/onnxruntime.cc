@@ -925,13 +925,44 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_ONNXRUNTIME_OPENVINO
             if (name == kOpenVINOExecutionAccelerator) {
               need_lock = true;
-              OrtOpenVINOProviderOptions openvino_options;
-              openvino_options.device_type =
-                  "CPU";  // device_type default is CPU
+
+              std::vector<std::string> openvino_option_keys;
+              std::vector<std::string> openvino_option_values;
+
+              triton::common::TritonJson::Value params;
+              bool has_device_type = false;
+              if (ea.Find("parameters", &params)) {
+                std::vector<std::string> param_keys;
+                RETURN_IF_ERROR(params.Members(&param_keys));
+                for (const auto& param_key : param_keys) {
+                  std::string value;
+                  RETURN_IF_ERROR(
+                      params.MemberAsString(param_key.c_str(), &value));
+                  if (param_key == "device_type") {
+                    has_device_type = true;
+                  }
+                  openvino_option_keys.push_back(param_key);
+                  openvino_option_values.push_back(value);
+                }
+              }
+
+              if (!has_device_type) {
+                openvino_option_keys.push_back("device_type");
+                openvino_option_values.push_back(
+                    "CPU");  // device_type default is CPU
+              }
+
+              std::vector<const char*> option_keys;
+              std::vector<const char*> option_values;
+              for (size_t idx = 0; idx < openvino_option_keys.size(); ++idx) {
+                option_keys.push_back(openvino_option_keys[idx].c_str());
+                option_values.push_back(openvino_option_values[idx].c_str());
+              }
 
               RETURN_IF_ORT_ERROR(
-                  ort_api->SessionOptionsAppendExecutionProvider_OpenVINO(
-                      soptions, &openvino_options));
+                  ort_api->SessionOptionsAppendExecutionProvider_OpenVINO_V2(
+                      soptions, option_keys.data(), option_values.data(),
+                      option_keys.size()));
 
               LOG_MESSAGE(
                   TRITONSERVER_LOG_VERBOSE,
