@@ -145,7 +145,15 @@ RUN dnf install -y \\
         wget \\
         zip
 
-RUN pip3 install patchelf==0.17.2 cmake==4.0.3 numpy>=2.0.0
+WORKDIR /tmp
+ENV CMAKE_VERSION=4.0.3
+RUN if [[ $(uname -m) == "x86_64" ]]; then arch="x86_64"; else arch="aarch64"; fi \
+    && curl -OL https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-${arch}.tar.gz \
+    && tar -xzf cmake-${CMAKE_VERSION}-linux-${arch}.tar.gz --strip-components=1 -C /usr/local \
+    && rm -f cmake-${CMAKE_VERSION}-linux-${arch}.tar.gz \
+    && cmake --version
+
+RUN pip3 install patchelf==0.17.2 numpy>=2.0.0
 """
     else:
         if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
