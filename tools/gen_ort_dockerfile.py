@@ -139,13 +139,13 @@ RUN yum install -y \\
         curl \\
         git \\
         gnupg \\
-        gnupg1 \
+        gnupg1 \\
         openssl-devel \\
-        python3-pip \
+        python3-pip \\
         wget \\
         zip
 
-RUN pip3 install patchelf==0.17.2
+RUN pip3 install patchelf==0.17.2 numpy
 """
     else:
         if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
