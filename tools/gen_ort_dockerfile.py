@@ -134,7 +134,7 @@ ENV PYBIN=${PYTHONPATH}/bin
 ENV PYTHON_BIN_PATH=${PYBIN}/python${PYVER} \
     PATH=${PYBIN}:${PATH}
 
-RUN yum install -y \\
+RUN dnf install -y \\
         ca-certificates \\
         curl \\
         git \\
@@ -145,7 +145,9 @@ RUN yum install -y \\
         wget \\
         zip
 
-RUN pip3 install patchelf==0.17.2 numpy
+RUN pipx install cmake==4.0.3 --force
+
+RUN pip3 install patchelf==0.17.2 numpy>=2.0.0
 """
     else:
         if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
