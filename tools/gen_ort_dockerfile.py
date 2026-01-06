@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -79,6 +79,10 @@ OPENVINO_VERSION_MAP = {
     "2025.4.0": (
         "2025.4",  # OpenVINO short version
         "2025.4.0.20398.8fdad55727d",  # OpenVINO version with build number
+    ),
+    "2025.4.1": (
+        "2025.4.1",  # OpenVINO short version
+        "2025.4.1.20426.82bbf0292c5",  # OpenVINO version with build number
     ),
 }
 
