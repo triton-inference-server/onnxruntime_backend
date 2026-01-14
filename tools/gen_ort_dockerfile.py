@@ -142,7 +142,8 @@ ENV PYBIN=${PYTHONPATH}/bin
 ENV PYTHON_BIN_PATH=${PYBIN}/python${PYVER} \
     PATH=${PYBIN}:${PATH}
 
-RUN dnf install -y \\
+RUN dnf update && \\
+    dnf install -y \\
         ca-certificates \\
         curl \\
         git \\
