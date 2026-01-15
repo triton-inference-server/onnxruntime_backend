@@ -147,7 +147,6 @@ RUN dnf install -y \\
         curl \\
         git \\
         gnupg \\
-        gnupg1 \\
         openssl-devel \\
         python3-pip \\
         wget \\
