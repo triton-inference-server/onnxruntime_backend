@@ -142,13 +142,11 @@ ENV PYBIN=${PYTHONPATH}/bin
 ENV PYTHON_BIN_PATH=${PYBIN}/python${PYVER} \
     PATH=${PYBIN}:${PATH}
 
-RUN dnf update && \\
-    dnf install -y \\
+RUN dnf install -y \\
         ca-certificates \\
         curl \\
         git \\
         gnupg \\
-        gnupg1 \\
         openssl-devel \\
         python3-pip \\
         wget \\
