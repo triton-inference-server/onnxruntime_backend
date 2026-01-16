@@ -25,6 +25,23 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# Modifications Copyright (c) 2024-2025 Advanced Micro Devices, Inc.
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 import argparse
 import os
 import platform
@@ -197,6 +214,18 @@ RUN pip3 install \\
 ENV VERBOSE=1
 """
 
+    # ROCm: ONNX Runtime and MIGraphX are pre-built in base image
+    if FLAGS.enable_rocm:
+        df += """
+# ROCm, MIGraphX, and ONNX Runtime already installed in base image
+# Just install build tools and utilities
+RUN apt-get update && \\
+    apt-get install -y --no-install-recommends \\
+        sudo git apt-utils bash build-essential curl \\
+        python3-dev python3-pip aria2 libnuma-dev pkg-config ccache \\
+    && rm -rf /var/lib/apt/lists/*
+"""
+
     if FLAGS.ort_openvino is not None:
         df += """
 # Install OpenVINO
@@ -246,11 +275,25 @@ ENV PYTHONPATH=$INTEL_OPENVINO_DIR/python/python3.12:$INTEL_OPENVINO_DIR/python/
             openvino_toolkit_filename, openvino_folder_name
         )
 
+    # ROCm: Skip building ONNX Runtime from source - use pre-built from base image
+    if FLAGS.enable_rocm:
+        df += """
+#
+# ONNX Runtime for ROCm - already installed in base image
+#
+ARG ONNXRUNTIME_VERSION
+ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_BUILD_CONFIG
+
+# ONNX Runtime and MIGraphX are pre-built in the base image
+RUN echo "ONNX Runtime and MIGraphX already installed in base image" && \\
+    python3 -c "import onnxruntime; print('ONNX Runtime version:', onnxruntime.__version__)"
+"""
     ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
     # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
     # use tensorrt-8.0 branch instead of using rel-1.8.1
     # From ORT 1.9 onwards we will switch back to using rel-* branches
-    if FLAGS.ort_version == "1.8.1":
+    elif FLAGS.ort_version == "1.8.1":
         df += """
 #
 # ONNX Runtime build
@@ -287,12 +330,14 @@ ARG ONNXRUNTIME_BUILD_CONFIG
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime
         """
 
-    if FLAGS.onnx_tensorrt_tag != "":
-        df += """
+    # Skip onnx-tensorrt tag and build for ROCm (using pre-built)
+    if not FLAGS.enable_rocm:
+        if FLAGS.onnx_tensorrt_tag != "":
+            df += """
     RUN (cd /workspace/onnxruntime/cmake/external/onnx-tensorrt && git fetch origin {}:ortrefbranch && git checkout ortrefbranch)
     """.format(
-            FLAGS.onnx_tensorrt_tag
-        )
+                FLAGS.onnx_tensorrt_tag
+            )
 
     ep_flags = ""
     if FLAGS.enable_gpu:
@@ -351,19 +396,67 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
         else:
             cuda_archs = "75;80;86;90;100;120"
 
-    df += """
+    # Skip build.sh for ROCm (using pre-built)
+    if not FLAGS.enable_rocm:
+        df += """
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --parallel --skip_submodule_sync --build_shared_lib \
+ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --parallel --skip_submodule_sync --build_shared_lib \\
     --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}'  --cmake_extra_defines CMAKE_POLICY_VERSION_MINIMUM=3.5 --build_wheel"
 """.format(
-        cuda_archs
-    )
+            cuda_archs
+        )
 
-    df += """
+        df += """
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 """.format(
-        ep_flags
-    )
+            ep_flags
+        )
+
+    # ROCm: Copy pre-built artifacts from base image to /opt/onnxruntime
+    if FLAGS.enable_rocm:
+        df += """
+#
+# Copy ONNX Runtime artifacts from base image installation to /opt/onnxruntime
+#
+WORKDIR /workspace
+
+RUN mkdir -p /opt/onnxruntime/lib /opt/onnxruntime/include
+
+# Find and copy shared libraries from pip-installed onnxruntime
+# Note: Only MIGraphX EP is used, ROCm EP is skipped
+RUN SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])") && \\
+    echo "Found site-packages at: $SITE_PACKAGES" && \\
+    cp $SITE_PACKAGES/onnxruntime/capi/libonnxruntime.so.* /opt/onnxruntime/lib/ && \\
+    cp $SITE_PACKAGES/onnxruntime/capi/libonnxruntime_providers_shared.so /opt/onnxruntime/lib/ && \\
+    cp $SITE_PACKAGES/onnxruntime/capi/libonnxruntime_providers_migraphx.so /opt/onnxruntime/lib/ && \\
+    cd /opt/onnxruntime/lib && \\
+    ORT_SO=$(ls libonnxruntime.so.* | head -1) && \\
+    ln -sf $ORT_SO libonnxruntime.so.1 && \\
+    ln -sf $ORT_SO libonnxruntime.so
+
+# Copy header files from installed ONNX Runtime
+# Headers are in /opt/rocm/include/onnxruntime/ (from cmake install)
+RUN echo "Copying header files from /opt/rocm/include/onnxruntime/" && \\
+    cp /opt/rocm/include/onnxruntime/onnxruntime_c_api.h /opt/onnxruntime/include/ && \\
+    cp /opt/rocm/include/onnxruntime/onnxruntime_session_options_config_keys.h /opt/onnxruntime/include/ && \\
+    cp /opt/rocm/include/onnxruntime/cpu_provider_factory.h /opt/onnxruntime/include/ && \\
+    (cp /opt/rocm/include/onnxruntime/onnxruntime_ep_c_api.h /opt/onnxruntime/include/ 2>/dev/null || echo "EP header not found, skipping") && \\
+    echo "${ONNXRUNTIME_VERSION}" > /opt/onnxruntime/ort_onnx_version.txt && \\
+    echo "ONNX Runtime headers and libraries copied to /opt/onnxruntime"
+
+# Set RPATH for all .so files
+RUN cd /opt/onnxruntime/lib && \\
+    for i in `find . -mindepth 1 -maxdepth 1 -type f -name '*\\.so*'`; do \\
+        patchelf --set-rpath '$ORIGIN' $i || true; \\
+    done
+
+# Create bin and test directories
+RUN mkdir -p /opt/onnxruntime/bin /opt/onnxruntime/test
+"""
+        # Write dockerfile and return early for ROCm
+        with open(output_file, "w") as dfile:
+            dfile.write(df)
+        return
 
     df += """
 #
@@ -635,6 +728,11 @@ def preprocess_gpu_flags():
             else:
                 FLAGS.tensorrt_home = "/usr/src/tensorrt"
 
+        # ROCm defaults
+        if FLAGS.enable_rocm:
+            if FLAGS.rocm_home is None:
+                FLAGS.rocm_home = "/opt/rocm"
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -695,8 +793,25 @@ if __name__ == "__main__":
     )
     parser.add_argument("--trt-version", type=str, default="", help="TRT version.")
 
+    # ROCm/MIGraphX arguments
+    parser.add_argument(
+        "--enable-rocm", action="store_true", required=False, help="Enable ROCm GPU support"
+    )
+    parser.add_argument(
+        "--rocm-version", type=str, required=False, help="Version for ROCm."
+    )
+    parser.add_argument(
+        "--rocm-home", type=str, required=False, help="Home directory for ROCm."
+    )
+    parser.add_argument(
+        "--ort-migraphx",
+        action="store_true",
+        required=False,
+        help="Enable MIGraphX execution provider.",
+    )
+
     FLAGS = parser.parse_args()
-    if FLAGS.enable_gpu:
+    if FLAGS.enable_gpu or FLAGS.enable_rocm:
         preprocess_gpu_flags()
 
     # if a tag is provided by the user, then simply use it

@@ -24,6 +24,25 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+/*
+ * Modifications Copyright (c) 2024 Advanced Micro Devices, Inc.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 #include <stdint.h>
 
 #include <mutex>
@@ -42,6 +61,11 @@
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
+
+#ifdef TRITON_ENABLE_ROCM
+#include <hip/hip_runtime_api.h>
+#endif  // TRITON_ENABLE_ROCM
+
 
 //
 // ONNX Runtime Backend that implements the TRITONBACKEND API.
@@ -441,7 +465,7 @@ ModelState::LoadModel(
   // will check it.
 
   // GPU execution providers
-#ifdef TRITON_ENABLE_GPU
+#if defined(TRITON_ENABLE_GPU) || defined(TRITON_ENABLE_ROCM)
   if ((instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) ||
       (instance_group_kind == TRITONSERVER_INSTANCEGROUPKIND_AUTO)) {
     std::map<std::string, std::string> cuda_options_map;
@@ -742,6 +766,98 @@ ModelState::LoadModel(
               continue;
             }
 #endif  // TRITON_ENABLE_ONNXRUNTIME_TENSORRT
+#ifdef TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX
+            if (name == kMIGraphXExecutionAccelerator) {
+              // create MIGraphX options with default values
+              std::string int8_calibration_table_name;
+              std::string model_cache_dir;
+              OrtMIGraphXProviderOptions migx_options{
+                  instance_group_device_id,
+                  0,        // migraphx_fp16_enable
+                  0,        // migraphx_bf16_enable
+                  0,        // migraphx_fp8_enable
+                  0,        // migraphx_int8_enable
+                  0,        // migraphx_use_native_calibration_table
+                  nullptr,  // migraphx_int8_calibration_table_name
+                  nullptr,  // migraphx_cache_dir
+                  false,    // migraphx_exhaustive_tune
+                  SIZE_MAX, // migraphx_mem_limit (use all available memory)
+                  0,        // migraphx_arena_extend_strategy (0 = kNextPowerOfTwo)
+                  0,        // migraphx_max_dynamic_batch (0 = no dynamic batch)
+              };
+              // Validate and set parameters
+              triton::common::TritonJson::Value params;
+              if (ea.Find("parameters", &params)) {
+                std::vector<std::string> param_keys;
+                RETURN_IF_ERROR(params.Members(&param_keys));
+                for (const auto& param_key : param_keys) {
+                  std::string value_string;
+                  if (param_key == "precision_mode") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    if (value_string == "FP16") {
+                      migx_options.migraphx_fp16_enable = 1;
+                    } else if (value_string == "BF16") {
+                      migx_options.migraphx_bf16_enable = 1;
+                    } else if (value_string == "FP8") {
+                      migx_options.migraphx_fp8_enable = 1;
+                    } else if (value_string == "INT8") {
+                      migx_options.migraphx_int8_enable = 1;
+                    } else if (value_string != "FP32") {
+                      RETURN_ERROR_IF_FALSE(
+                          false, TRITONSERVER_ERROR_INVALID_ARG,
+                          std::string("unsupported precision mode '") +
+                              value_string + "' is requested");
+                    }
+                  } else if (param_key == "int8_calibration_table_name") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &int8_calibration_table_name));
+                    migx_options.migraphx_int8_calibration_table_name =
+                        int8_calibration_table_name.c_str();
+                  } else if (param_key == "int8_use_native_calibration_table") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    int use_native_calibration_table;
+                    RETURN_IF_ERROR(ParseIntValue(
+                        value_string, &use_native_calibration_table));
+                    migx_options.migraphx_use_native_calibration_table =
+                        use_native_calibration_table;
+                  } else if (param_key == "migraphx_model_cache_dir") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &model_cache_dir));
+                    migx_options.migraphx_cache_dir =
+                        model_cache_dir.c_str();
+                  } else if (param_key == "migraphx_exhaustive_tune") {
+                    std::string value_string;
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    if (value_string == "true")
+                    {
+                      migx_options.migraphx_exhaustive_tune = true;
+                    }
+                  } else {
+                    return TRITONSERVER_ErrorNew(
+                        TRITONSERVER_ERROR_INVALID_ARG,
+                        std::string(
+                            "unknown parameter '" + param_key +
+                            "' is provided for MIGraphX Execution "
+                            "Accelerator")
+                            .c_str());
+                  }
+                }
+              }
+              RETURN_IF_ORT_ERROR(
+                  ort_api->SessionOptionsAppendExecutionProvider_MIGraphX(
+                      soptions, &migx_options));
+              LOG_MESSAGE(
+                  TRITONSERVER_LOG_VERBOSE,
+                  (std::string("MIGraphX Execution Accelerator is set for '") +
+                   Name() + "' on device " +
+                   std::to_string(instance_group_device_id))
+                      .c_str());
+              continue;
+            }
+#endif  // TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX
 
             if (name == "cuda") {
               // Parse CUDA EP configurations
@@ -782,6 +898,7 @@ ModelState::LoadModel(
       }
     }
 
+#ifdef TRITON_ENABLE_GPU
     // Default GPU execution provider.
     // Using default values for everything other than device id and cuda
     // stream
@@ -903,8 +1020,66 @@ ModelState::LoadModel(
          std::string(" with options: ") + std::string(options))
             .c_str());
     RETURN_IF_ORT_ERROR(ort_api->AllocatorFree(allocator, options));
-  }
 #endif  // TRITON_ENABLE_GPU
+
+#if defined(TRITON_ENABLE_ROCM) && !defined(TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX)
+    // Default AMD GPU execution provider using ROCm
+    // Using default values for everything other than device id and ROCM
+    // stream
+    OrtROCMProviderOptions rocm_options;
+    rocm_options.device_id = instance_group_device_id;
+    rocm_options.has_user_compute_stream = stream != nullptr ? 1 : 0;
+    rocm_options.user_compute_stream =
+        stream != nullptr ? (void*)stream : nullptr,
+    rocm_options.default_memory_arena_cfg = nullptr;
+
+    {
+      // Parse ROCm EP configurations
+      triton::common::TritonJson::Value params;
+      if (model_config_.Find("parameters", &params)) {
+        int miopen_conv_exhaustive_search = 0;
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "miopen_conv_exhaustive_search", &miopen_conv_exhaustive_search, 0));
+        rocm_options.miopen_conv_exhaustive_search = miopen_conv_exhaustive_search;
+
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "gpu_mem_limit", &rocm_options.gpu_mem_limit,
+            std::numeric_limits<size_t>::max()));
+
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "arena_extend_strategy",
+            &rocm_options.arena_extend_strategy, 0));
+
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "do_copy_in_default_stream",
+            &rocm_options.do_copy_in_default_stream, true));
+
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "tunable_op_enable",
+            &rocm_options.tunable_op_enable, true));
+
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "tunable_op_tuning_enable",
+            &rocm_options.tunable_op_tuning_enable, true));
+
+        int tunable_op_max_tuning_ms = 0;
+        RETURN_IF_ERROR(TryParseModelStringParameter(
+            params, "tunable_op_max_tuning_duration_ms", &tunable_op_max_tuning_ms, 0));
+        rocm_options.tunable_op_max_tuning_duration_ms = tunable_op_max_tuning_ms;
+      }
+    }
+
+    RETURN_IF_ORT_ERROR(ort_api->SessionOptionsAppendExecutionProvider_ROCM(
+        soptions, &rocm_options));
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_VERBOSE,
+        (std::string("ROCM Execution Accelerator is set for '") + Name() +
+         "' on device " + std::to_string(instance_group_device_id))
+            .c_str());
+#endif  // TRITON_ENABLE_ROCM
+  }
+
+#endif  // TRITON_ENABLE_GPU || TRITON_ENABLE_ROCM
 
   // CPU execution providers
   {
@@ -1031,7 +1206,7 @@ ModelState::AutoCompleteConfig()
   {
     TRITONSERVER_InstanceGroupKind kind = TRITONSERVER_INSTANCEGROUPKIND_CPU;
 
-#ifdef TRITON_ENABLE_GPU
+#if defined(TRITON_ENABLE_GPU) || defined(TRITON_ENABLE_ROCM)
     triton::common::TritonJson::Value instance_group;
     ModelConfig().Find("instance_group", &instance_group);
 
@@ -1053,7 +1228,7 @@ ModelState::AutoCompleteConfig()
         break;
       }
     }
-#endif  // TRITON_ENABLE_GPU
+#endif  // TRITON_ENABLE_GPU || TRITON_ENABLE_ROCM
 
     OrtSession* sptr = nullptr;
     RETURN_IF_ERROR(LoadModel(
@@ -1367,12 +1542,21 @@ ModelInstanceState::ModelInstanceState(
       ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
       &default_allocator_, CudaStream()));
 
+#ifdef TRITON_ENABLE_GPU
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     THROW_IF_BACKEND_INSTANCE_ORT_ERROR(ort_api->CreateMemoryInfo(
         "Cuda", OrtAllocatorType::OrtArenaAllocator, DeviceId(),
         OrtMemTypeDefault, &cuda_allocator_info_));
   }
+#endif //TRITON_ENABLE_GPU
 
+#ifdef TRITON_ENABLE_ROCM
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+    THROW_IF_BACKEND_INSTANCE_ORT_ERROR(ort_api->CreateMemoryInfo(
+        "Hip", OrtAllocatorType::OrtArenaAllocator, DeviceId(),
+        OrtMemTypeDefault, &cuda_allocator_info_));
+  }
+#endif //TRITON_ENABLE_ROCM
   THROW_IF_BACKEND_INSTANCE_ORT_ERROR(
       ort_api->AllocatorGetInfo(default_allocator_, &cpu_allocator_info_));
 
@@ -2125,6 +2309,13 @@ ModelInstanceState::ProcessRequests(
   }
 #endif
 
+  // Wait for any in-flight input tensor copies to complete.
+#ifdef TRITON_ENABLE_ROCM
+  if (cuda_copy) {
+    static_cast<void>(hipStreamSynchronize(static_cast<hipStream_t>(CudaStream())));
+  }
+#endif
+
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
@@ -2497,6 +2688,15 @@ ModelInstanceState::SetStringInputTensor(
   }
 #endif  // TRITON_ENABLE_GPU
 
+#ifdef TRITON_ENABLE_ROCM
+  // Synchronize to ensure the buffer is ready to be modified
+  if (*cuda_copy) {
+    static_cast<void>(hipStreamSynchronize(static_cast<hipStream_t>(CudaStream())));
+
+    *cuda_copy = false;
+  }
+#endif  // TRITON_ENABLE_ROCM
+
   // Modify input buffer and set string expected by ORT
   SetStringInputBuffer(
       input_name, expected_byte_sizes, expected_element_cnts, responses,
@@ -2732,6 +2932,11 @@ ModelInstanceState::ReadOutputTensors(
     cudaStreamSynchronize(stream_);
   }
 #endif  // TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
+  if (cuda_copy) {
+    static_cast<void>(hipStreamSynchronize(static_cast<hipStream_t>(stream_)));
+  }
+#endif  // TRITON_ENABLE_ROCM
   return nullptr;
 }
 
