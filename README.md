@@ -1,5 +1,5 @@
 <!--
-# Copyright (c) 2020-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2026, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -90,7 +90,7 @@ selection of the compute precision and workspace size. The optimization
 parameters and their description are as follows.
 
 
-* `precision_mode`: The precision used for optimization. Allowed values are "FP32", "FP16" and "INT8". Default value is "FP32".
+* `precision_mode`: The precision used for optimization. Allowed values are "FP32", "FP16", "BF16", and "INT8". Default value is "FP32".
 * `max_workspace_size_bytes`: The maximum GPU memory the model can use temporarily during execution. Default value is 1GB.
 * `int8_calibration_table_name`: Specify INT8 calibration table name. Applicable when precision_mode=="INT8" and the models do not contain Q/DQ nodes. If calibration table is provided for model with Q/DQ nodes then ORT session creation will fail.
 * `int8_use_native_calibration_table`: Calibration table to use. Allowed values are 1 (use native TensorRT generated calibration table) and 0 (use ORT generated calibration table). Default is 0. **Note: Latest calibration table file needs to be copied to trt_engine_cache_path before inference. Calibration table is specific to models and calibration data sets. Whenever new calibration table is generated, old file in the path should be cleaned up or be replaced.
@@ -111,6 +111,7 @@ check [ONNX Runtime doc](https://onnxruntime.ai/docs/execution-providers/TensorR
 | trt_max_partition_iterations      | e.g: "1000"                                         | trt_max_partition_iterations                     | int    |
 | trt_min_subgraph_size             | e.g: "1"                                            | trt_min_subgraph_size                            | int    |
 | precision_mode                    | "FP16"                                              | trt_fp16_enable                                  | bool   |
+| precision_mode                    | "BF16"                                              | trt_bf16_enable                                  | bool   |
 | precision_mode                    | "INT8"                                              | trt_int8_enable                                  | bool   |
 | int8_calibration_table_name       |                                                     | trt_int8_calibration_table_name                  | string |
 | int8_use_native_calibration_table | e.g: "1" or "true", "0" or "false"                  | trt_int8_use_native_calibration_table            | bool   |

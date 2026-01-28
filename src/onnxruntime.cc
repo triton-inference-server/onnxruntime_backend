@@ -1,4 +1,4 @@
-// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -481,6 +481,9 @@ ModelState::LoadModel(
                         param_key.c_str(), &value_string));
                     if (value_string == "FP16") {
                       key = "trt_fp16_enable";
+                      value = "1";
+                    } else if (value_string == "BF16") {
+                      key = "trt_bf16_enable";
                       value = "1";
                     } else if (value_string == "INT8") {
                       key = "trt_int8_enable";
