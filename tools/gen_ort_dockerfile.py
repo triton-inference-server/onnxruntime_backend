@@ -340,7 +340,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
             cuda_archs = "87"
     else:
         if os.uname().machine != "x86_64":
-            cuda_archs = "80;86;90;100;110;120;121"
+            cuda_archs = "80;86;90;100;103;110;120;121"
         elif os.getenv("CUDA_ARCH_LIST") is not None:
             print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
             cuda_archs = (
@@ -352,7 +352,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
             cuda_archs = re.sub(r"-real;$", "", cuda_archs)
             print(f"[INFO] Set ONNX Runtime to use CUDA architectures to: {cuda_archs}")
         else:
-            cuda_archs = "75;80;86;90;100;120"
+            cuda_archs = "75;80;86;90;100;103;120"
 
     df += """
 WORKDIR /workspace/onnxruntime
@@ -539,7 +539,7 @@ RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxru
 WORKDIR /workspace/onnxruntime
 ARG VS_DEVCMD_BAT="\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat"
 RUN powershell Set-Content 'build.bat' -value 'call %VS_DEVCMD_BAT%',(Get-Content 'build.bat')
-RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=75;80;86;90;100;120" --skip_submodule_sync --parallel --build_shared_lib --compile_no_warning_as_error --skip_tests --build_wheel --update --build --build_dir /workspace/build {}
+RUN build.bat --cmake_generator "Visual Studio 17 2022" --config Release --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=75;80;86;90;100;103;120" --skip_submodule_sync --parallel --build_shared_lib --compile_no_warning_as_error --skip_tests --build_wheel --update --build --build_dir /workspace/build {}
 """.format(
         ep_flags
     )
