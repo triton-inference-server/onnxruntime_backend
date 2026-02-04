@@ -316,7 +316,7 @@ following conditions:
    is omitted from the model configuration.
 
 If max_batch_size > 1 and no
-[scheduler](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/model_configuration.md#scheduling-and-batching)
+[scheduler](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/architecture.md#models-and-schedulers)
 is provided, the dynamic batch scheduler will be used.
 
 ```
