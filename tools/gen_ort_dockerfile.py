@@ -94,6 +94,7 @@ def parse_cuda_arch_list(raw):
     - Normalize 10.0 -> 100, 12.0 -> 120 (remove dots).
     - If code >= 100: use family (100f, 110f, 120f), no -real.
     - Else: use code-real.
+    - If last element is below 100 (has -real), leave it without -real.
     - Join with ';'.
     """
     if not raw:
@@ -114,6 +115,9 @@ def parse_cuda_arch_list(raw):
             result.append(f"{arch_major}0f")
         else:
             result.append(f"{arch_num}-real")
+    # If last element is below 100 (has -real), leave it without -real
+    if result and result[-1].endswith("-real"):
+        result[-1] = result[-1][: -len("-real")]
     return ";".join(result)
 
 
