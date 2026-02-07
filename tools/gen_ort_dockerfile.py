@@ -324,7 +324,9 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
+    (cd onnxruntime && git submodule update --init --recursive && \\
+     git fetch origin pull/27278/head:pr-27278 && git cherry-pick pr-27278)
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
@@ -535,7 +537,8 @@ SHELL ["cmd", "/S", "/C"]
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
-    cd onnxruntime && git submodule update --init --recursive
+    cd onnxruntime && git submodule update --init --recursive && \
+    git fetch origin pull/27278/head:pr-27278 && git cherry-pick pr-27278
 """
 
     if FLAGS.onnx_tensorrt_tag != "":
