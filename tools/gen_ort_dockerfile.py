@@ -87,7 +87,7 @@ OPENVINO_VERSION_MAP = {
 }
 
 
-def parse_cuda_arch_list(raw):
+def parse_cuda_arch_list(raw, ort_format=False):
     """
     Parse CUDA_ARCH_LIST string to match backend/cmake/define.cuda_architectures.cmake:
     - Split by spaces, skip PTX and empty tokens.
@@ -96,6 +96,8 @@ def parse_cuda_arch_list(raw):
     - Else: use code-real.
     - If last element is below 100 (has -real), leave it without -real.
     - Join with ';'.
+    If ort_format=True, output plain numeric codes only (e.g. 75;80;90;100;120) for
+    ONNX Runtime's CMAKE_CUDA_ARCHITECTURES, which does not accept -real or family 'f' suffix.
     """
     if not raw:
         return ""
@@ -112,11 +114,17 @@ def parse_cuda_arch_list(raw):
         arch_num = int(arch_num_str)
         if arch_num >= 100:
             arch_major = arch_num // 10
-            result.append(f"{arch_major}0f")
+            if ort_format:
+                result.append(f"{arch_major}0")
+            else:
+                result.append(f"{arch_major}0f")
         else:
-            result.append(f"{arch_num}-real")
-    # If last element is below 100 (has -real), leave it without -real
-    if result and result[-1].endswith("-real"):
+            if ort_format:
+                result.append(str(arch_num))
+            else:
+                result.append(f"{arch_num}-real")
+    # If last element is below 100 (has -real), leave it without -real (backend format only)
+    if not ort_format and result and result[-1].endswith("-real"):
         result[-1] = result[-1][: -len("-real")]
     return ";".join(result)
 
@@ -356,25 +364,30 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
     if FLAGS.ort_openvino is not None:
         ep_flags += " --use_openvino CPU"
 
+    # ONNX Runtime CMAKE_CUDA_ARCHITECTURES expects plain numeric codes (no -real, no f suffix)
     if target_platform() == "igpu":
         ep_flags += (
             " --skip_tests --cmake_extra_defines 'onnxruntime_BUILD_UNIT_TESTS=OFF'"
         )
         if os.getenv("CUDA_ARCH_LIST") is not None:
             print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
-            cuda_archs = parse_cuda_arch_list(os.getenv("CUDA_ARCH_LIST"))
+            cuda_archs = parse_cuda_arch_list(
+                os.getenv("CUDA_ARCH_LIST"), ort_format=True
+            )
             print(f"[INFO] Set ONNX Runtime to use CUDA architectures to: {cuda_archs}")
         else:
             cuda_archs = "87"
     else:
         if os.uname().machine != "x86_64":
-            cuda_archs = "80-real;86-real;90-real;100f;110f;120f"
+            cuda_archs = "80;86;90;100;110;120"
         elif os.getenv("CUDA_ARCH_LIST") is not None:
             print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
-            cuda_archs = parse_cuda_arch_list(os.getenv("CUDA_ARCH_LIST"))
+            cuda_archs = parse_cuda_arch_list(
+                os.getenv("CUDA_ARCH_LIST"), ort_format=True
+            )
             print(f"[INFO] Set ONNX Runtime to use CUDA architectures to: {cuda_archs}")
         else:
-            cuda_archs = "75-real;80-real;86-real;90-real;100f;110f;120f"
+            cuda_archs = "75;80;86;90;100;110;120"
 
     df += """
 WORKDIR /workspace/onnxruntime
