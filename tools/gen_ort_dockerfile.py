@@ -326,8 +326,7 @@ ARG ONNXRUNTIME_BUILD_CONFIG
 
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
     cd onnxruntime && git submodule update --init --recursive && \\
-    git config user.email "build@localhost" && git config user.name "Build" && \\
-    git fetch origin pull/27278/head:pr-27278 && git cherry-pick pr-27278
+    git cherry-pick 6625856b0094c0880b48ef2cf207ae24ee9ea71e
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
@@ -539,8 +538,7 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
     cd onnxruntime && git submodule update --init --recursive && \
-    git config user.email "build@localhost" && git config user.name "Build" && \
-    git fetch origin pull/27278/head:pr-27278 && git cherry-pick pr-27278
+    git cherry-pick 6625856b0094c0880b48ef2cf207ae24ee9ea71e
 """
 
     if FLAGS.onnx_tensorrt_tag != "":
