@@ -87,6 +87,43 @@ OPENVINO_VERSION_MAP = {
 }
 
 
+def parse_cuda_arch_list(raw):
+    """
+    Parse CUDA_ARCH_LIST string to generate CUDA architecture codes:
+    - Split by spaces, skip PTX and empty tokens.
+    - Normalize 10.0 -> 100, 12.0 -> 120 (remove dots).
+    - If code >= 100: use family (100f, 110f, 120f), no -real.
+    - Else: use code-real.
+    - If last element is below 100 (has -real), leave it without -real.
+    - Join with ';'.
+
+    Output format matches backend/cmake and is compatible with ONNX Runtime
+    CMAKE_CUDA_ARCHITECTURES (which now supports -real and family 'f' suffix).
+    """
+    if not raw:
+        return ""
+    raw = raw.replace("PTX", "")
+    tokens = raw.split()
+    result = []
+    for arch in tokens:
+        arch = arch.strip()
+        if not arch:
+            continue
+        arch_num_str = arch.replace(".", "")
+        if not arch_num_str.isdigit():
+            continue
+        arch_num = int(arch_num_str)
+        if arch_num >= 100:
+            arch_major = arch_num // 10
+            result.append(f"{arch_major}0f")
+        else:
+            result.append(f"{arch_num}-real")
+    # If last element is below 100 (has -real), leave it without -real
+    if result and result[-1].endswith("-real"):
+        result[-1] = result[-1][: -len("-real")]
+    return ";".join(result)
+
+
 def target_platform():
     if FLAGS.target_platform is not None:
         return FLAGS.target_platform
@@ -287,7 +324,10 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
+    cd onnxruntime && git submodule update --init --recursive && \\
+    git config user.email "build@localhost" && git config user.name "Build" && \\
+    git cherry-pick 6625856b0094c0880b48ef2cf207ae24ee9ea71e
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
@@ -322,37 +362,26 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
     if FLAGS.ort_openvino is not None:
         ep_flags += " --use_openvino CPU"
 
+    # ONNX Runtime CMAKE_CUDA_ARCHITECTURES expects plain numeric codes (no -real, no f suffix)
     if target_platform() == "igpu":
         ep_flags += (
             " --skip_tests --cmake_extra_defines 'onnxruntime_BUILD_UNIT_TESTS=OFF'"
         )
         if os.getenv("CUDA_ARCH_LIST") is not None:
             print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
-            cuda_archs = (
-                os.getenv("CUDA_ARCH_LIST")
-                .replace("PTX", "")
-                .replace(" ", "-real;")
-                .replace(".", "")
-            )
-            cuda_archs = re.sub(r"-real;$", "", cuda_archs)
+            cuda_archs = parse_cuda_arch_list(os.getenv("CUDA_ARCH_LIST"))
             print(f"[INFO] Set ONNX Runtime to use CUDA architectures to: {cuda_archs}")
         else:
             cuda_archs = "87"
     else:
         if os.uname().machine != "x86_64":
-            cuda_archs = "80;86;90;100;110;120;121"
+            cuda_archs = "80-real;86-real;90-real;100f;110f;120f"
         elif os.getenv("CUDA_ARCH_LIST") is not None:
             print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
-            cuda_archs = (
-                os.getenv("CUDA_ARCH_LIST")
-                .replace("PTX", "")
-                .replace(" ", "-real;")
-                .replace(".", "")
-            )
-            cuda_archs = re.sub(r"-real;$", "", cuda_archs)
+            cuda_archs = parse_cuda_arch_list(os.getenv("CUDA_ARCH_LIST"))
             print(f"[INFO] Set ONNX Runtime to use CUDA architectures to: {cuda_archs}")
         else:
-            cuda_archs = "75;80;86;90;100;120"
+            cuda_archs = "75-real;80-real;86-real;90-real;100f;110f;120f"
 
     df += """
 WORKDIR /workspace/onnxruntime
@@ -509,7 +538,9 @@ SHELL ["cmd", "/S", "/C"]
 ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 RUN git clone -b rel-%ONNXRUNTIME_VERSION% --recursive %ONNXRUNTIME_REPO% onnxruntime && \
-    cd onnxruntime && git submodule update --init --recursive
+    cd onnxruntime && git submodule update --init --recursive && \
+    git config user.email "build@localhost" && git config user.name "Build" && \
+    git cherry-pick 6625856b0094c0880b48ef2cf207ae24ee9ea71e
 """
 
     if FLAGS.onnx_tensorrt_tag != "":
