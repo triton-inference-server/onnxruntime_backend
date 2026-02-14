@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2019-2026, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -275,9 +275,6 @@ TRITONSERVER_DataType
 ConvertFromOnnxDataType(ONNXTensorElementDataType onnx_type)
 {
   switch (onnx_type) {
-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
-      // maps to c type float (4 bytes)
-      return TRITONSERVER_TYPE_FP32;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8:
       return TRITONSERVER_TYPE_UINT8;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_INT8:
@@ -294,8 +291,14 @@ ConvertFromOnnxDataType(ONNXTensorElementDataType onnx_type)
       return TRITONSERVER_TYPE_BYTES;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_BOOL:
       return TRITONSERVER_TYPE_BOOL;
+    // Non-IEEE floating-point format based on IEEE754 single-precision
+    case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
+      return TRITONSERVER_TYPE_BF16;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16:
       return TRITONSERVER_TYPE_FP16;
+    case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
+      // maps to c type float (4 bytes)
+      return TRITONSERVER_TYPE_FP32;
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_DOUBLE:
       // maps to c type double (8 bytes)
       return TRITONSERVER_TYPE_FP64;
@@ -308,8 +311,6 @@ ConvertFromOnnxDataType(ONNXTensorElementDataType onnx_type)
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX64:
     // complex with float64 real and imaginary components
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_COMPLEX128:
-    // Non-IEEE floating-point format based on IEEE754 single-precision
-    case ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16:
     case ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED:
     default:
       break;
@@ -338,6 +339,8 @@ ConvertToOnnxDataType(TRITONSERVER_DataType data_type)
       return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32;
     case TRITONSERVER_TYPE_INT64:
       return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64;
+    case TRITONSERVER_TYPE_BF16:
+      return ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16;
     case TRITONSERVER_TYPE_FP16:
       return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
     case TRITONSERVER_TYPE_FP32:
@@ -391,6 +394,8 @@ ModelConfigDataTypeToOnnxDataType(const std::string& data_type_str)
     return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT32;
   } else if (dtype == "INT64") {
     return ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64;
+  } else if (dtype == "BF16") {
+    return ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16;
   } else if (dtype == "FP16") {
     return ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16;
   } else if (dtype == "FP32") {
@@ -425,6 +430,8 @@ OnnxDataTypeToModelConfigDataType(ONNXTensorElementDataType data_type)
     return "TYPE_INT32";
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64) {
     return "TYPE_INT64";
+  } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_BFLOAT16) {
+    return "TYPE_BF16";
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16) {
     return "TYPE_FP16";
   } else if (data_type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT) {
