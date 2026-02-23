@@ -290,7 +290,8 @@ ARG ONNXRUNTIME_BUILD_CONFIG
 RUN git clone ${{MIGRAPHX_REPO}} --recursive -b ${{MIGRAPHX_BRANCH}} migraphx_src && \\
     cd migraphx_src && \\
     pip3 install --prefix /usr/local https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz && \\
-    PATH="/usr/local/bin:$PATH" rbuild build -d depend -B build -DMIGRAPHX_ENABLE_PYTHON=OFF -DGPU_TARGETS=gfx942 2>&1 | tee migraphx_build.log && \\
+    test -x /usr/local/bin/rbuild || (echo "ERROR: rbuild not found at /usr/local/bin/rbuild" && exit 1) && \\
+    /usr/local/bin/rbuild build -d depend -B build -DMIGRAPHX_ENABLE_PYTHON=OFF -DGPU_TARGETS=gfx942 2>&1 | tee migraphx_build.log && \\
     cd build && \\
     make -j$(nproc) package && dpkg -i *.deb
 
