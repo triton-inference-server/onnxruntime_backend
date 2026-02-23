@@ -214,11 +214,10 @@ RUN pip3 install \\
 ENV VERBOSE=1
 """
 
-    # ROCm: ONNX Runtime and MIGraphX are pre-built in base image
+    # ROCm: install build tools; MIGraphX and ONNX Runtime are built from source below
     if FLAGS.enable_rocm:
         df += """
-# ROCm, MIGraphX, and ONNX Runtime already installed in base image
-# Just install build tools and utilities
+# ROCm: install build tools (MIGraphX and ONNX Runtime built from source in this image)
 RUN apt-get update && \\
     apt-get install -y --no-install-recommends \\
         sudo git apt-utils bash build-essential curl \\
@@ -275,20 +274,47 @@ ENV PYTHONPATH=$INTEL_OPENVINO_DIR/python/python3.12:$INTEL_OPENVINO_DIR/python/
             openvino_toolkit_filename, openvino_folder_name
         )
 
-    # ROCm: Skip building ONNX Runtime from source - use pre-built from base image
+    # ROCm: Build MIGraphX and ONNX Runtime from source (NVIDIA-style, inside this image)
     if FLAGS.enable_rocm:
         df += """
 #
-# ONNX Runtime for ROCm - already installed in base image
+# Build MIGraphX from source
 #
+ARG MIGRAPHX_REPO={}
+ARG MIGRAPHX_BRANCH={}
 ARG ONNXRUNTIME_VERSION
-ARG ONNXRUNTIME_REPO
+ARG ONNXRUNTIME_REPO={}
+ARG ONNXRUNTIME_BRANCH={}
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-# ONNX Runtime and MIGraphX are pre-built in the base image
-RUN echo "ONNX Runtime and MIGraphX already installed in base image" && \\
-    python3 -c "import onnxruntime; print('ONNX Runtime version:', onnxruntime.__version__)"
-"""
+RUN git clone ${{MIGRAPHX_REPO}} --recursive -b ${{MIGRAPHX_BRANCH}} migraphx_src && \\
+    cd migraphx_src && \\
+    pip3 install --prefix /usr/local https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz && \\
+    rbuild build -d depend -B build -DMIGRAPHX_ENABLE_PYTHON=OFF -DGPU_TARGETS=gfx942 2>&1 | tee migraphx_build.log && \\
+    cd build && \\
+    make -j$(nproc) package && dpkg -i *.deb
+
+ENV MIGRAPHX_MLIR_USE_SPECIFIC_OPS=attention,dot
+ENV MIGRAPHX_ENABLE_MLIR_GEG_FUSION=1
+ENV MIGRAPHX_ENABLE_REWRITE_DOT=1
+
+#
+# Build ONNX Runtime with MIGraphX EP from source
+#
+RUN git clone ${{ONNXRUNTIME_REPO}} --recursive -b ${{ONNXRUNTIME_BRANCH}} onnxruntime && \\
+    cd onnxruntime && \\
+    pip install numpy packaging && \\
+    ./build.sh --config ${{ONNXRUNTIME_BUILD_CONFIG}} --allow_running_as_root --rocm_home /opt/rocm --use_migraphx --migraphx_home /opt/rocm --skip_tests --parallel --enable_pybind --build_wheel 2>&1 | tee onnxrt_build.log && \\
+    pip install ./build/Linux/Release/dist/*.whl --force-reinstall && \\
+    cd build/Linux/Release && \\
+    cmake --install . --prefix /opt/rocm && \\
+    echo "ONNX Runtime installed to /opt/rocm with headers and libraries"
+""".format(
+            FLAGS.migraphx_repo,
+            FLAGS.migraphx_branch,
+            FLAGS.onnxruntime_repo,
+            FLAGS.onnxruntime_branch,
+        )
     ## TEMPORARY: Using the tensorrt-8.0 branch until ORT 1.9 release to enable ORT backend with TRT 8.0 support.
     # For ORT versions 1.8.0 and below the behavior will remain same. For ORT version 1.8.1 we will
     # use tensorrt-8.0 branch instead of using rel-1.8.1
@@ -412,11 +438,11 @@ RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
             ep_flags
         )
 
-    # ROCm: Copy pre-built artifacts from base image to /opt/onnxruntime
+    # ROCm: Copy built ONNX Runtime artifacts to /opt/onnxruntime
     if FLAGS.enable_rocm:
         df += """
 #
-# Copy ONNX Runtime artifacts from base image installation to /opt/onnxruntime
+# Copy ONNX Runtime artifacts from build to /opt/onnxruntime
 #
 WORKDIR /workspace
 
@@ -808,6 +834,30 @@ if __name__ == "__main__":
         action="store_true",
         required=False,
         help="Enable MIGraphX execution provider.",
+    )
+    parser.add_argument(
+        "--onnxruntime-repo",
+        type=str,
+        default="https://github.com/ROCm/onnxruntime",
+        help="ONNX Runtime (ROCm) git repo URL for build-from-source.",
+    )
+    parser.add_argument(
+        "--onnxruntime-branch",
+        type=str,
+        default="rocm7.2_internal_testing",
+        help="ONNX Runtime (ROCm) git branch for build-from-source.",
+    )
+    parser.add_argument(
+        "--migraphx-repo",
+        type=str,
+        default="https://github.com/ROCm/AMDMIGraphX.git",
+        help="MIGraphX git repo URL for build-from-source.",
+    )
+    parser.add_argument(
+        "--migraphx-branch",
+        type=str,
+        default="release/rocm-rel-7.2",
+        help="MIGraphX git branch for build-from-source.",
     )
 
     FLAGS = parser.parse_args()
