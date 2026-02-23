@@ -301,7 +301,8 @@ ENV MIGRAPHX_ENABLE_REWRITE_DOT=1
 #
 # Build ONNX Runtime with MIGraphX EP from source
 #
-RUN git clone ${{ONNXRUNTIME_REPO}} --recursive -b ${{ONNXRUNTIME_BRANCH}} onnxruntime && \\
+RUN rm -rf onnxruntime && \\
+    git clone ${{ONNXRUNTIME_REPO}} --recursive -b ${{ONNXRUNTIME_BRANCH}} onnxruntime && \\
     cd onnxruntime && \\
     pip install numpy packaging && \\
     ./build.sh --config ${{ONNXRUNTIME_BUILD_CONFIG}} --allow_running_as_root --rocm_home /opt/rocm --use_migraphx --migraphx_home /opt/rocm --skip_tests --parallel --enable_pybind --build_wheel 2>&1 | tee onnxrt_build.log && \\
@@ -844,7 +845,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--onnxruntime-branch",
         type=str,
-        default="rocm7.2_internal_testing",
+        default="add_padded_batch",
         help="ONNX Runtime (ROCm) git branch for build-from-source.",
     )
     parser.add_argument(
@@ -856,7 +857,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--migraphx-branch",
         type=str,
-        default="release/rocm-rel-7.2",
+        default="concat_ai",
         help="MIGraphX git branch for build-from-source.",
     )
 
