@@ -150,8 +150,8 @@ set(TRT_VERSION "" CACHE STRING "TRT version for this build.")
 set(TRITON_ONNXRUNTIME_LIB_PATHS "" CACHE PATH "Paths to ONNXRuntime libraries")
 
 set(TRITON_REPO_ORGANIZATION "https://github.com/ROCm" CACHE STRING "Git repository to pull from")
-set(TRITON_BACKEND_REPO_TAG "rocm7.1.1_r25.12" CACHE STRING "Tag for ROCm/triton-inference-server-backend repo")
-set(TRITON_CORE_REPO_TAG "rocm7.1.1_r25.12" CACHE STRING "Tag for ROCm/triton-inference-server-core repo")
+set(TRITON_BACKEND_REPO_TAG "rocm7.2_r25.12" CACHE STRING "Tag for ROCm/triton-inference-server-backend repo")
+set(TRITON_CORE_REPO_TAG "rocm7.2_r25.12" CACHE STRING "Tag for ROCm/triton-inference-server-core repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo") # unchanged for ROCm
 
 # Use C++17 standard as Triton's minimum required.
