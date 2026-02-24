@@ -207,7 +207,7 @@ else()
   set(TRITON_ONNXRUNTIME_DOCKER_IMAGE "tritonserver_onnxruntime")
   set(TRITON_ONNXRUNTIME_DOCKER_MEMORY "$<IF:$<BOOL:WIN32>,32g,8g>")
   if(NOT DEFINED TRITON_ONNXRUNTIME_DOCKER_CACHE_ARGS)
-    set(TRITON_ONNXRUNTIME_DOCKER_CACHE_ARGS "--no-cache --progress=plain")
+    set(TRITON_ONNXRUNTIME_DOCKER_CACHE_ARGS "--no-cache" "--progress=plain")
   endif()
   set(TRITON_ONNXRUNTIME_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/onnxruntime/include")
 
