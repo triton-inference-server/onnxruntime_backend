@@ -463,8 +463,9 @@ RUN SITE_PACKAGES=$(python3 -c "import site; print(site.getsitepackages()[0])") 
 
 # Copy MIGraphX runtime libraries (built in this image via dpkg) into /opt/onnxruntime/lib
 # so they are included in final artifacts; the provider loads libmigraphx_c.so.3 at runtime.
-RUN find /usr /opt/rocm -name 'libmigraphx*.so*' 2>/dev/null | while read f; do cp -P "$f" /opt/onnxruntime/lib/; done && \\
-    (ls /opt/onnxruntime/lib/libmigraphx*.so* 2>/dev/null && echo "MIGraphX runtime libs copied to /opt/onnxruntime/lib") || echo "No MIGraphX libs found under /usr or /opt/rocm"
+# Search /usr, /opt/rocm, /usr/local, and /workspace (dpkg installs to /opt/rocm; build tree under /workspace).
+RUN find /usr /opt/rocm /usr/local /workspace -name 'libmigraphx*.so*' 2>/dev/null | while read f; do cp -P "$f" /opt/onnxruntime/lib/; done && \\
+    (ls /opt/onnxruntime/lib/libmigraphx*.so* 2>/dev/null && echo "MIGraphX runtime libs copied to /opt/onnxruntime/lib") || echo "No MIGraphX libs found under /usr, /opt/rocm, /usr/local, or /workspace"
 
 # Copy header files from installed ONNX Runtime
 # Headers are in /opt/rocm/include/onnxruntime/ (from cmake install)
