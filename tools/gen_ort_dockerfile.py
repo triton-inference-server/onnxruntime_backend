@@ -185,11 +185,12 @@ RUN dnf install -y \\
         git \\
         gnupg \\
         openssl-devel \\
-        python3-pip \\
+        python3.12-pip \\
+        python3.12-devel \\
         wget \\
         zip
 
-RUN pipx install cmake==4.0.3 --force
+RUN pip3 install cmake==4.0.3 --force
 
 RUN pip3 install patchelf==0.17.2 numpy>=2.0.0
 """
