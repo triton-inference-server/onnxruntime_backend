@@ -217,7 +217,7 @@ else()
         set(TRITON_BUILD_CONTAINER "localhost/debian12_rocm7.2")
       else()
         # Use ROCm ONNX Runtime container which includes ORT 1.22 and MIGraphX
-        set(TRITON_BUILD_CONTAINER "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0")
+        set(TRITON_BUILD_CONTAINER "localhost/ubuntu24.04_rocm7.2")
       endif()
       # Add ROCm and HIP include paths
       set(TRITON_ONNXRUNTIME_INCLUDE_PATHS ${TRITON_ONNXRUNTIME_INCLUDE_PATHS} /opt/rocm/include/hip)
