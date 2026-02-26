@@ -287,9 +287,10 @@ ARG ONNXRUNTIME_REPO={}
 ARG ONNXRUNTIME_BRANCH={}
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone ${{MIGRAPHX_REPO}} --recursive -b ${{MIGRAPHX_BRANCH}} migraphx_src && \\
+RUN pip3 install --no-cache-dir wheel build && \\
+    git clone ${{MIGRAPHX_REPO}} --recursive -b ${{MIGRAPHX_BRANCH}} migraphx_src && \\
     cd migraphx_src && \\
-    pip3 install https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz && \\
+    pip3 install --no-cache-dir https://github.com/RadeonOpenCompute/rbuild/archive/master.tar.gz && \\
     rbuild build -d depend -B build -DMIGRAPHX_ENABLE_PYTHON=OFF -DGPU_TARGETS=gfx942 2>&1 | tee migraphx_build.log && \\
     cd build && \\
     make -j$(nproc) package && dpkg -i *.deb
