@@ -827,6 +827,14 @@ ModelState::LoadModel(
                         param_key.c_str(), &model_cache_dir));
                     migx_options.migraphx_cache_dir =
                         model_cache_dir.c_str();
+                  } else if (param_key == "migraphx_max_dynamic_batch") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    size_t max_dynamic_batch;
+                    RETURN_IF_ERROR(ParseUnsignedLongLongValue(
+                        value_string, &max_dynamic_batch));
+                    migx_options.migraphx_max_dynamic_batch =
+                        max_dynamic_batch;
                   } else if (param_key == "migraphx_exhaustive_tune") {
                     std::string value_string;
                     RETURN_IF_ERROR(params.MemberAsString(
