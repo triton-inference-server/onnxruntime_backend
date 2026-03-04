@@ -541,6 +541,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--onnx-tensorrt-tag", type=str, default="", help="onnx-tensorrt repo tag."
     )
+    parser.add_argument("--trt-version", type=str, default="", help="TRT version.")
 
     FLAGS = parser.parse_args()
     if FLAGS.enable_gpu:
