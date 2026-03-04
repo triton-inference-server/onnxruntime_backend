@@ -547,7 +547,7 @@ if __name__ == "__main__":
     if FLAGS.enable_gpu:
         preprocess_gpu_flags()
 
-    print("[INFO] Print stored values used for Dockerfile generation")
+    print(f"[INFO] Print stored values used for {FLAGS.output} generation")
     for name, value in sorted(vars(FLAGS).items()):
         print("  {}: {}".format(name, value))
 
