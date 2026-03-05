@@ -174,9 +174,13 @@ RUN dnf install -y \\
         wget \\
         zip
 
-RUN pip3 install cmake==4.0.3 --force
+RUN pip3 install \\
+       cmake==4.0.3 \\
+       numpy \\
+       packaging \\
+       patchelf==0.17.2 \\
+       wheel>=0.35.1
 
-RUN pip3 install patchelf==0.17.2 numpy>=2.0.0
 """
 
         if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
