@@ -169,8 +169,8 @@ RUN dnf install -y \\
         git \\
         gnupg \\
         openssl-devel \\
-        python3-devel \\
-        python3-pip \\
+        python3.12-devel \\
+        python3.12-pip \\
         wget \\
         zip
 
