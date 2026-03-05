@@ -178,6 +178,25 @@ RUN pipx install cmake==4.0.3 --force
 
 RUN pip3 install patchelf==0.17.2 numpy>=2.0.0
 """
+
+        if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
+            df += """
+ENV CCACHE_REMOTE_ONLY="true" \\
+    CCACHE_REMOTE_STORAGE="{}" \\
+    CMAKE_CXX_COMPILER_LAUNCHER="ccache" \\
+    CMAKE_C_COMPILER_LAUNCHER="ccache" \\
+    CMAKE_CUDA_COMPILER_LAUNCHER="ccache" \\
+    VERBOSE=1
+
+RUN curl -o /tmp/ccache.tar.gz -L https://github.com/ccache/ccache/releases/download/v4.12.3/ccache-4.12.3.tar.gz && \\
+    tar -xzf /tmp/ccache.tar.gz -C /tmp && \\
+    cmake -D CMAKE_BUILD_TYPE=Release -S /tmp/ccache-4.12.3 -B /tmp/build && \\
+    cmake --build /tmp/build -j$(nproc) -t install && \\
+    rm -rf /tmp/ccache.tar.gz /tmp/ccache-4.12.3 /tmp/build && \\
+    ccache -p
+""".format(
+                os.getenv("CCACHE_REMOTE_STORAGE")
+            )
     else:
         if os.getenv("CCACHE_REMOTE_ONLY") and os.getenv("CCACHE_REMOTE_STORAGE"):
             df += """
