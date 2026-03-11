@@ -853,7 +853,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--onnxruntime-branch",
         type=str,
-        default="add_padded_batch",
+        default="target_batch_compile",
         help="ONNX Runtime (ROCm) git branch for build-from-source.",
     )
     parser.add_argument(
@@ -865,7 +865,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--migraphx-branch",
         type=str,
-        default="concat_ai",
+        default="release/rocm-rel-7.2",
         help="MIGraphX git branch for build-from-source.",
     )
 
