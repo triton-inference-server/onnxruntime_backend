@@ -286,6 +286,28 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     }
 
     {
+      triton::common::TritonJson::Value params;
+      if (ModelConfig().Find("parameters", &params)) {
+        triton::common::TritonJson::Value json_value;
+        const char* intra_op_allow_spinning_key =
+            "session.intra_op.allow_spinning";
+        if (params.Find(intra_op_allow_spinning_key, &json_value)) {
+          std::string string_value;
+          THROW_IF_BACKEND_MODEL_ERROR(
+              json_value.MemberAsString("string_value", &string_value));
+
+          LOG_MESSAGE(
+              TRITONSERVER_LOG_VERBOSE,
+              (std::string("Configuring '") + intra_op_allow_spinning_key +
+               "' to '" + string_value + "' for '" + Name() + "'")
+                  .c_str());
+          THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
+              soptions, intra_op_allow_spinning_key, string_value.c_str()));
+        }
+      }
+    }
+
+    {
       // Sets the number of threads used to parallelize the execution of the
       // graph (across nodes) If sequential execution is enabled this value is
       // ignored A value of 0 means ORT will pick a default
@@ -298,6 +320,28 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
       if (inter_op_thread_count > 0) {
         THROW_IF_BACKEND_MODEL_ORT_ERROR(
             ort_api->SetInterOpNumThreads(soptions, inter_op_thread_count));
+      }
+    }
+
+    {
+      triton::common::TritonJson::Value params;
+      if (ModelConfig().Find("parameters", &params)) {
+        triton::common::TritonJson::Value json_value;
+        const char* inter_op_allow_spinning_key =
+            "session.inter_op.allow_spinning";
+        if (params.Find(inter_op_allow_spinning_key, &json_value)) {
+          std::string string_value;
+          THROW_IF_BACKEND_MODEL_ERROR(
+              json_value.MemberAsString("string_value", &string_value));
+
+          LOG_MESSAGE(
+              TRITONSERVER_LOG_VERBOSE,
+              (std::string("Configuring '") + inter_op_allow_spinning_key +
+               "' to '" + string_value + "' for '" + Name() + "'")
+                  .c_str());
+          THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
+              soptions, inter_op_allow_spinning_key, string_value.c_str()));
+        }
       }
     }
   }

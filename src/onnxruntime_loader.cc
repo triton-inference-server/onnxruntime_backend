@@ -99,6 +99,13 @@ OnnxLoader::Init(common::TritonJson::Value& backend_config)
                   threading_options, inter_op_num_threads));
             }
           }
+          if (cmdline.Find("allow_spinning", &value)) {
+            bool allow_spinning = false;
+            RETURN_IF_ERROR(value.AsString(&value_str));
+            RETURN_IF_ERROR(ParseBoolValue(value_str, &allow_spinning));
+            RETURN_IF_ORT_ERROR(ort_api->SetGlobalSpinControl(
+                threading_options, allow_spinning ? 1 : 0));
+          }
         }
       }
     }
