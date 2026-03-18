@@ -286,28 +286,6 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     }
 
     {
-      triton::common::TritonJson::Value params;
-      if (ModelConfig().Find("parameters", &params)) {
-        triton::common::TritonJson::Value json_value;
-        const char* intra_op_allow_spinning_key =
-            "session.intra_op.allow_spinning";
-        if (params.Find(intra_op_allow_spinning_key, &json_value)) {
-          std::string string_value;
-          THROW_IF_BACKEND_MODEL_ERROR(
-              json_value.MemberAsString("string_value", &string_value));
-
-          LOG_MESSAGE(
-              TRITONSERVER_LOG_VERBOSE,
-              (std::string("Configuring '") + intra_op_allow_spinning_key +
-               "' to '" + string_value + "' for '" + Name() + "'")
-                  .c_str());
-          THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
-              soptions, intra_op_allow_spinning_key, string_value.c_str()));
-        }
-      }
-    }
-
-    {
       // Sets the number of threads used to parallelize the execution of the
       // graph (across nodes) If sequential execution is enabled this value is
       // ignored A value of 0 means ORT will pick a default
@@ -322,51 +300,36 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
             ort_api->SetInterOpNumThreads(soptions, inter_op_thread_count));
       }
     }
-
-    {
-      triton::common::TritonJson::Value params;
-      if (ModelConfig().Find("parameters", &params)) {
-        triton::common::TritonJson::Value json_value;
-        const char* inter_op_allow_spinning_key =
-            "session.inter_op.allow_spinning";
-        if (params.Find(inter_op_allow_spinning_key, &json_value)) {
-          std::string string_value;
-          THROW_IF_BACKEND_MODEL_ERROR(
-              json_value.MemberAsString("string_value", &string_value));
-
-          LOG_MESSAGE(
-              TRITONSERVER_LOG_VERBOSE,
-              (std::string("Configuring '") + inter_op_allow_spinning_key +
-               "' to '" + string_value + "' for '" + Name() + "'")
-                  .c_str());
-          THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
-              soptions, inter_op_allow_spinning_key, string_value.c_str()));
-        }
-      }
-    }
   }
 
-  // Enable/disable use_device_allocator_for_initializers
+  // Iterate over all 'session.' prefixed parameters and add them via AddSessionConfigEntry
+  // This covers parameters that were previously manually added, such as:
+  // - session.intra_op.allow_spinning
+  // - session.inter_op.allow_spinning
+  // - session.force_spinning_stop
+  // - session.use_device_allocator_for_initializers
   {
     triton::common::TritonJson::Value params;
     if (ModelConfig().Find("parameters", &params)) {
-      triton::common::TritonJson::Value json_value;
-      const char* use_device_allocator_for_initializers_key =
-          "session.use_device_allocator_for_initializers";
-      if (params.Find(use_device_allocator_for_initializers_key, &json_value)) {
-        std::string string_value;
-        THROW_IF_BACKEND_MODEL_ERROR(
-            json_value.MemberAsString("string_value", &string_value));
+      std::vector<std::string> param_keys;
+      THROW_IF_BACKEND_MODEL_ERROR(params.Members(&param_keys));
+      for (const auto& param_key : param_keys) {
+        if (param_key.rfind("session.", 0) == 0) {
+          triton::common::TritonJson::Value json_value;
+          if (params.Find(param_key.c_str(), &json_value)) {
+            std::string string_value;
+            THROW_IF_BACKEND_MODEL_ERROR(
+                json_value.MemberAsString("string_value", &string_value));
 
-        LOG_MESSAGE(
-            TRITONSERVER_LOG_VERBOSE,
-            (std::string("Configuring '") +
-             use_device_allocator_for_initializers_key + "' to '" +
-             string_value + "' for '" + Name() + "'")
-                .c_str());
-        THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
-            soptions, use_device_allocator_for_initializers_key,
-            string_value.c_str()));
+            LOG_MESSAGE(
+                TRITONSERVER_LOG_INFO,
+                (std::string("Configuring '") + param_key +
+                 "' to '" + string_value + "' for '" + Name() + "'")
+                    .c_str());
+            THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
+                soptions, param_key.c_str(), string_value.c_str()));
+          }
+        }
       }
     }
   }
