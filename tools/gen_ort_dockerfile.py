@@ -485,6 +485,9 @@ RUN mkdir -p /opt/onnxruntime/test && \
     cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/testdata/custom_op_library/custom_op_test.onnx \
        /opt/onnxruntime/test
 """
+    df += """
+CMD ["/bin/bash"]
+"""
 
     with open(output_file, "w") as dfile:
         dfile.write(df)
