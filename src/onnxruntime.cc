@@ -768,23 +768,15 @@ ModelState::LoadModel(
 #endif  // TRITON_ENABLE_ONNXRUNTIME_TENSORRT
 #ifdef TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX
             if (name == kMIGraphXExecutionAccelerator) {
-              // create MIGraphX options with default values
+              // Build MIGraphX provider options as string key-value pairs
+              // so the stream pointer can be passed via the ProviderOptions map.
+              std::vector<std::string> keys, values;
               std::string int8_calibration_table_name;
               std::string model_cache_dir;
-              OrtMIGraphXProviderOptions migx_options{
-                  instance_group_device_id,
-                  0,        // migraphx_fp16_enable
-                  0,        // migraphx_bf16_enable
-                  0,        // migraphx_fp8_enable
-                  0,        // migraphx_int8_enable
-                  0,        // migraphx_use_native_calibration_table
-                  nullptr,  // migraphx_int8_calibration_table_name
-                  nullptr,  // migraphx_cache_dir
-                  false,    // migraphx_exhaustive_tune
-                  SIZE_MAX, // migraphx_mem_limit (use all available memory)
-                  0,        // migraphx_arena_extend_strategy (0 = kNextPowerOfTwo)
-                  0,        // migraphx_max_dynamic_batch (0 = no dynamic batch)
-              };
+
+              keys.push_back("device_id");
+              values.push_back(std::to_string(instance_group_device_id));
+
               // Validate and set parameters
               triton::common::TritonJson::Value params;
               if (ea.Find("parameters", &params)) {
@@ -796,13 +788,17 @@ ModelState::LoadModel(
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
                     if (value_string == "FP16") {
-                      migx_options.migraphx_fp16_enable = 1;
+                      keys.push_back("migraphx_fp16_enable");
+                      values.push_back("1");
                     } else if (value_string == "BF16") {
-                      migx_options.migraphx_bf16_enable = 1;
+                      keys.push_back("migraphx_bf16_enable");
+                      values.push_back("1");
                     } else if (value_string == "FP8") {
-                      migx_options.migraphx_fp8_enable = 1;
+                      keys.push_back("migraphx_fp8_enable");
+                      values.push_back("1");
                     } else if (value_string == "INT8") {
-                      migx_options.migraphx_int8_enable = 1;
+                      keys.push_back("migraphx_int8_enable");
+                      values.push_back("1");
                     } else if (value_string != "FP32") {
                       RETURN_ERROR_IF_FALSE(
                           false, TRITONSERVER_ERROR_INVALID_ARG,
@@ -812,37 +808,37 @@ ModelState::LoadModel(
                   } else if (param_key == "int8_calibration_table_name") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &int8_calibration_table_name));
-                    migx_options.migraphx_int8_calibration_table_name =
-                        int8_calibration_table_name.c_str();
+                    keys.push_back("migraphx_int8_calibration_table_name");
+                    values.push_back(int8_calibration_table_name);
                   } else if (param_key == "int8_use_native_calibration_table") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
                     int use_native_calibration_table;
                     RETURN_IF_ERROR(ParseIntValue(
                         value_string, &use_native_calibration_table));
-                    migx_options.migraphx_use_native_calibration_table =
-                        use_native_calibration_table;
+                    keys.push_back(
+                        "migraphx_int8_use_native_calibration_table");
+                    values.push_back(std::to_string(
+                        use_native_calibration_table));
                   } else if (param_key == "migraphx_model_cache_dir") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &model_cache_dir));
-                    migx_options.migraphx_cache_dir =
-                        model_cache_dir.c_str();
+                    keys.push_back("migraphx_model_cache_dir");
+                    values.push_back(model_cache_dir);
                   } else if (param_key == "migraphx_max_dynamic_batch") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
                     size_t max_dynamic_batch;
                     RETURN_IF_ERROR(ParseUnsignedLongLongValue(
                         value_string, &max_dynamic_batch));
-                    migx_options.migraphx_max_dynamic_batch =
-                        max_dynamic_batch;
+                    keys.push_back("migraphx_max_dynamic_batch");
+                    values.push_back(std::to_string(max_dynamic_batch));
                   } else if (param_key == "migraphx_exhaustive_tune") {
-                    std::string value_string;
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
-                    if (value_string == "true")
-                    {
-                      migx_options.migraphx_exhaustive_tune = true;
-                    }
+                    keys.push_back("migraphx_exhaustive_tune");
+                    values.push_back(
+                        value_string == "true" ? "1" : "0");
                   } else {
                     return TRITONSERVER_ErrorNew(
                         TRITONSERVER_ERROR_INVALID_ARG,
@@ -854,14 +850,28 @@ ModelState::LoadModel(
                   }
                 }
               }
+
+              if (stream != nullptr) {
+                keys.push_back("user_compute_stream");
+                values.push_back(std::to_string(
+                    reinterpret_cast<size_t>(stream)));
+              }
+
+              std::vector<const char*> c_keys, c_values;
+              for (size_t i = 0; i < keys.size(); ++i) {
+                c_keys.push_back(keys[i].c_str());
+                c_values.push_back(values[i].c_str());
+              }
               RETURN_IF_ORT_ERROR(
-                  ort_api->SessionOptionsAppendExecutionProvider_MIGraphX(
-                      soptions, &migx_options));
+                  ort_api->SessionOptionsAppendExecutionProvider(
+                      soptions, "MIGraphX",
+                      c_keys.data(), c_values.data(), keys.size()));
               LOG_MESSAGE(
                   TRITONSERVER_LOG_VERBOSE,
                   (std::string("MIGraphX Execution Accelerator is set for '") +
                    Name() + "' on device " +
-                   std::to_string(instance_group_device_id))
+                   std::to_string(instance_group_device_id) +
+                   (stream != nullptr ? " with user compute stream" : ""))
                       .c_str());
               continue;
             }
