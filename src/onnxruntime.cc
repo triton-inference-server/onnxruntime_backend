@@ -557,6 +557,10 @@ ModelState::LoadModel(
                     RETURN_IF_ERROR(
                         params.MemberAsString(param_key.c_str(), &value));
                     key = "trt_engine_cache_path";
+                  } else if (param_key == "trt_op_types_to_exclude") {
+                    RETURN_IF_ERROR(
+                        params.MemberAsString(param_key.c_str(), &value));
+                    key = "trt_op_types_to_exclude";
                   } else if (param_key == "trt_engine_cache_prefix") {
                     RETURN_IF_ERROR(
                         params.MemberAsString(param_key.c_str(), &value));
