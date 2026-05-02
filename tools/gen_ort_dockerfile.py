@@ -339,7 +339,10 @@ ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
-    cd onnxruntime && git submodule update --init --recursive
+    cd onnxruntime && \\
+    git fetch origin pull/28317/head:pr-28317 && \\
+    git merge --squash pr-28317 && \\
+    git submodule update --init --recursive
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
