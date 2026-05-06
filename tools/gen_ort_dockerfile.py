@@ -173,20 +173,19 @@ RUN dnf install -y \\
         git \\
         gnupg \\
         openssl-devel \\
-        python3.12 \\
         wget \\
-        zip \\
-    && python3.12 -m venv /opt/venv
+        zip
 
-ENV PATH="/opt/venv/bin:$PATH"
+ENV PATH="/opt/python/cp312-cp312/bin:$PATH"
 
-RUN pip3 install \\
-       cmake==4.0.3 \\
+RUN pipx install \\
+       cmake>=4.0.3 \\
        numpy \\
        packaging \\
        patchelf==0.17.2 \\
        setuptools \\
-       wheel>=0.35.1
+       wheel>=0.35.1 \\
+       --force
 
 """
 
