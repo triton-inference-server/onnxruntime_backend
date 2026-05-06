@@ -178,7 +178,7 @@ RUN dnf install -y \\
 
 ENV PATH="/opt/python/cp312-cp312/bin:$PATH"
 
-RUN pipx install \\
+RUN pip3 install \\
        cmake>=4.0.3 \\
        numpy \\
        packaging \\
