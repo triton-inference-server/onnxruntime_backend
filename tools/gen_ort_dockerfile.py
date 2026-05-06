@@ -173,10 +173,12 @@ RUN dnf install -y \\
         git \\
         gnupg \\
         openssl-devel \\
-        python3.12-devel \\
-        python3.12-pip \\
+        python3.12-venv \\
         wget \\
-        zip
+        zip \\
+    && python3.12 -m venv /opt/venv
+
+ENV PATH="/opt/venv/bin:$PATH"
 
 RUN pip3 install \\
        cmake==4.0.3 \\
