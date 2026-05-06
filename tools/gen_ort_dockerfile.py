@@ -391,15 +391,6 @@ ENV COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --parallel --skip_
     )
 
     df += """
-# https://github.com/NVIDIA/cccl/issues/8833
-RUN curl -sL https://raw.githubusercontent.com/NVIDIA/cccl/f952733/cub/cub/device/device_transform.cuh \\
-    -o /usr/local/cuda/include/cccl/cub/device/device_transform.cuh
-RUN curl -sL https://raw.githubusercontent.com/NVIDIA/cccl/f952733/cub/cub/device/dispatch/tuning/tuning_transform.cuh \\
-    -o /usr/local/cuda/include/cccl/cub/device/dispatch/tuning/tuning_transform.cuh
-
-"""
-
-    df += """
 RUN ./build.sh ${{COMMON_BUILD_ARGS}} --update --build {}
 """.format(
         ep_flags
