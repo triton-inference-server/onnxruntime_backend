@@ -173,7 +173,7 @@ RUN dnf install -y \\
         git \\
         gnupg \\
         openssl-devel \\
-        python3.12-venv \\
+        python3.12 \\
         wget \\
         zip \\
     && python3.12 -m venv /opt/venv
