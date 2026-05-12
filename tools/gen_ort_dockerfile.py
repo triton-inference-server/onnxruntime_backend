@@ -382,12 +382,16 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
     else:
         cuda_archs = "75-real;80-real;86-real;90-real;100f;110f;120f"
 
+    ort_parallel_arg = "--parallel"
+    if FLAGS.ort_build_parallel is not None:
+        ort_parallel_arg += f" {FLAGS.ort_build_parallel}"
+
     df += """
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --parallel --skip_submodule_sync --build_shared_lib \
+ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} {} --skip_submodule_sync --build_shared_lib \
     --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}'  --cmake_extra_defines CMAKE_POLICY_VERSION_MINIMUM=3.5 --build_wheel"
 """.format(
-        cuda_archs
+        ort_parallel_arg, cuda_archs
     )
 
     df += """
@@ -540,6 +544,13 @@ if __name__ == "__main__":
         default="Release",
         choices=["Debug", "Release", "RelWithDebInfo"],
         help="ORT build configuration.",
+    )
+    parser.add_argument(
+        "--ort-build-parallel",
+        type=int,
+        required=False,
+        default=None,
+        help="Limit ONNX Runtime internal build parallelism.",
     )
     parser.add_argument(
         "--target-platform",
