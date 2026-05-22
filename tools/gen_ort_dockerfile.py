@@ -135,7 +135,7 @@ def dockerfile_common():
     df = """
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
-ARG ONNXRUNTIME_REPO=https://github.com/mc-nv/onnxruntime
+ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
 ARG ONNXRUNTIME_BUILD_CONFIG={}
 """.format(
         FLAGS.triton_container, FLAGS.ort_version, FLAGS.ort_build_config
@@ -342,7 +342,7 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone -b mchornyi/TRI-704/onnx --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
     cd onnxruntime && git submodule update --init --recursive
         """
 
