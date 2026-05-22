@@ -344,7 +344,7 @@ ARG ONNXRUNTIME_BUILD_CONFIG
 
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
     (cd onnxruntime && \\
-     git fetch upstream pull/28611/head:ort-pr-trt11 pull/28586/head:ort-pr-abseil-nvcc && \\
+     git fetch origin pull/28611/head:ort-pr-trt11 pull/28586/head:ort-pr-abseil-nvcc && \\
      git cherry-pick ort-pr-trt11 && \\
      git cherry-pick ort-pr-abseil-nvcc)
         """
