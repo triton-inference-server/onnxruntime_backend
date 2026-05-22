@@ -131,7 +131,7 @@ def dockerfile_common():
     df = """
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
-ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
+ARG ONNXRUNTIME_REPO=https://github.com/mc-nv/onnxruntime
 ARG ONNXRUNTIME_BUILD_CONFIG={}
 """.format(
         FLAGS.triton_container, FLAGS.ort_version, FLAGS.ort_build_config
@@ -338,11 +338,7 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
-    (cd onnxruntime && \\
-     git fetch upstream pull/28611/head:ort-pr-trt11 pull/28586/head:ort-pr-abseil-nvcc && \\
-     git cherry-pick ort-pr-trt11 && \\
-     git cherry-pick ort-pr-abseil-nvcc)
+RUN git clone -b mchornyi/TRI-704/onnx-patch-and-trt --recursive ${ONNXRUNTIME_REPO} onnxruntime
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
