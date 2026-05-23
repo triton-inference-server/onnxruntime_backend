@@ -281,6 +281,10 @@ for more information.
 * `enable_mem_pattern`: Use 1 to enable memory pattern and 0 to disable.
 See [this](https://onnxruntime.ai/docs/api/c/struct_ort_api.html#ad13b711736956bf0565fea0f8d7a5d75)
 for more information.
+* `share_session_between_instances`: Use 1 to share a single ORT session across
+model instances in the same instance group and 0 to create one session per
+model instance. The default is 0. This is a model-level parameter and applies
+to all instance groups for the model.
 * `memory.enable_memory_arena_shrinkage`:
 See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h)
 for more information.
