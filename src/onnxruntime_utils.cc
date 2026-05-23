@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "onnxruntime_utils.h"
-#include <regex>
 
 namespace triton { namespace backend { namespace onnxruntime {
 
@@ -565,16 +564,20 @@ GetInstanceGroupName(
   if (model_name.empty() || instance_name.empty()) {
     return "";
   }
-  // Using regex search to extract instance group name from model instance name
-  // model instance naming follows pattern: <model name>_<instance group index>_<instance index>
-  // instance group naming follows pattern: <model name>_<instance group index>
-  std::regex group_name_regex('(' + model_name + '_' + "[0-9]" + ')');
-  std::smatch group_name;
-  if (std::regex_search(instance_name, group_name, group_name_regex)) {
-    return group_name.str(1);
+
+  // Model instance names follow <model name>_<instance group index>_<instance index>.
+  // Return <model name>_<instance group index>.
+  const std::string prefix = model_name + "_";
+  if (instance_name.rfind(prefix, 0) != 0) {
+    return "";
   }
 
-  return "";
+  const size_t group_end = instance_name.find('_', prefix.size());
+  if (group_end == std::string::npos) {
+    return "";
+  }
+
+  return instance_name.substr(0, group_end);
 }
 
 }}}  // namespace triton::backend::onnxruntime
