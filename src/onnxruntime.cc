@@ -405,7 +405,7 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   // If this value is set all instances within an instance group will share
   // the ort session
   {
-    bool share_session;
+    bool share_session = false;
     triton::common::TritonJson::Value params;
     if (ModelConfig().Find("parameters", &params)) {
       THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
@@ -425,6 +425,8 @@ ModelState::LoadModel(
 {
   // Get the group name for the instance
   std::string instance_group_name(GetInstanceGroupName(Name(), instance_name));
+  const bool should_share_session =
+      share_session_between_instances_ && !instance_name.empty();
   // Find the ONNX file that describes the model itself. If the model
   // configuration doesn't have an explicit model file specified then
   // use the default name ("model.onnx").
@@ -452,16 +454,21 @@ ModelState::LoadModel(
 
   // Check if we are sharing the session. If so get the session pointer and
   // return
- if (share_session_between_instances_) {
-    group_instance_session_map_mutex_.lock();
+  std::unique_lock<std::mutex> session_map_lock(
+      group_instance_session_map_mutex_, std::defer_lock);
+  if (should_share_session) {
+    RETURN_ERROR_IF_TRUE(
+        instance_group_name.empty(), TRITONSERVER_ERROR_INTERNAL,
+        std::string("unable to determine instance group name for instance '") +
+            instance_name + "'");
+
+    session_map_lock.lock();
     TRITONSERVER_Error* error = GetSessionForGroup(instance_group_name, session);
     if (error == nullptr) {
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO,
           (std::string("Reusing session for instance: ") + instance_name)
               .c_str());
-      // Session successfully retrieved, unlock the mutex and return the session
-      group_instance_session_map_mutex_.unlock();
       return nullptr;
     }
     // In case of error do not release lock and carry on to load session, set it in map
@@ -1047,12 +1054,11 @@ ModelState::LoadModel(
           TRITONSERVER_LOG_INFO,
           (std::string("Created session for instance: ") + instance_name)
               .c_str());
-  if (share_session_between_instances_) {
+  if (should_share_session) {
     // The session was created fine this is not a critical error
     LOG_IF_ERROR(
         SetSessionForGroup(instance_group_name, session),
         "Failed to map ort session to the group for sharing");
-    group_instance_session_map_mutex_.unlock();
   }
 
   return nullptr;  // success
