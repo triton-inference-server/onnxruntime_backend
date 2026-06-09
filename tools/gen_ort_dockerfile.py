@@ -81,6 +81,10 @@ OPENVINO_VERSION_MAP = {
         "2026.1",  # OpenVINO short version
         "2026.1.0.21367.63e31528c62",  # OpenVINO version with build number
     ),
+    "2026.2.0": (
+        "2026.2",  # OpenVINO short version
+        "2026.2.0.21903.52ddc073857",  # OpenVINO version with build number
+    ),
 }
 
 
