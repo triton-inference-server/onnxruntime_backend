@@ -346,11 +346,7 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
     ( cd onnxruntime && git checkout v${ONNXRUNTIME_VERSION} && \\
     git config --global user.email "onnxruntime_backend@nvidia.com" && \\
     git config --global user.name "onnxruntime_backend" && \\
-    git cherry-pick 53fcead6c747330dd69ac6b960972b535042b3ff && \\
-    git fetch origin pull/28586/head:ort-pr-abseil-nvcc && \\
-    git cherry-pick ort-pr-abseil-nvcc && \\
-    git fetch origin pull/28972/head:ort-pr-cccl-header-order && \\
-    git cherry-pick ort-pr-cccl-header-order ) && \\
+    git cherry-pick 53fcead6c747330dd69ac6b960972b535042b3ff ) && \\
     cd onnxruntime && git submodule update --init --recursive
         """
 
