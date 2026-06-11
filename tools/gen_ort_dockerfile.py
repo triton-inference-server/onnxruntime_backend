@@ -81,6 +81,10 @@ OPENVINO_VERSION_MAP = {
         "2026.1",  # OpenVINO short version
         "2026.1.0.21367.63e31528c62",  # OpenVINO version with build number
     ),
+    "2026.2.0": (
+        "2026.2",  # OpenVINO short version
+        "2026.2.0.21903.52ddc073857",  # OpenVINO version with build number
+    ),
 }
 
 
@@ -339,6 +343,10 @@ ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
 RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
+    ( cd onnxruntime && git checkout v${ONNXRUNTIME_VERSION} && \\
+    git config --global user.email "onnxruntime_backend@nvidia.com" && \\
+    git config --global user.name "onnxruntime_backend" && \\
+    git cherry-pick 53fcead6c747330dd69ac6b960972b535042b3ff ) && \\
     cd onnxruntime && git submodule update --init --recursive
         """
 
