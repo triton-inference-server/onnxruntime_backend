@@ -449,11 +449,16 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
     else:
         cuda_archs = "75-real;80-real;86-real;90-real;100f;110f;120f"
 
+    parallel_arg = "--parallel"
+    if FLAGS.parallel_jobs is not None:
+        parallel_arg += " {}".format(FLAGS.parallel_jobs)
+
     df += """
 WORKDIR /workspace/onnxruntime
-ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_sync --build_shared_lib \
+ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} {} --skip_submodule_sync --build_shared_lib \
     --compile_no_warning_as_error --build_dir /workspace/build --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES='{}'  --cmake_extra_defines CMAKE_POLICY_VERSION_MINIMUM=3.5 --build_wheel"
 """.format(
+        parallel_arg,
         cuda_archs
     )
 
@@ -629,6 +634,12 @@ if __name__ == "__main__":
         required=False,
         default=None,
         help='Target for build, can be "linux" or "rhel". If not specified, build targets the current platform.',
+    )
+    parser.add_argument(
+        "--parallel-jobs",
+        type=int,
+        required=False,
+        help="Parallelism to use for the ONNX Runtime build.",
     )
 
     parser.add_argument(
