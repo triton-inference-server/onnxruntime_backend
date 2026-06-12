@@ -107,6 +107,7 @@ set(TRITON_ONNX_TENSORRT_REPO_TAG "" CACHE STRING "Tag for onnx-tensorrt repo")
 set(TRT_VERSION "" CACHE STRING "TRT version for this build.")
 set(TRITON_ONNXRUNTIME_LIB_PATHS "" CACHE PATH "Paths to ONNXRuntime libraries")
 set(TRITON_ONNXRUNTIME_DOCKER_BUILD_NETWORK "" CACHE STRING "Docker network mode for nested ONNXRuntime docker build")
+set(TRITON_ONNXRUNTIME_BUILD_AS_ROOT ON CACHE BOOL "Allow nested ONNXRuntime build to run as root inside the build image")
 
 set(TRITON_REPO_ORGANIZATION "https://github.com/triton-inference-server" CACHE STRING "Git repository to pull from")
 set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/backend repo")
@@ -354,6 +355,9 @@ if(TRITON_ONNXRUNTIME_DOCKER_BUILD)
   if(NOT TRITON_CUDA_ARCH_LIST STREQUAL "")
     set(_GEN_FLAGS ${_GEN_FLAGS} "--cuda-arch-list=${TRITON_CUDA_ARCH_LIST}")
   endif() # TRITON_CUDA_ARCH_LIST
+  if(NOT TRITON_ONNXRUNTIME_BUILD_AS_ROOT)
+    set(_GEN_FLAGS ${_GEN_FLAGS} "--no-root-build")
+  endif() # TRITON_ONNXRUNTIME_BUILD_AS_ROOT
 
   set(_DOCKER_BUILD_NETWORK_ARGS "")
   if(NOT TRITON_ONNXRUNTIME_DOCKER_BUILD_NETWORK STREQUAL "")
