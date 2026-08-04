@@ -34,46 +34,6 @@ import re
 FLAGS = None
 
 OPENVINO_VERSION_MAP = {
-    "2024.0.0": (
-        "2024.0",  # OpenVINO short version
-        "2024.0.0.14509.34caeefd078",  # OpenVINO version with build number
-    ),
-    "2024.1.0": (
-        "2024.1",  # OpenVINO short version
-        "2024.1.0.15008.f4afc983258",  # OpenVINO version with build number
-    ),
-    "2024.4.0": (
-        "2024.4",  # OpenVINO short version
-        "2024.4.0.16579.c3152d32c9c",  # OpenVINO version with build number
-    ),
-    "2024.5.0": (
-        "2024.5",  # OpenVINO short version
-        "2024.5.0.17288.7975fa5da0c",  # OpenVINO version with build number
-    ),
-    "2025.0.0": (
-        "2025.0",  # OpenVINO short version
-        "2025.0.0.17942.1f68be9f594",  # OpenVINO version with build number
-    ),
-    "2025.1.0": (
-        "2025.1",  # OpenVINO short version
-        "2025.1.0.18503.6fec06580ab",  # OpenVINO version with build number
-    ),
-    "2025.2.0": (
-        "2025.2",  # OpenVINO short version
-        "2025.2.0.19140.c01cd93e24d",  # OpenVINO version with build number
-    ),
-    "2025.3.0": (
-        "2025.3",  # OpenVINO short version
-        "2025.3.0.19807.44526285f24",  # OpenVINO version with build number
-    ),
-    "2025.4.0": (
-        "2025.4",  # OpenVINO short version
-        "2025.4.0.20398.8fdad55727d",  # OpenVINO version with build number
-    ),
-    "2025.4.1": (
-        "2025.4.1",  # OpenVINO short version
-        "2025.4.1.20426.82bbf0292c5",  # OpenVINO version with build number
-    ),
     "2026.0.0": (
         "2026.0",  # OpenVINO short version
         "2026.0.0.20965.c6d6a13a886",  # OpenVINO version with build number
@@ -85,6 +45,10 @@ OPENVINO_VERSION_MAP = {
     "2026.2.0": (
         "2026.2",  # OpenVINO short version
         "2026.2.0.21903.52ddc073857",  # OpenVINO version with build number
+    ),
+    "2026.3.0": (
+        "2026.3",  # OpenVINO short version
+        "2026.3.0.22451.bd8d6542e3c",  # OpenVINO version with build number
     ),
 }
 
