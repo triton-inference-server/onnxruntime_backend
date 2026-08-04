@@ -452,7 +452,8 @@ WORKDIR /opt/onnxruntime/include
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_c_api.h . \\
     && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h . \\
     && cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h . \\
-    && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_ep_c_api.h .
+    && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_ep_c_api.h . \\
+    && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_error_code.h .
 
 WORKDIR /opt/onnxruntime/lib
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so . \\
