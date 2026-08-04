@@ -366,11 +366,7 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
-    (cd onnxruntime && \\
-     git config --global user.email "onnxruntime_backend@nvidia.com" && \\
-     git config --global user.name "onnxruntime_backend" && \\
-     git cherry-pick 5b36110635b51216e40b6aa7aedac392ca44e075 )
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
