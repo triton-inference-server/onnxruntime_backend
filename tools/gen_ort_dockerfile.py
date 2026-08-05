@@ -205,7 +205,7 @@ RUN dnf install -y \\
         wget \\
         zip
 
-RUN . /opt/_internal/pipx/shared/bin/activate
+ENV PATH="/opt/_internal/pipx/shared/bin:$PATH"
 RUN pip3 install \\
        cmake==4.0.3 \\
        numpy \\
