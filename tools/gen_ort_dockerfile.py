@@ -202,10 +202,10 @@ RUN dnf install -y \\
         gnupg \\
         openssl-devel \\
         python3.12-devel \\
-        python3.12-pip \\
         wget \\
         zip
 
+RUN . /opt/_internal/pipx/shared/bin/activate
 RUN pip3 install \\
        cmake==4.0.3 \\
        numpy \\
