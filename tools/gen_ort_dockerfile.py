@@ -211,6 +211,7 @@ RUN pip3 install \\
        numpy \\
        packaging \\
        patchelf==0.17.2 \\
+       setuptools \\
        wheel>=0.35.1
 
 """
