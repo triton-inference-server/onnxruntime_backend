@@ -86,6 +86,27 @@ struct BackendConfiguration {
   int default_max_batch_size_{0};
 };
 
+TRITONSERVER_Error*
+NormalizeCudnnConvAlgoSearch(
+    const std::string& value, std::string* normalized_value)
+{
+  if ((value == "0") || (value == "EXHAUSTIVE")) {
+    *normalized_value = "EXHAUSTIVE";
+  } else if ((value == "1") || (value == "HEURISTIC")) {
+    *normalized_value = "HEURISTIC";
+  } else if ((value == "2") || (value == "DEFAULT")) {
+    *normalized_value = "DEFAULT";
+  } else {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("unsupported cudnn_conv_algo_search value '") + value +
+         "' is requested")
+            .c_str());
+  }
+
+  return nullptr;
+}
+
 //
 // ModelState
 //
@@ -754,8 +775,14 @@ ModelState::LoadModel(
                 RETURN_IF_ERROR(params.Members(&param_keys));
                 for (const auto& param_key : param_keys) {
                   std::string value_string, key, value;
-                  // Special handling for boolean values
-                  if (param_key == "do_copy_in_default_stream" ||
+                  if (param_key == "cudnn_conv_algo_search") {
+                    RETURN_IF_ERROR(params.MemberAsString(
+                        param_key.c_str(), &value_string));
+                    RETURN_IF_ERROR(
+                        NormalizeCudnnConvAlgoSearch(value_string, &value));
+                    key = param_key;
+                  } else if (
+                      param_key == "do_copy_in_default_stream" ||
                       param_key == "use_ep_level_unified_stream") {
                     RETURN_IF_ERROR(params.MemberAsString(
                         param_key.c_str(), &value_string));
@@ -810,23 +837,8 @@ ModelState::LoadModel(
           RETURN_IF_ERROR(TryParseModelStringParameter(
               params, "cudnn_conv_algo_search", &cudnn_conv_algo_search, 0));
           std::string string_value;
-          switch (cudnn_conv_algo_search) {
-            case 0:
-              string_value = "EXHAUSTIVE";
-              break;
-            case 1:
-              string_value = "HEURISTIC";
-              break;
-            case 2:
-              string_value = "DEFAULT";
-              break;
-            default:
-              return TRITONSERVER_ErrorNew(
-                  TRITONSERVER_ERROR_INVALID_ARG,
-                  (std::string("unsupported cudnn_conv_algo_search value '") +
-                   std::to_string(cudnn_conv_algo_search) + "' is requested")
-                      .c_str());
-          }
+          RETURN_IF_ERROR(NormalizeCudnnConvAlgoSearch(
+              std::to_string(cudnn_conv_algo_search), &string_value));
           cuda_options_map["cudnn_conv_algo_search"] = string_value;
         } else {
           cuda_options_map["cudnn_conv_algo_search"] = "EXHAUSTIVE";
