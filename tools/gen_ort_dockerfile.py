@@ -34,46 +34,6 @@ import re
 FLAGS = None
 
 OPENVINO_VERSION_MAP = {
-    "2024.0.0": (
-        "2024.0",  # OpenVINO short version
-        "2024.0.0.14509.34caeefd078",  # OpenVINO version with build number
-    ),
-    "2024.1.0": (
-        "2024.1",  # OpenVINO short version
-        "2024.1.0.15008.f4afc983258",  # OpenVINO version with build number
-    ),
-    "2024.4.0": (
-        "2024.4",  # OpenVINO short version
-        "2024.4.0.16579.c3152d32c9c",  # OpenVINO version with build number
-    ),
-    "2024.5.0": (
-        "2024.5",  # OpenVINO short version
-        "2024.5.0.17288.7975fa5da0c",  # OpenVINO version with build number
-    ),
-    "2025.0.0": (
-        "2025.0",  # OpenVINO short version
-        "2025.0.0.17942.1f68be9f594",  # OpenVINO version with build number
-    ),
-    "2025.1.0": (
-        "2025.1",  # OpenVINO short version
-        "2025.1.0.18503.6fec06580ab",  # OpenVINO version with build number
-    ),
-    "2025.2.0": (
-        "2025.2",  # OpenVINO short version
-        "2025.2.0.19140.c01cd93e24d",  # OpenVINO version with build number
-    ),
-    "2025.3.0": (
-        "2025.3",  # OpenVINO short version
-        "2025.3.0.19807.44526285f24",  # OpenVINO version with build number
-    ),
-    "2025.4.0": (
-        "2025.4",  # OpenVINO short version
-        "2025.4.0.20398.8fdad55727d",  # OpenVINO version with build number
-    ),
-    "2025.4.1": (
-        "2025.4.1",  # OpenVINO short version
-        "2025.4.1.20426.82bbf0292c5",  # OpenVINO version with build number
-    ),
     "2026.0.0": (
         "2026.0",  # OpenVINO short version
         "2026.0.0.20965.c6d6a13a886",  # OpenVINO version with build number
@@ -85,6 +45,10 @@ OPENVINO_VERSION_MAP = {
     "2026.2.0": (
         "2026.2",  # OpenVINO short version
         "2026.2.0.21903.52ddc073857",  # OpenVINO version with build number
+    ),
+    "2026.3.0": (
+        "2026.3",  # OpenVINO short version
+        "2026.3.0.22451.bd8d6542e3c",  # OpenVINO version with build number
     ),
 }
 
@@ -238,15 +202,16 @@ RUN dnf install -y \\
         gnupg \\
         openssl-devel \\
         python3.12-devel \\
-        python3.12-pip \\
         wget \\
         zip
 
+ENV PATH="/opt/_internal/pipx/shared/bin:$PATH"
 RUN pip3 install \\
        cmake==4.0.3 \\
        numpy \\
        packaging \\
        patchelf==0.17.2 \\
+       setuptools \\
        wheel>=0.35.1
 
 """
@@ -402,11 +367,7 @@ ARG ONNXRUNTIME_VERSION
 ARG ONNXRUNTIME_REPO
 ARG ONNXRUNTIME_BUILD_CONFIG
 
-RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \\
-    (cd onnxruntime && \\
-     git config --global user.email "onnxruntime_backend@nvidia.com" && \\
-     git config --global user.name "onnxruntime_backend" && \\
-     git cherry-pick 5b36110635b51216e40b6aa7aedac392ca44e075 )
+RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime
         """
 
     if FLAGS.onnx_tensorrt_tag != "":
@@ -492,7 +453,8 @@ WORKDIR /opt/onnxruntime/include
 RUN cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_c_api.h . \\
     && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h . \\
     && cp /workspace/onnxruntime/include/onnxruntime/core/providers/cpu/cpu_provider_factory.h . \\
-    && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_ep_c_api.h .
+    && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_ep_c_api.h . \\
+    && cp /workspace/onnxruntime/include/onnxruntime/core/session/onnxruntime_error_code.h .
 
 WORKDIR /opt/onnxruntime/lib
 RUN cp /workspace/build/${ONNXRUNTIME_BUILD_CONFIG}/libonnxruntime_providers_shared.so . \\
