@@ -449,10 +449,6 @@ RUN git clone -b rel-${ONNXRUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnx
     # ONNX Runtime CMAKE_CUDA_ARCHITECTURES expects plain numeric codes (no -real, no f suffix)
     if os.uname().machine != "x86_64":
         cuda_archs = "80-real;86-real;90-real;100f;110f;120f"
-    elif FLAGS.cuda_arch_list is not None:
-        print(f"[INFO] Defined CUDA arch list: {FLAGS.cuda_arch_list}")
-        cuda_archs = parse_cuda_arch_list(FLAGS.cuda_arch_list)
-        print(f"[INFO] Set ONNX Runtime to use CUDA architectures to: {cuda_archs}")
     elif os.getenv("CUDA_ARCH_LIST") is not None:
         print(f"[INFO] Defined CUDA_ARCH_LIST: {os.getenv('CUDA_ARCH_LIST')}")
         cuda_archs = parse_cuda_arch_list(os.getenv("CUDA_ARCH_LIST"))
@@ -656,12 +652,6 @@ if __name__ == "__main__":
         type=int,
         required=False,
         help="Parallelism to use for the ONNX Runtime build.",
-    )
-    parser.add_argument(
-        "--cuda-arch-list",
-        type=str,
-        required=False,
-        help="CUDA architectures to use for the ONNX Runtime build.",
     )
     parser.add_argument(
         "--no-root-build",
