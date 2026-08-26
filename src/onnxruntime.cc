@@ -352,6 +352,17 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
             (std::string("Configuring enable_mem_arena to ") + string_value)
                 .c_str());
         THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_status);
+      } else {
+        // Default: disable CPU memory arena to prevent RSS growth across
+        // load/unload cycles. The BFCArena retains freed memory in per-session
+        // pools and does not return it to the OS, causing monotonic RSS growth.
+        // With arena disabled, allocations go directly to the system allocator
+        // which returns memory on free.
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_VERBOSE,
+            "Disabling CPU memory arena by default to prevent memory leak");
+        THROW_IF_BACKEND_MODEL_ORT_ERROR(
+            ort_api->DisableCpuMemArena(soptions));
       }
     }
   }
@@ -1403,6 +1414,17 @@ ModelInstanceState::ModelInstanceState(
       THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddRunConfigEntry(
           runOptions_, enable_memory_arena_shrinkage_key,
           string_value.c_str()));
+    } else {
+      // Default: enable CPU arena shrinkage to prevent memory leak across
+      // load/unload cycles. Without this, the BFCArena grows monotonically
+      // and never returns memory to the OS, causing RSS to grow until OOM.
+      // See: onnxruntime/core/framework/bfc_arena.cc Shrink()
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_VERBOSE,
+          "Configuring memory.enable_memory_arena_shrinkage to cpu:0 "
+          "(default)");
+      THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddRunConfigEntry(
+          runOptions_, enable_memory_arena_shrinkage_key, "cpu:0"));
     }
   }
 
