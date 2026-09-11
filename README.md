@@ -141,6 +141,7 @@ check [ONNX Runtime doc](https://onnxruntime.ai/docs/execution-providers/TensorR
 | trt_dump_ep_context_model         | e.g: "1" or "true", "0" or "false"                  | trt_dump_ep_context_model                        | bool   |
 | trt_ep_context_file_path          |                                                     | trt_ep_context_file_path                         | string |
 | trt_ep_context_embed_mode         | e.g: "1"                                            | trt_ep_context_embed_mode                        | int    |
+| trt_op_types_to_exclude           | e.g. "op_type1,op_type_2"                           | trt_op_types_to_exclude                          | string |
 
 The section of model config file specifying these parameters will look like:
 
