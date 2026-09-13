@@ -25,7 +25,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import os
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import numpy as np
 import tritonclient.http as httpclient
@@ -36,6 +39,50 @@ class ShareSessionTest(unittest.TestCase):
         self.client_ = httpclient.InferenceServerClient("localhost:8000")
         self.model_name_ = "add_with_initializer_shared"
         self.input_data_ = np.zeros((5, 5)).astype(np.float32)
+
+    def tearDown(self):
+        self.client_.close()
+
+    def test_concurrent_inference(self):
+        def infer(worker):
+            with httpclient.InferenceServerClient("localhost:8000") as client:
+                for index in range(16):
+                    value = worker * 16 + index
+                    data = np.full((5, 5), value, dtype=np.float32)
+                    infer_input = httpclient.InferInput("INPUT", data.shape, "FP32")
+                    infer_input.set_data_from_numpy(data)
+                    inputs = [infer_input]
+                    expected = data + 1
+                    if index % 2:
+                        initializer = data + 2
+                        optional_input = httpclient.InferInput(
+                            "INITIALIZER", data.shape, "FP32"
+                        )
+                        optional_input.set_data_from_numpy(initializer)
+                        inputs.append(optional_input)
+                        expected = data + initializer
+                    results = client.infer(self.model_name_, inputs)
+                    np.testing.assert_array_equal(results.as_numpy("OUTPUT"), expected)
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            list(executor.map(infer, range(8)))
+
+    def test_cuda_compute_stream(self):
+        config = self.client_.get_model_config(self.model_name_)
+        if not any(group["kind"] == "KIND_GPU" for group in config["instance_group"]):
+            self.skipTest("CUDA stream options require GPU instances")
+
+        sharing = config["parameters"]["share_session_between_instances"]
+        shared = sharing["string_value"] == "1"
+        log = Path(os.environ.get("SERVER_LOG", "server.log")).read_text()
+        options = [
+            line
+            for line in log.splitlines()
+            if f"CUDA Execution Accelerator is set for '{self.model_name_}'" in line
+        ]
+        self.assertEqual(len(options), 1 if shared else 2)
+        for line in options:
+            self.assertIn(f"has_user_compute_stream={0 if shared else 1};", line)
 
     def test_infer_without_optional_input(self):
         infer_input = httpclient.InferInput("INPUT", self.input_data_.shape, "FP32")

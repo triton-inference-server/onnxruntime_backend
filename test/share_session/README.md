@@ -28,6 +28,19 @@
 
 This test verifies that `share_session_between_instances` reuses a single ORT
 session for multiple model instances in the same instance group.
+It checks concurrent requests with distinct inputs, including optional inputs.
+For GPU instances, it also checks that shared sessions use ORT-managed compute
+streams and unshared sessions retain their instance's compute stream.
+
+The default is shared CPU sessions. Run all variants with:
+
+```bash
+for kind in CPU GPU; do
+  for sharing in 0 1; do
+    INSTANCE_KIND=$kind SHARE_SESSION=$sharing bash test.sh || exit 1
+  done
+done
+```
 
 Like other backend tests in this repository, it assumes the Triton Server QA
 test environment is set up and that `../common/util.sh` is available.

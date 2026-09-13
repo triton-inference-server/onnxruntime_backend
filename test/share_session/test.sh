@@ -27,9 +27,39 @@
 
 export CUDA_VISIBLE_DEVICES=0
 
+INSTANCE_KIND=${INSTANCE_KIND:=CPU}
+SHARE_SESSION=${SHARE_SESSION:=1}
+MODEL_REPOSITORY=$(mktemp -d)
+trap 'rm -rf "$MODEL_REPOSITORY"' EXIT
+
+python - "$MODEL_REPOSITORY" "$INSTANCE_KIND" "$SHARE_SESSION" <<'PY'
+import shutil
+import sys
+from pathlib import Path
+
+from google.protobuf import text_format
+from tritonclient.grpc import model_config_pb2
+
+repository, kind, share_session = sys.argv[1:]
+assert kind in ("CPU", "GPU"), kind
+assert share_session in ("0", "1"), share_session
+model = Path(repository) / "add_with_initializer_shared"
+shutil.copytree("models/add_with_initializer_shared", model)
+config_path = model / "config.pbtxt"
+config = text_format.Parse(config_path.read_text(), model_config_pb2.ModelConfig())
+config.instance_group[0].kind = model_config_pb2.ModelInstanceGroup.Kind.Value(
+    "KIND_" + kind
+)
+config.parameters["share_session_between_instances"].string_value = share_session
+config_path.write_text(text_format.MessageToString(config))
+PY
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+
 SERVER=/opt/tritonserver/bin/tritonserver
-SERVER_ARGS="--model-repository=`pwd`/models --log-info=1"
-SERVER_LOG="./server.log"
+SERVER_ARGS="--model-repository=$MODEL_REPOSITORY --log-info=1 --log-verbose=1"
+export SERVER_LOG="./server.log"
 CLIENT_LOG="./test.log"
 source ../common/util.sh
 
@@ -57,18 +87,19 @@ CREATED_COUNT=$(grep -c "Created session for instance: add_with_initializer_shar
 MAPPED_COUNT=$(grep -c "Mapped session for instance group: add_with_initializer_shared_" $SERVER_LOG)
 REUSED_COUNT=$(grep -c "Reusing session for instance: add_with_initializer_shared_" $SERVER_LOG)
 
-if [ "$CREATED_COUNT" -ne 1 ]; then
-    echo "Expected one created session, found $CREATED_COUNT"
+EXPECTED_CREATED=$((2 - SHARE_SESSION))
+if [ "$CREATED_COUNT" -ne "$EXPECTED_CREATED" ]; then
+    echo "Expected $EXPECTED_CREATED created sessions, found $CREATED_COUNT"
     RET=1
 fi
 
-if [ "$MAPPED_COUNT" -ne 1 ]; then
-    echo "Expected one mapped session, found $MAPPED_COUNT"
+if [ "$MAPPED_COUNT" -ne "$SHARE_SESSION" ]; then
+    echo "Expected $SHARE_SESSION mapped sessions, found $MAPPED_COUNT"
     RET=1
 fi
 
-if [ "$REUSED_COUNT" -ne 1 ]; then
-    echo "Expected one reused session, found $REUSED_COUNT"
+if [ "$REUSED_COUNT" -ne "$SHARE_SESSION" ]; then
+    echo "Expected $SHARE_SESSION reused sessions, found $REUSED_COUNT"
     RET=1
 fi
 

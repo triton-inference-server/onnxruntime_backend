@@ -284,7 +284,9 @@ for more information.
 * `share_session_between_instances`: Use 1 to share a single ORT session across
 model instances in the same instance group and 0 to create one session per
 model instance. The default is 0. This is a model-level parameter and applies
-to all instance groups for the model.
+to all instance groups for the model. Shared CUDA sessions use ORT-managed
+compute streams instead of a model instance's CUDA stream, allowing concurrent
+instances to execute without being serialized on that instance's stream.
 * `memory.enable_memory_arena_shrinkage`:
 See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h)
 for more information.

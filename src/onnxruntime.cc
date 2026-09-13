@@ -858,8 +858,14 @@ ModelState::LoadModel(
     std::unique_ptr<
         OrtCUDAProviderOptionsV2, decltype(ort_api->ReleaseCUDAProviderOptions)>
         rel_cuda_options(cuda_options, ort_api->ReleaseCUDAProviderOptions);
+    // A user compute stream makes ORT use one stream for all calling threads.
+    // Let ORT manage streams for shared sessions so concurrent instances are
+    // not serialized on the first instance's stream.
+    const bool use_user_compute_stream =
+        !should_share_session && (stream != nullptr);
     cuda_options_map["device_id"] = std::to_string(instance_group_device_id);
-    cuda_options_map["has_user_compute_stream"] = stream != nullptr ? "1" : "0";
+    cuda_options_map["has_user_compute_stream"] =
+        use_user_compute_stream ? "1" : "0";
     RETURN_IF_ORT_ERROR(ort_api->UpdateCUDAProviderOptionsWithValue(
         rel_cuda_options.get(), "default_memory_arena_cfg", nullptr));
     {
@@ -952,7 +958,7 @@ ModelState::LoadModel(
         rel_cuda_options.get(), option_names.data(), option_values.data(),
         option_values.size()));
 
-    if (stream != nullptr) {
+    if (use_user_compute_stream) {
       RETURN_IF_ORT_ERROR(ort_api->UpdateCUDAProviderOptionsWithValue(
           rel_cuda_options.get(), "user_compute_stream", stream));
     }
