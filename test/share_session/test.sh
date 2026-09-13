@@ -1,0 +1,129 @@
+#!/bin/bash
+# Copyright 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
+
+INSTANCE_KIND=${INSTANCE_KIND:=CPU}
+SHARE_SESSION=${SHARE_SESSION:=1}
+GPU_COUNT=${GPU_COUNT:=1}
+if ! [[ "$GPU_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+    echo "GPU_COUNT must be a positive integer"
+    exit 1
+fi
+MODEL_REPOSITORY=$(mktemp -d)
+trap 'rm -rf "$MODEL_REPOSITORY"' EXIT
+
+python - "$MODEL_REPOSITORY" "$INSTANCE_KIND" "$SHARE_SESSION" "$GPU_COUNT" <<'PY'
+import shutil
+import sys
+from pathlib import Path
+
+from google.protobuf import text_format
+from tritonclient.grpc import model_config_pb2
+
+repository, kind, share_session, gpu_count = sys.argv[1:]
+assert kind in ("CPU", "GPU"), kind
+assert share_session in ("0", "1"), share_session
+model = Path(repository) / "add_with_initializer_shared"
+shutil.copytree("models/add_with_initializer_shared", model)
+config_path = model / "config.pbtxt"
+config = text_format.Parse(config_path.read_text(), model_config_pb2.ModelConfig())
+config.instance_group[0].kind = model_config_pb2.ModelInstanceGroup.Kind.Value(
+    "KIND_" + kind
+)
+if kind == "GPU":
+    config.instance_group[0].gpus[:] = range(int(gpu_count))
+config.parameters["share_session_between_instances"].string_value = share_session
+config_path.write_text(text_format.MessageToString(config))
+PY
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+
+SERVER=/opt/tritonserver/bin/tritonserver
+SERVER_ARGS="--model-repository=$MODEL_REPOSITORY --log-info=1 --log-verbose=1"
+export SERVER_LOG="./server.log"
+CLIENT_LOG="./test.log"
+source ../common/util.sh
+
+rm -f *.log
+
+run_server
+if [ "$SERVER_PID" == "0" ]; then
+    echo -e "\n***\n*** Failed to start $SERVER\n***"
+    cat $SERVER_LOG
+    exit 1
+fi
+
+RET=0
+
+set +e
+
+python test.py >>$CLIENT_LOG 2>&1
+if [ $? -ne 0 ]; then
+    cat $CLIENT_LOG
+    echo -e "\n***\n*** Test Failed\n***"
+    RET=1
+fi
+
+CREATED_COUNT=$(grep -c "Created session for instance: add_with_initializer_shared_" $SERVER_LOG)
+MAPPED_COUNT=$(grep -c "Mapped session for instance group: add_with_initializer_shared_" $SERVER_LOG)
+REUSED_COUNT=$(grep -c "Reusing session for instance: add_with_initializer_shared_" $SERVER_LOG)
+
+DEVICE_COUNT=1
+if [ "$INSTANCE_KIND" == "GPU" ]; then
+    DEVICE_COUNT=$GPU_COUNT
+fi
+EXPECTED_CREATED=$(((2 - SHARE_SESSION) * DEVICE_COUNT))
+EXPECTED_SHARED=$((SHARE_SESSION * DEVICE_COUNT))
+if [ "$CREATED_COUNT" -ne "$EXPECTED_CREATED" ]; then
+    echo "Expected $EXPECTED_CREATED created sessions, found $CREATED_COUNT"
+    RET=1
+fi
+
+if [ "$MAPPED_COUNT" -ne "$EXPECTED_SHARED" ]; then
+    echo "Expected $EXPECTED_SHARED mapped sessions, found $MAPPED_COUNT"
+    RET=1
+fi
+
+if [ "$REUSED_COUNT" -ne "$EXPECTED_SHARED" ]; then
+    echo "Expected $EXPECTED_SHARED reused sessions, found $REUSED_COUNT"
+    RET=1
+fi
+
+set -e
+
+kill $SERVER_PID
+wait $SERVER_PID
+
+if [ $RET -eq 0 ]; then
+    echo -e "\n***\n*** Test Passed\n***"
+else
+    echo -e "\n***\n*** Test FAILED\n***"
+fi
+
+exit $RET

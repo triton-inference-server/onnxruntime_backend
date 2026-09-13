@@ -25,12 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
-
+#include <map>
 #include <mutex>
 #include <vector>
 
 #include "onnxruntime_loader.h"
 #include "onnxruntime_utils.h"
+#include "session_key.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_memory.h"
@@ -107,10 +108,10 @@ class ModelState : public BackendModel {
   // onnx file, return in 'session' and 'allocator' the ORT session
   // and allocator.
   TRITONSERVER_Error* LoadModel(
-      const std::string& artifact_name,
+      const std::string& artifact_name, const std::string& instance_name,
       const TRITONSERVER_InstanceGroupKind instance_group_kind,
       const int32_t instance_group_device_id, std::string* model_path,
-      OrtSession** session, OrtAllocator** default_allocator,
+      std::shared_ptr<OrtSession>& session, OrtAllocator** default_allocator,
       cudaStream_t stream);
 
   const std::map<std::string, std::pair<int64_t, int64_t>>& ModelOutputs()
@@ -127,6 +128,11 @@ class ModelState : public BackendModel {
   TRITONSERVER_Error* AutoCompleteIO(
       const char* key, const OnnxTensorInfoMap& io_infos);
 
+  TRITONSERVER_Error* GetSessionForGroup(
+      const SessionKey& key, std::shared_ptr<OrtSession>& session);
+  TRITONSERVER_Error* SetSessionForGroup(
+      const SessionKey& key, const std::shared_ptr<OrtSession>& session);
+
   // Session options used when creating a ORT session.
   std::unique_ptr<OrtSessionOptions, SessionOptionsDeleter> session_options_;
 
@@ -136,6 +142,18 @@ class ModelState : public BackendModel {
   // is specified both in the output section and state section, it indicates
   // that the backend must return the output state to the client too.
   std::map<std::string, std::pair<int64_t, int64_t>> model_outputs_;
+
+  // Indicate if an onnxrt session should be shared or not. This is a model
+  // global and applies to all instances. So, storing it in the model state
+  bool share_session_between_instances_;
+
+  // Map each instance group, kind and device to its ORT session. This is useful if
+  // share_session_between_instances is set to true in parameters.
+  // share_session_between_instances is a global model config and the user
+  // should be careful when setting this. There is no way to set this per
+  // instance group.
+  std::map<SessionKey, std::shared_ptr<OrtSession>> group_instance_session_map_;
+  std::mutex group_instance_session_map_mutex_;
 };
 
 TRITONSERVER_Error*
@@ -206,7 +224,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** state)
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
-    : BackendModel(triton_model, true /* allow_optional */)
+    : BackendModel(triton_model, true /* allow_optional */), share_session_between_instances_(false)
 {
   // Create session options that will be cloned and used for each
   // instance when creating that instance's session.
@@ -384,19 +402,34 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     }
   }
 
-  // FIXME. Is it possible to share a single OrtSession across
-  // multiple instances? If so then should move loading and validation
-  // of the session to here instead of creating a session for each
-  // instance in ModelStateInstance::Create().
+  // This setting will apply across multiple instance groups.
+  // If set, instances of the same kind and device within an instance group
+  // share the ORT session.
+  {
+    bool share_session = false;
+    triton::common::TritonJson::Value params;
+    if (ModelConfig().Find("parameters", &params)) {
+      THROW_IF_BACKEND_MODEL_ERROR(TryParseModelStringParameter(
+          params, "share_session_between_instances", &share_session, false));
+    }
+    share_session_between_instances_ = share_session;
+  }
 }
 
 TRITONSERVER_Error*
 ModelState::LoadModel(
-    const std::string& artifact_name,
+    const std::string& artifact_name, const std::string& instance_name,
     const TRITONSERVER_InstanceGroupKind instance_group_kind,
     const int32_t instance_group_device_id, std::string* model_path,
-    OrtSession** session, OrtAllocator** default_allocator, cudaStream_t stream)
+    std::shared_ptr<OrtSession>& session, OrtAllocator** default_allocator,
+    cudaStream_t stream)
 {
+  // Get the group name for the instance
+  std::string instance_group_name(GetInstanceGroupName(Name(), instance_name));
+  const SessionKey session_key{
+      instance_group_name, instance_group_kind, instance_group_device_id};
+  const bool should_share_session =
+      share_session_between_instances_ && !instance_name.empty();
   // Find the ONNX file that describes the model itself. If the model
   // configuration doesn't have an explicit model file specified then
   // use the default name ("model.onnx").
@@ -408,6 +441,10 @@ ModelState::LoadModel(
   *model_path = JoinPath(
       {RepositoryPath(), std::to_string(Version()), cc_model_filename});
 
+  // get default cpu allocator
+  RETURN_IF_ORT_ERROR(
+      ort_api->GetAllocatorWithDefaultOptions(default_allocator));
+
   // If the model path is a directory then the actual model is
   // <dir>/model.onnx.
   {
@@ -416,6 +453,37 @@ ModelState::LoadModel(
     if (is_dir) {
       *model_path = JoinPath({*model_path, "model.onnx"});
     }
+  }
+
+  // Check if we are sharing the session. If so get the session pointer and
+  // return
+  std::unique_lock<std::mutex> session_map_lock(
+      group_instance_session_map_mutex_, std::defer_lock);
+  if (should_share_session) {
+    RETURN_ERROR_IF_TRUE(
+        instance_group_name.empty(), TRITONSERVER_ERROR_INTERNAL,
+        std::string("unable to determine instance group name for instance '") +
+            instance_name + "'");
+
+    session_map_lock.lock();
+    TRITONSERVER_Error* error = GetSessionForGroup(session_key, session);
+    if (error == nullptr) {
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Reusing session for instance: ") + instance_name)
+              .c_str());
+      return nullptr;
+    }
+    // In case of error do not release lock and carry on to load session, set it in map
+    // to enable sharing session with other instances
+    LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Could not find a session corresponding to instance group: ") + instance_group_name)
+              .c_str());
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_VERBOSE,
+        TRITONSERVER_ErrorMessage(error));
+    TRITONSERVER_ErrorDelete(error);
   }
 
   {
@@ -793,8 +861,14 @@ ModelState::LoadModel(
     std::unique_ptr<
         OrtCUDAProviderOptionsV2, decltype(ort_api->ReleaseCUDAProviderOptions)>
         rel_cuda_options(cuda_options, ort_api->ReleaseCUDAProviderOptions);
+    // A user compute stream makes ORT use one stream for all calling threads.
+    // Let ORT manage streams for shared sessions so concurrent instances are
+    // not serialized on the first instance's stream.
+    const bool use_user_compute_stream =
+        !should_share_session && (stream != nullptr);
     cuda_options_map["device_id"] = std::to_string(instance_group_device_id);
-    cuda_options_map["has_user_compute_stream"] = stream != nullptr ? "1" : "0";
+    cuda_options_map["has_user_compute_stream"] =
+        use_user_compute_stream ? "1" : "0";
     RETURN_IF_ORT_ERROR(ort_api->UpdateCUDAProviderOptionsWithValue(
         rel_cuda_options.get(), "default_memory_arena_cfg", nullptr));
     {
@@ -887,7 +961,7 @@ ModelState::LoadModel(
         rel_cuda_options.get(), option_names.data(), option_values.data(),
         option_values.size()));
 
-    if (stream != nullptr) {
+    if (use_user_compute_stream) {
       RETURN_IF_ORT_ERROR(ort_api->UpdateCUDAProviderOptionsWithValue(
           rel_cuda_options.get(), "user_compute_stream", stream));
     }
@@ -979,12 +1053,22 @@ ModelState::LoadModel(
     glock.lock();
   }
 
+  // This will be allocated by OnnxRT here but will be freed when the last
+  // instance of shared_ptr is released
+  OrtSession* session_ptr;
   RETURN_IF_ERROR(OnnxLoader::LoadSession(
-      true /* is_path */, *model_path, soptions, session));
-
-  // get default cpu allocator
-  RETURN_IF_ORT_ERROR(
-      ort_api->GetAllocatorWithDefaultOptions(default_allocator));
+      true /* is_path */, *model_path, soptions, &session_ptr));
+  session = std::shared_ptr<OrtSession>(session_ptr, SessionDeleter());
+  LOG_MESSAGE(
+          TRITONSERVER_LOG_INFO,
+          (std::string("Created session for instance: ") + instance_name)
+              .c_str());
+  if (should_share_session) {
+    // The session was created fine this is not a critical error
+    LOG_IF_ERROR(
+        SetSessionForGroup(session_key, session),
+        "Failed to map ort session to the group for sharing");
+  }
 
   return nullptr;  // success
 }
@@ -1026,9 +1110,9 @@ ModelState::AutoCompleteConfig()
   RETURN_IF_ERROR(
       ModelConfig().MemberAsString("default_model_filename", &artifact_name));
 
-  // Must cleanup 'session'. 'allocator' is default allocator which
+  // 'allocator' is default allocator which
   // is managed by ONNX Runtime so don't need to free/release
-  std::unique_ptr<OrtSession, SessionDeleter> session;
+  std::shared_ptr<OrtSession> session;
   OrtAllocator* default_allocator;
   std::string model_path;
   {
@@ -1057,12 +1141,9 @@ ModelState::AutoCompleteConfig()
       }
     }
 #endif  // TRITON_ENABLE_GPU
-
-    OrtSession* sptr = nullptr;
     RETURN_IF_ERROR(LoadModel(
-        artifact_name, kind, 0, &model_path, &sptr, &default_allocator,
-        nullptr));
-    session.reset(sptr);
+        artifact_name, "", kind, 0, &model_path,
+        session, &default_allocator, nullptr));
   }
   OnnxTensorInfoMap input_tensor_infos;
   RETURN_IF_ERROR(
@@ -1229,6 +1310,43 @@ ModelState::AutoCompleteIO(const char* key, const OnnxTensorInfoMap& io_infos)
   return nullptr;  // success
 }
 
+TRITONSERVER_Error*
+ModelState::GetSessionForGroup(
+    const SessionKey& key, std::shared_ptr<OrtSession>& session)
+{
+  const auto& group_name = std::get<0>(key);
+  RETURN_ERROR_IF_TRUE(
+      group_name.empty(), TRITONSERVER_ERROR_INVALID_ARG,
+      std::string("Empty group name"));
+  {
+    const auto session_entry = group_instance_session_map_.find(key);
+    RETURN_ERROR_IF_TRUE(
+        (session_entry == group_instance_session_map_.end()),
+        TRITONSERVER_ERROR_NOT_FOUND, std::string("No such group in session map: ") + group_name);
+
+    session = session_entry->second;
+  }
+  return nullptr;
+}
+
+TRITONSERVER_Error*
+ModelState::SetSessionForGroup(
+    const SessionKey& key, const std::shared_ptr<OrtSession>& session)
+{
+  const auto& group_name = std::get<0>(key);
+  RETURN_ERROR_IF_TRUE(
+      group_name.empty(), TRITONSERVER_ERROR_INVALID_ARG,
+      std::string("Empty instance group name"));
+  group_instance_session_map_[key] = session;
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("Mapped session for instance group: ") + group_name + " (" +
+       TRITONSERVER_InstanceGroupKindString(std::get<1>(key)) + " device " +
+       std::to_string(std::get<2>(key)) + ")")
+          .c_str());
+  return nullptr;
+}
+
 //
 // ModelInstanceState
 //
@@ -1315,7 +1433,7 @@ class ModelInstanceState : public BackendModelInstance {
 
   // Onnx Runtime variables that are used across runs on this
   // instance.
-  OrtSession* session_;
+  std::shared_ptr<OrtSession> session_;
   OrtAllocator* default_allocator_;
   OrtMemoryInfo* cuda_allocator_info_;
   const OrtMemoryInfo* cpu_allocator_info_;
@@ -1367,7 +1485,7 @@ ModelInstanceState::ModelInstanceState(
       io_binding_(nullptr), output_buffer_(nullptr)
 {
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
-      ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
+      ArtifactFilename(), Name(), Kind(), DeviceId(), &model_path_, session_,
       &default_allocator_, CudaStream()));
 
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
@@ -1380,7 +1498,7 @@ ModelInstanceState::ModelInstanceState(
       ort_api->AllocatorGetInfo(default_allocator_, &cpu_allocator_info_));
 
   THROW_IF_BACKEND_INSTANCE_ORT_ERROR(
-      ort_api->CreateIoBinding(session_, &io_binding_));
+      ort_api->CreateIoBinding(session_.get(), &io_binding_));
 
   THROW_IF_BACKEND_INSTANCE_ORT_ERROR(ort_api->CreateRunOptions(&runOptions_));
 
@@ -1479,9 +1597,6 @@ ModelInstanceState::~ModelInstanceState()
   ort_api->ReleaseRunOptions(runOptions_);
   ort_api->ReleaseIoBinding(io_binding_);
   ort_api->ReleaseMemoryInfo(cuda_allocator_info_);
-  if (session_ != nullptr) {
-    OnnxLoader::UnloadSession(session_);
-  }
   // 'default_allocator_' is default allocator which is managed by ONNX
   // Runtime
 }
@@ -1543,7 +1658,7 @@ ModelInstanceState::ValidateBooleanSequenceControl(
   if (*have_control) {
     OnnxTensorInfoMap input_tensor_infos;
     RETURN_IF_ERROR(
-        InputInfos(session_, default_allocator_, input_tensor_infos));
+        InputInfos(session_.get(), default_allocator_, input_tensor_infos));
     const auto& iit = input_tensor_infos.find(tensor_name);
     if (iit == input_tensor_infos.end()) {
       return TRITONSERVER_ErrorNew(
@@ -1600,7 +1715,7 @@ ModelInstanceState::ValidateTypedSequenceControl(
   if (*have_control) {
     OnnxTensorInfoMap input_tensor_infos;
     RETURN_IF_ERROR(
-        InputInfos(session_, default_allocator_, input_tensor_infos));
+        InputInfos(session_.get(), default_allocator_, input_tensor_infos));
     const auto& iit = input_tensor_infos.find(tensor_name);
     if (iit == input_tensor_infos.end()) {
       return TRITONSERVER_ErrorNew(
@@ -1647,17 +1762,17 @@ TRITONSERVER_Error*
 ModelInstanceState::ValidateInputs(const size_t expected_input_cnt)
 {
   std::set<std::string> input_tensor_names;
-  RETURN_IF_ERROR(InputNames(session_, input_tensor_names));
+  RETURN_IF_ERROR(InputNames(session_.get(), input_tensor_names));
   RETURN_IF_ERROR(
-      InputInfos(session_, default_allocator_, input_tensor_infos_));
+      InputInfos(session_.get(), default_allocator_, input_tensor_infos_));
 
   std::set<std::string> overridable_initializer_tensor_names;
   RETURN_IF_ERROR(OverridableInitializerNames(
-      session_, overridable_initializer_tensor_names));
+      session_.get(), overridable_initializer_tensor_names));
 
   OnnxTensorInfoMap overridable_initializer_tensor_infos;
   RETURN_IF_ERROR(OverridableInitializerInfos(
-      session_, default_allocator_, overridable_initializer_tensor_infos));
+      session_.get(), default_allocator_, overridable_initializer_tensor_infos));
 
   if (input_tensor_infos_.size() != expected_input_cnt) {
     return TRITONSERVER_ErrorNew(
@@ -1794,10 +1909,10 @@ TRITONSERVER_Error*
 ModelInstanceState::ValidateOutputs()
 {
   std::set<std::string> output_tensor_names;
-  RETURN_IF_ERROR(OutputNames(session_, output_tensor_names));
+  RETURN_IF_ERROR(OutputNames(session_.get(), output_tensor_names));
 
   RETURN_IF_ERROR(
-      OutputInfos(session_, default_allocator_, output_tensor_infos_));
+      OutputInfos(session_.get(), default_allocator_, output_tensor_infos_));
 
   triton::common::TritonJson::Value ios;
   RETURN_IF_ERROR(model_state_->ModelConfig().MemberAsArray("output", &ios));
@@ -2194,7 +2309,7 @@ ModelInstanceState::OrtRun(
     const uint32_t response_count)
 {
   RETURN_IF_ORT_ERROR(
-      ort_api->RunWithBinding(session_, runOptions_, io_binding_));
+      ort_api->RunWithBinding(session_.get(), runOptions_, io_binding_));
   return nullptr;
 }
 
@@ -2715,7 +2830,6 @@ ModelInstanceState::ReadOutputTensors(
           RETURN_IF_ERROR(TRITONBACKEND_StateUpdate(state));
         }
       }
-
 
     } else {
       char* output_buffer = nullptr;

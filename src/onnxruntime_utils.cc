@@ -557,5 +557,27 @@ CompareDimsSupported(
   return nullptr;  // success
 }
 
+std::string
+GetInstanceGroupName(
+    const std::string& model_name, const std::string& instance_name)
+{
+  if (model_name.empty() || instance_name.empty()) {
+    return "";
+  }
+
+  // Model instance names follow <model name>_<instance group index>_<instance index>.
+  // Return <model name>_<instance group index>.
+  const std::string prefix = model_name + "_";
+  if (instance_name.rfind(prefix, 0) != 0) {
+    return "";
+  }
+
+  const size_t group_end = instance_name.find('_', prefix.size());
+  if (group_end == std::string::npos) {
+    return "";
+  }
+
+  return instance_name.substr(0, group_end);
+}
 
 }}}  // namespace triton::backend::onnxruntime
