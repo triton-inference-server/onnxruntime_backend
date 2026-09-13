@@ -25,11 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
+#include <map>
 #include <mutex>
 #include <vector>
 
 #include "onnxruntime_loader.h"
 #include "onnxruntime_utils.h"
+#include "session_key.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_memory.h"
@@ -127,9 +129,9 @@ class ModelState : public BackendModel {
       const char* key, const OnnxTensorInfoMap& io_infos);
 
   TRITONSERVER_Error* GetSessionForGroup(
-      const std::string& group_name, std::shared_ptr<OrtSession>& session);
+      const SessionKey& key, std::shared_ptr<OrtSession>& session);
   TRITONSERVER_Error* SetSessionForGroup(
-      const std::string& group_name, const std::shared_ptr<OrtSession>& session);
+      const SessionKey& key, const std::shared_ptr<OrtSession>& session);
 
   // Session options used when creating a ORT session.
   std::unique_ptr<OrtSessionOptions, SessionOptionsDeleter> session_options_;
@@ -145,13 +147,12 @@ class ModelState : public BackendModel {
   // global and applies to all instances. So, storing it in the model state
   bool share_session_between_instances_;
 
-  // maintain a map of group id to ORT session. This is only useful if
+  // Map each instance group, kind and device to its ORT session. This is useful if
   // share_session_between_instances is set to true in parameters.
   // share_session_between_instances is a global model config and the user
   // should be careful when setting this. There is no way to set this per
   // instance group.
-  std::unordered_map<std::string, std::shared_ptr<OrtSession>>
-      group_instance_session_map_;
+  std::map<SessionKey, std::shared_ptr<OrtSession>> group_instance_session_map_;
   std::mutex group_instance_session_map_mutex_;
 };
 
@@ -402,8 +403,8 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
   }
 
   // This setting will apply across multiple instance groups.
-  // If this value is set all instances within an instance group will share
-  // the ort session
+  // If set, instances of the same kind and device within an instance group
+  // share the ORT session.
   {
     bool share_session = false;
     triton::common::TritonJson::Value params;
@@ -425,6 +426,8 @@ ModelState::LoadModel(
 {
   // Get the group name for the instance
   std::string instance_group_name(GetInstanceGroupName(Name(), instance_name));
+  const SessionKey session_key{
+      instance_group_name, instance_group_kind, instance_group_device_id};
   const bool should_share_session =
       share_session_between_instances_ && !instance_name.empty();
   // Find the ONNX file that describes the model itself. If the model
@@ -463,7 +466,7 @@ ModelState::LoadModel(
             instance_name + "'");
 
     session_map_lock.lock();
-    TRITONSERVER_Error* error = GetSessionForGroup(instance_group_name, session);
+    TRITONSERVER_Error* error = GetSessionForGroup(session_key, session);
     if (error == nullptr) {
       LOG_MESSAGE(
           TRITONSERVER_LOG_INFO,
@@ -1063,7 +1066,7 @@ ModelState::LoadModel(
   if (should_share_session) {
     // The session was created fine this is not a critical error
     LOG_IF_ERROR(
-        SetSessionForGroup(instance_group_name, session),
+        SetSessionForGroup(session_key, session),
         "Failed to map ort session to the group for sharing");
   }
 
@@ -1309,15 +1312,14 @@ ModelState::AutoCompleteIO(const char* key, const OnnxTensorInfoMap& io_infos)
 
 TRITONSERVER_Error*
 ModelState::GetSessionForGroup(
-    const std::string& group_name, std::shared_ptr<OrtSession>& session)
+    const SessionKey& key, std::shared_ptr<OrtSession>& session)
 {
+  const auto& group_name = std::get<0>(key);
   RETURN_ERROR_IF_TRUE(
       group_name.empty(), TRITONSERVER_ERROR_INVALID_ARG,
       std::string("Empty group name"));
   {
-    std::unordered_map<std::string, std::shared_ptr<OrtSession>>::iterator
-        session_entry;
-    session_entry = group_instance_session_map_.find(group_name);
+    const auto session_entry = group_instance_session_map_.find(key);
     RETURN_ERROR_IF_TRUE(
         (session_entry == group_instance_session_map_.end()),
         TRITONSERVER_ERROR_NOT_FOUND, std::string("No such group in session map: ") + group_name);
@@ -1329,13 +1331,19 @@ ModelState::GetSessionForGroup(
 
 TRITONSERVER_Error*
 ModelState::SetSessionForGroup(
-    const std::string& group_name, const std::shared_ptr<OrtSession>& session)
+    const SessionKey& key, const std::shared_ptr<OrtSession>& session)
 {
+  const auto& group_name = std::get<0>(key);
   RETURN_ERROR_IF_TRUE(
       group_name.empty(), TRITONSERVER_ERROR_INVALID_ARG,
       std::string("Empty instance group name"));
-  group_instance_session_map_[group_name] = session;
-  LOG_MESSAGE(TRITONSERVER_LOG_INFO, (std::string("Mapped session for instance group: ") + group_name).c_str());
+  group_instance_session_map_[key] = session;
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("Mapped session for instance group: ") + group_name + " (" +
+       TRITONSERVER_InstanceGroupKindString(std::get<1>(key)) + " device " +
+       std::to_string(std::get<2>(key)) + ")")
+          .c_str());
   return nullptr;
 }
 

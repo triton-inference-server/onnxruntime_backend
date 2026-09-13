@@ -219,6 +219,7 @@ add_library(
   src/onnxruntime_loader.h
   src/onnxruntime_utils.cc
   src/onnxruntime_utils.h
+  src/session_key.h
 )
 
 add_library(

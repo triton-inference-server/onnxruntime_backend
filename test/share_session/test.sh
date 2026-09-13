@@ -25,14 +25,19 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 
 INSTANCE_KIND=${INSTANCE_KIND:=CPU}
 SHARE_SESSION=${SHARE_SESSION:=1}
+GPU_COUNT=${GPU_COUNT:=1}
+if ! [[ "$GPU_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+    echo "GPU_COUNT must be a positive integer"
+    exit 1
+fi
 MODEL_REPOSITORY=$(mktemp -d)
 trap 'rm -rf "$MODEL_REPOSITORY"' EXIT
 
-python - "$MODEL_REPOSITORY" "$INSTANCE_KIND" "$SHARE_SESSION" <<'PY'
+python - "$MODEL_REPOSITORY" "$INSTANCE_KIND" "$SHARE_SESSION" "$GPU_COUNT" <<'PY'
 import shutil
 import sys
 from pathlib import Path
@@ -40,7 +45,7 @@ from pathlib import Path
 from google.protobuf import text_format
 from tritonclient.grpc import model_config_pb2
 
-repository, kind, share_session = sys.argv[1:]
+repository, kind, share_session, gpu_count = sys.argv[1:]
 assert kind in ("CPU", "GPU"), kind
 assert share_session in ("0", "1"), share_session
 model = Path(repository) / "add_with_initializer_shared"
@@ -50,6 +55,8 @@ config = text_format.Parse(config_path.read_text(), model_config_pb2.ModelConfig
 config.instance_group[0].kind = model_config_pb2.ModelInstanceGroup.Kind.Value(
     "KIND_" + kind
 )
+if kind == "GPU":
+    config.instance_group[0].gpus[:] = range(int(gpu_count))
 config.parameters["share_session_between_instances"].string_value = share_session
 config_path.write_text(text_format.MessageToString(config))
 PY
@@ -87,19 +94,24 @@ CREATED_COUNT=$(grep -c "Created session for instance: add_with_initializer_shar
 MAPPED_COUNT=$(grep -c "Mapped session for instance group: add_with_initializer_shared_" $SERVER_LOG)
 REUSED_COUNT=$(grep -c "Reusing session for instance: add_with_initializer_shared_" $SERVER_LOG)
 
-EXPECTED_CREATED=$((2 - SHARE_SESSION))
+DEVICE_COUNT=1
+if [ "$INSTANCE_KIND" == "GPU" ]; then
+    DEVICE_COUNT=$GPU_COUNT
+fi
+EXPECTED_CREATED=$(((2 - SHARE_SESSION) * DEVICE_COUNT))
+EXPECTED_SHARED=$((SHARE_SESSION * DEVICE_COUNT))
 if [ "$CREATED_COUNT" -ne "$EXPECTED_CREATED" ]; then
     echo "Expected $EXPECTED_CREATED created sessions, found $CREATED_COUNT"
     RET=1
 fi
 
-if [ "$MAPPED_COUNT" -ne "$SHARE_SESSION" ]; then
-    echo "Expected $SHARE_SESSION mapped sessions, found $MAPPED_COUNT"
+if [ "$MAPPED_COUNT" -ne "$EXPECTED_SHARED" ]; then
+    echo "Expected $EXPECTED_SHARED mapped sessions, found $MAPPED_COUNT"
     RET=1
 fi
 
-if [ "$REUSED_COUNT" -ne "$SHARE_SESSION" ]; then
-    echo "Expected $SHARE_SESSION reused sessions, found $REUSED_COUNT"
+if [ "$REUSED_COUNT" -ne "$EXPECTED_SHARED" ]; then
+    echo "Expected $EXPECTED_SHARED reused sessions, found $REUSED_COUNT"
     RET=1
 fi
 

@@ -26,7 +26,9 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import os
+import re
 import unittest
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -80,9 +82,18 @@ class ShareSessionTest(unittest.TestCase):
             for line in log.splitlines()
             if f"CUDA Execution Accelerator is set for '{self.model_name_}'" in line
         ]
-        self.assertEqual(len(options), 1 if shared else 2)
+        expected_devices = Counter()
+        for group in config["instance_group"]:
+            if group["kind"] == "KIND_GPU":
+                for device in group["gpus"]:
+                    expected_devices[device] += 1 if shared else group["count"]
+        actual_devices = Counter()
         for line in options:
+            device = re.search(r" on device (\d+) with options: ", line)
+            self.assertIsNotNone(device, line)
+            actual_devices[int(device.group(1))] += 1
             self.assertIn(f"has_user_compute_stream={0 if shared else 1};", line)
+        self.assertEqual(actual_devices, expected_devices)
 
     def test_infer_without_optional_input(self):
         infer_input = httpclient.InferInput("INPUT", self.input_data_.shape, "FP32")
