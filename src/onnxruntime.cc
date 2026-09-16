@@ -302,27 +302,34 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
     }
   }
 
-  // Enable/disable use_device_allocator_for_initializers
+  // Iterate over all 'session.' prefixed parameters and add them via AddSessionConfigEntry
+  // This covers parameters that were previously manually added, such as:
+  // - session.intra_op.allow_spinning
+  // - session.inter_op.allow_spinning
+  // - session.force_spinning_stop
+  // - session.use_device_allocator_for_initializers
   {
     triton::common::TritonJson::Value params;
     if (ModelConfig().Find("parameters", &params)) {
-      triton::common::TritonJson::Value json_value;
-      const char* use_device_allocator_for_initializers_key =
-          "session.use_device_allocator_for_initializers";
-      if (params.Find(use_device_allocator_for_initializers_key, &json_value)) {
-        std::string string_value;
-        THROW_IF_BACKEND_MODEL_ERROR(
-            json_value.MemberAsString("string_value", &string_value));
+      std::vector<std::string> param_keys;
+      THROW_IF_BACKEND_MODEL_ERROR(params.Members(&param_keys));
+      for (const auto& param_key : param_keys) {
+        if (param_key.rfind("session.", 0) == 0) {
+          triton::common::TritonJson::Value json_value;
+          if (params.Find(param_key.c_str(), &json_value)) {
+            std::string string_value;
+            THROW_IF_BACKEND_MODEL_ERROR(
+                json_value.MemberAsString("string_value", &string_value));
 
-        LOG_MESSAGE(
-            TRITONSERVER_LOG_VERBOSE,
-            (std::string("Configuring '") +
-             use_device_allocator_for_initializers_key + "' to '" +
-             string_value + "' for '" + Name() + "'")
-                .c_str());
-        THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
-            soptions, use_device_allocator_for_initializers_key,
-            string_value.c_str()));
+            LOG_MESSAGE(
+                TRITONSERVER_LOG_INFO,
+                (std::string("Configuring '") + param_key +
+                 "' to '" + string_value + "' for '" + Name() + "'")
+                    .c_str());
+            THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddSessionConfigEntry(
+                soptions, param_key.c_str(), string_value.c_str()));
+          }
+        }
       }
     }
   }
@@ -925,13 +932,44 @@ ModelState::LoadModel(
 #ifdef TRITON_ENABLE_ONNXRUNTIME_OPENVINO
             if (name == kOpenVINOExecutionAccelerator) {
               need_lock = true;
-              OrtOpenVINOProviderOptions openvino_options;
-              openvino_options.device_type =
-                  "CPU";  // device_type default is CPU
+
+              std::vector<std::string> openvino_option_keys;
+              std::vector<std::string> openvino_option_values;
+
+              triton::common::TritonJson::Value params;
+              bool has_device_type = false;
+              if (ea.Find("parameters", &params)) {
+                std::vector<std::string> param_keys;
+                RETURN_IF_ERROR(params.Members(&param_keys));
+                for (const auto& param_key : param_keys) {
+                  std::string value;
+                  RETURN_IF_ERROR(
+                      params.MemberAsString(param_key.c_str(), &value));
+                  if (param_key == "device_type") {
+                    has_device_type = true;
+                  }
+                  openvino_option_keys.push_back(param_key);
+                  openvino_option_values.push_back(value);
+                }
+              }
+
+              if (!has_device_type) {
+                openvino_option_keys.push_back("device_type");
+                openvino_option_values.push_back(
+                    "CPU");  // device_type default is CPU
+              }
+
+              std::vector<const char*> option_keys;
+              std::vector<const char*> option_values;
+              for (size_t idx = 0; idx < openvino_option_keys.size(); ++idx) {
+                option_keys.push_back(openvino_option_keys[idx].c_str());
+                option_values.push_back(openvino_option_values[idx].c_str());
+              }
 
               RETURN_IF_ORT_ERROR(
-                  ort_api->SessionOptionsAppendExecutionProvider_OpenVINO(
-                      soptions, &openvino_options));
+                  ort_api->SessionOptionsAppendExecutionProvider_OpenVINO_V2(
+                      soptions, option_keys.data(), option_values.data(),
+                      option_keys.size()));
 
               LOG_MESSAGE(
                   TRITONSERVER_LOG_VERBOSE,
