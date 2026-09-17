@@ -427,6 +427,12 @@ ARG COMMON_BUILD_ARGS="--config ${{ONNXRUNTIME_BUILD_CONFIG}} --skip_submodule_s
     # the build stage stays free of shell logic (portable across Debian/RHEL).
     nvcc_threads = 2
     ort_jobs = build_parallelism(nvcc_threads)
+    # An explicit --parallel-jobs can only lower the memory-derived cap above:
+    # the TRI-1550 budget (~MEM_GB_PER_SLOT per compiler slot) has to hold
+    # either way, so take the min. r26.07 passes `--parallel {ort_jobs}` on the
+    # RUN line, so the value computed here is what the build actually uses.
+    if FLAGS.parallel_jobs is not None:
+        ort_jobs = min(FLAGS.parallel_jobs, ort_jobs)
     print(
         "[INFO] ONNX Runtime build parallelism: --parallel {} --nvcc_threads {} "
         "(usable cores {}, MemAvailable {})".format(
@@ -595,6 +601,12 @@ if __name__ == "__main__":
         required=False,
         default=None,
         help='Target for build, can be "linux" or "rhel". If not specified, build targets the current platform.',
+    )
+    parser.add_argument(
+        "--parallel-jobs",
+        type=int,
+        required=False,
+        help="Parallelism to use for the ONNX Runtime build.",
     )
 
     parser.add_argument(
