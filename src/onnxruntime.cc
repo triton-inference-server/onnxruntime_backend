@@ -2219,6 +2219,7 @@ IsFatalCudaError(cudaError_t err)
     case cudaErrorInvalidPc:
     case cudaErrorECCUncorrectable:
     case cudaErrorLaunchTimeout:
+    case cudaErrorAssert:
       return true;
     default:
       return false;
