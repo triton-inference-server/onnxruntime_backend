@@ -132,8 +132,10 @@ Triton deployment is configured and who can supply models and requests.
 - The model repository is **trusted**. Models and `config.pbtxt` files are
   assumed to come from authorized users, and write access to the repository
   is restricted. The backend does not sandbox model execution.
-- The backend relies on the Triton server for **authentication,
-  authorization, TLS and rate limiting**. It performs none of these itself.
+- The backend provides no **authentication, authorization, TLS or client
+  request throttling**, and Triton does not enable them by default. Deployers
+  must explicitly configure the applicable Triton server or gateway controls
+  before exposing inference endpoints.
 - Input tensor metadata from clients is assumed to be checked by Triton core
   against the model configuration before it reaches this backend; the backend
   validates what it needs for ONNX Runtime but is not a general input
