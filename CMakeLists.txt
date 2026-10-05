@@ -42,11 +42,10 @@ project(tritononnxruntimebackend LANGUAGES C CXX)
 #   - Set TRITON_BUILD_ONNXRUNTIME_VERSION to the version of ONNX
 #     Runtime that you want to be built for the backend.
 #
-#   - Set TRITON_BUILD_CONTAINER to the Triton container to use as a
-#     base for the build. On linux you can instead set
-#     TRITON_BUILD_CONTAINER_VERSION to the Triton version that you
-#     want to target with the build and the corresponding container
-#     from NGC will be used.
+#   - Set TRITON_BUILD_CONTAINER to the container to use as a base for
+#     the build. Required: the image is never inferred here, so that
+#     whoever drives the build decides it. It must provide the CUDA
+#     toolchain when GPU support is enabled.
 #
 #   - Optionally set TRITON_BUILD_CUDA_VERSION and
 #     TRITON_BUILD_CUDA_HOME. If not set these are automatically set
@@ -91,8 +90,7 @@ option(TRITON_ENABLE_ONNXRUNTIME_TENSORRT
   "Enable TensorRT execution provider for ONNXRuntime backend in server" OFF)
 option(TRITON_ENABLE_ONNXRUNTIME_OPENVINO
   "Enable OpenVINO execution provider for ONNXRuntime backend in server" OFF)
-set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
-set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
+set(TRITON_BUILD_CONTAINER "" CACHE STRING "Container to use as a base for build")
 set(TRITON_BUILD_ONNXRUNTIME_VERSION "" CACHE STRING "ONNXRuntime version to build")
 set(TRITON_BUILD_ONNXRUNTIME_OPENVINO_VERSION "" CACHE STRING "ONNXRuntime OpenVINO version to build")
 set(TRITON_BUILD_TARGET_PLATFORM "" CACHE STRING "Target platform for ONNXRuntime build")
@@ -149,13 +147,9 @@ if(NOT TRITON_ONNXRUNTIME_DOCKER_BUILD)
 
 else()
 
-  if(NOT TRITON_BUILD_CONTAINER AND NOT TRITON_BUILD_CONTAINER_VERSION)
-    message(FATAL_ERROR
-      "TRITON_BUILD_ONNXRUNTIME_VERSION requires TRITON_BUILD_CONTAINER or TRITON_BUILD_CONTAINER_VERSION")
-  endif()
-
   if(NOT TRITON_BUILD_CONTAINER)
-    set(TRITON_BUILD_CONTAINER "nvcr.io/nvidia/tritonserver:${TRITON_BUILD_CONTAINER_VERSION}-py3-min")
+    message(FATAL_ERROR
+      "TRITON_BUILD_ONNXRUNTIME_VERSION requires TRITON_BUILD_CONTAINER")
   endif()
 
   set(TRITON_ONNXRUNTIME_DOCKER_IMAGE "tritonserver_onnxruntime")
