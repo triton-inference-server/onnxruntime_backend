@@ -26,6 +26,7 @@
 
 #include <stdint.h>
 
+#include <atomic>
 #include <mutex>
 #include <vector>
 
@@ -1246,6 +1247,10 @@ class ModelInstanceState : public BackendModelInstance {
   // Get the state of the model that corresponds to this instance.
   ModelState* StateForModel() const { return model_state_; }
 
+  // Returns false once this instance has hit an unrecoverable CUDA error and
+  // can no longer serve requests.
+  bool DeviceHealthy() const { return device_healthy_.load(); }
+
   // Execute...
   void ProcessRequests(
       TRITONBACKEND_Request** requests, const uint32_t request_count);
@@ -1339,6 +1344,11 @@ class ModelInstanceState : public BackendModelInstance {
   std::vector<OrtValue*> output_tensors_;
   OrtValue** output_buffer_;
   std::vector<BackendMemory*> input_tensor_memories_;
+
+  // Latched to false when a GPU run leaves the CUDA context in a fatal,
+  // unrecoverable state. Read by TRITONBACKEND_ModelInstanceReady on a
+  // different thread than ProcessRequests, so it must be atomic.
+  std::atomic<bool> device_healthy_{true};
 };
 
 TRITONSERVER_Error*
@@ -2188,14 +2198,84 @@ ModelInstanceState::ProcessRequests(
   }
 }
 
+#ifdef TRITON_ENABLE_GPU
+namespace {
+
+// True only for CUDA errors that corrupt the CUDA context and are therefore
+// sticky/unrecoverable: every later CUDA call in the process keeps reporting
+// the same error until the context is destroyed (process restart). Recoverable
+// errors (e.g. out-of-memory, invalid argument) return false so that transient
+// failures never take the model out of service.
+bool
+IsFatalCudaError(cudaError_t err)
+{
+  switch (err) {
+    case cudaErrorIllegalAddress:
+    case cudaErrorLaunchFailure:
+    case cudaErrorHardwareStackError:
+    case cudaErrorIllegalInstruction:
+    case cudaErrorMisalignedAddress:
+    case cudaErrorInvalidAddressSpace:
+    case cudaErrorInvalidPc:
+    case cudaErrorECCUncorrectable:
+    case cudaErrorLaunchTimeout:
+    case cudaErrorAssert:
+      return true;
+    default:
+      return false;
+  }
+}
+
+}  // namespace
+#endif  // TRITON_ENABLE_GPU
+
 TRITONSERVER_Error*
 ModelInstanceState::OrtRun(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count)
 {
-  RETURN_IF_ORT_ERROR(
-      ort_api->RunWithBinding(session_, runOptions_, io_binding_));
-  return nullptr;
+  TRITONSERVER_Error* err = nullptr;
+  OrtStatus* status =
+      ort_api->RunWithBinding(session_, runOptions_, io_binding_);
+  if (status != nullptr) {
+    OrtErrorCode code = ort_api->GetErrorCode(status);
+    std::string msg = std::string(ort_api->GetErrorMessage(status));
+    ort_api->ReleaseStatus(status);
+    err = TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        (std::string("onnx runtime error ") + std::to_string(code) + ": " + msg)
+            .c_str());
+  }
+
+#ifdef TRITON_ENABLE_GPU
+  // A failed GPU run may have left the CUDA context in a fatal, sticky state
+  // (e.g. an out-of-bounds kernel write -> cudaErrorIllegalAddress). Probe the
+  // context only on the already-failing path so the healthy path is untouched.
+  // A sticky error is re-reported by any synchronizing call regardless of which
+  // thread first hit it, so cudaStreamSynchronize is the reliable probe;
+  // cudaGetLastError additionally drains the per-thread error latch.
+  if (err != nullptr && Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU &&
+      device_healthy_.load()) {
+    cudaError_t sync_err = cudaStreamSynchronize(CudaStream());
+    cudaError_t last_err = cudaGetLastError();
+    cudaError_t fatal =
+        IsFatalCudaError(sync_err)
+            ? sync_err
+            : (IsFatalCudaError(last_err) ? last_err : cudaSuccess);
+    if (fatal != cudaSuccess) {
+      device_healthy_.store(false);
+      LOG_MESSAGE(
+          TRITONSERVER_LOG_ERROR,
+          (std::string("instance '") + Name() +
+           "' encountered an unrecoverable CUDA error (" +
+           cudaGetErrorString(fatal) +
+           "); marking it NOT READY, the instance must be restarted")
+              .c_str());
+    }
+  }
+#endif  // TRITON_ENABLE_GPU
+
+  return err;
 }
 
 TRITONSERVER_Error*
@@ -3189,6 +3269,26 @@ TRITONBACKEND_ModelInstanceExecute(
   instance_state->ProcessRequests(requests, request_count);
 
   return nullptr;  // success
+}
+
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReady(TRITONBACKEND_ModelInstance* instance)
+{
+  ModelInstanceState* instance_state;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(
+      instance, reinterpret_cast<void**>(&instance_state)));
+
+  // device_healthy_ is only ever latched false on the GPU execution path, so
+  // CPU instances (and CPU-only builds) always report ready here.
+  if (!instance_state->DeviceHealthy()) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_UNAVAILABLE,
+        (std::string("instance '") + instance_state->Name() +
+         "' is in an unrecoverable CUDA error state and is NOT READY; the "
+         "CUDA context must be reinitialized (restart the instance)")
+            .c_str());
+  }
+  return nullptr;  // ready
 }
 
 TRITONSERVER_Error*
