@@ -285,6 +285,32 @@ for more information.
 See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h)
 for more information.
 * `session.use_device_allocator_for_initializers`: Use "1" to enable using device allocator for allocating initialized tensor memory and "0" to disable. The default is "0". See [this](https://onnxruntime.ai/docs/get-started/with-c.html) for more information.
+* `io_pooling`: Boolean (`true`/`on`/`1` or `false`/`off`/`0`, any other value
+makes the model fail to load), default `false`. When enabled, non-string inputs
+use per-instance pooled buffers that are reused across batches. This eliminates
+per-batch input buffer allocations and keeps the input device addresses stable
+across batches. Inputs whose non-batch dimensions are all static are allocated
+at model load, sized for `max_batch_size`; inputs with dynamic dimensions, and
+ragged inputs, get a buffer on first use that is grown on demand.
+A pooled buffer stays allocated for the lifetime of the instance and never
+shrinks, keeping the high-water mark of the largest batch it has seen, because a
+request of that size can recur and reusing the memory is the point of pooling.
+The memory held per instance is therefore the sum, over the statically-shaped
+inputs, of `max_batch_size * product(non-batch dims) * sizeof(type)`
+(`max_batch_size` counts as 1 for models without batching); for example 36.8 MiB
+for each fp32 `[3, 224, 224]` input with `max_batch_size` 64. Size
+`--cuda-memory-pool-byte-size` (64 MB by default) and
+`--pinned-memory-pool-byte-size` (256 MB by default) for the largest expected
+request times the number of instances; when a pool is exhausted, a buffer
+escalates to a direct `cudaMalloc` or `cudaHostAlloc` allocation.
+Pooling always copies request data into the pooled buffer, which disables the
+zero-copy path used when a batch consists of a single contiguous request, so
+it does not pay off on CPU instances dominated by single-request batches.
+Batch inputs keep the legacy path.
+
+```
+parameters { key: "io_pooling" value: { string_value: "true" } }
+```
 
 ### Command line options
 
