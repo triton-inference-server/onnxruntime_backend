@@ -26,7 +26,9 @@
 
 #include <stdint.h>
 
+#include <array>
 #include <atomic>
+#include <exception>
 #include <mutex>
 #include <vector>
 
@@ -54,6 +56,26 @@ namespace triton { namespace backend { namespace onnxruntime {
 struct SessionDeleter {
   void operator()(OrtSession* f) { OnnxLoader::UnloadSession(f); }
 };
+
+/// Deleter for OrtValue.
+struct ValueDeleter {
+  void operator()(OrtValue* f) { ort_api->ReleaseValue(f); }
+};
+
+// Byte size of a tensor for buffer sizing. GetByteSize() cannot be used for a
+// rank-0 tensor: it derives the element count from the shape, and
+// GetElementCount() returns its zero-initialised accumulator for an empty
+// shape (backend_common.cc), so a scalar reports 0 bytes instead of one
+// element. A pooled buffer sized at 0 falls back to the 1-byte floor in
+// EnsurePooledCapacity, and the OrtValue created over it is rejected by ORT
+// with "not enough space". Scalars occupy exactly one element.
+size_t
+BufferByteSize(
+    const TRITONSERVER_DataType dtype, const std::vector<int64_t>& shape)
+{
+  return shape.empty() ? TRITONSERVER_DataTypeByteSize(dtype)
+                       : GetByteSize(dtype, shape);
+}
 
 // BackendConfiguration
 struct BackendConfiguration {
@@ -1256,10 +1278,50 @@ class ModelInstanceState : public BackendModelInstance {
       TRITONBACKEND_Request** requests, const uint32_t request_count);
 
  private:
+  // Input or output buffer that is reused across batches. Pooling avoids
+  // per-batch allocations and keeps the device address stable. All pooling
+  // state (the pools and 'io_binding_') is touched only by the single
+  // per-instance runner thread (including warmup), so no locking is required
+  // by design.
+  struct PooledTensor {
+    // Grow-only, never shrinks.
+    std::unique_ptr<BackendMemory> memory;
+    // Non-owning view over 'memory'.
+    std::unique_ptr<OrtValue, ValueDeleter> value;
+    std::vector<int64_t> bound_shape;  // shape 'value' was created with
+    bool is_scalar = false;            // model tensor has empty dims
+    TRITONSERVER_MemoryType mem_type =
+        TRITONSERVER_MEMORY_CPU;  // type of the current 'memory'
+    int64_t mem_type_id = 0;
+  };
+
+  // A pooled output: one buffer per placement, since the preferred location is
+  // a property of the batch's requests and can differ between batches, plus
+  // what binding it needs that does not depend on the batch.
+  struct PooledOutput {
+    std::array<PooledTensor, 2> slots;  // 0: host, 1: device
+    std::vector<int64_t> dims;          // declared model dims
+    ONNXTensorElementDataType type = ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED;
+    size_t max_byte_size = 0;  // 'dims' at max_batch_size
+  };
+
   ModelInstanceState(
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance);
   void ReleaseOrtRunResources();
+  // Releases what the constructor acquires. Also called by the constructor
+  // when it throws, since the destructor then never runs.
+  void ReleaseInstanceResources();
+  // Ensure 'pt' owns a buffer of at least 'bytes', growing (reallocating) it
+  // if necessary. 'desired_placement' selects the device of a new buffer.
+  TRITONSERVER_Error* EnsurePooledCapacity(
+      PooledTensor* pt, const std::string& name, size_t bytes,
+      TRITONSERVER_MemoryType desired_placement);
+  // Return the cached OrtValue for 'pt' if it already matches 'shape',
+  // otherwise (re)create it as a view over the grown pooled buffer.
+  TRITONSERVER_Error* GetOrCreatePooledValue(
+      PooledTensor* pt, const std::vector<int64_t>& shape, size_t bytes,
+      ONNXTensorElementDataType type, OrtValue** out);
   TRITONSERVER_Error* ValidateBooleanSequenceControl(
       triton::common::TritonJson::Value& sequence_batching,
       const std::string& control_kind, bool required, bool* have_control);
@@ -1345,6 +1407,21 @@ class ModelInstanceState : public BackendModelInstance {
   OrtValue** output_buffer_;
   std::vector<BackendMemory*> input_tensor_memories_;
 
+  // Pooled buffers for every non-string request input, ragged or scalar.
+  // Keyed by input name; owned by this instance and reused across batches.
+  // Inputs static modulo the batch dimension, ragged ones excepted, are sized
+  // here for the whole instance; the others are allocated on first use and
+  // grown on demand.
+  std::unordered_map<std::string, PooledTensor> pooled_inputs_;
+  // Device of every pooled input buffer: the instance's own.
+  TRITONSERVER_MemoryType pooled_input_placement_ = TRITONSERVER_MEMORY_CPU;
+  // Pooled buffers for static-modulo-batch, non-string, non-batch outputs,
+  // bound with BindOutput: ORT then writes results into them, in place and
+  // without a per-batch output allocation when the buffer is on the EP device.
+  // Keyed by output name.
+  std::unordered_map<std::string, PooledOutput> pooled_outputs_;
+  bool io_pooling_enabled_ = false;
+
   // Latched to false when a GPU run leaves the CUDA context in a fatal,
   // unrecoverable state. Read by TRITONBACKEND_ModelInstanceReady on a
   // different thread than ProcessRequests, so it must be atomic.
@@ -1374,8 +1451,21 @@ ModelInstanceState::ModelInstanceState(
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state), session_(nullptr), default_allocator_(nullptr),
       cuda_allocator_info_(nullptr), cpu_allocator_info_(nullptr),
-      io_binding_(nullptr), output_buffer_(nullptr)
+      io_binding_(nullptr), runOptions_(nullptr), output_buffer_(nullptr)
 {
+  // A failed load would otherwise keep the session and its weights allocated
+  // until the server restarts, one more copy per load attempt.
+  struct ReleaseOnThrow {
+    ModelInstanceState* state;
+    int uncaught = std::uncaught_exceptions();
+    ~ReleaseOnThrow()
+    {
+      if (std::uncaught_exceptions() > uncaught) {
+        state->ReleaseInstanceResources();
+      }
+    }
+  } release_on_throw{this};
+
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
       ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
       &default_allocator_, CudaStream()));
@@ -1413,6 +1503,35 @@ ModelInstanceState::ModelInstanceState(
       THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddRunConfigEntry(
           runOptions_, enable_memory_arena_shrinkage_key,
           string_value.c_str()));
+    }
+  }
+
+  // Enable/disable input/output buffer pooling (default disabled). Failures
+  // must be BackendModelInstanceExceptions: Create() catches only that type,
+  // so a BackendModelException thrown here would terminate the server.
+  {
+    triton::common::TritonJson::Value params;
+    if (model_state->ModelConfig().Find("parameters", &params)) {
+      triton::common::TritonJson::Value json_value;
+      if (params.Find("io_pooling", &json_value)) {
+        std::string string_value;
+        THROW_IF_BACKEND_INSTANCE_ERROR(
+            json_value.MemberAsString("string_value", &string_value));
+        TRITONSERVER_Error* err =
+            ParseBoolValue(string_value, &io_pooling_enabled_);
+        if (err != nullptr) {
+          TRITONSERVER_ErrorDelete(err);
+          throw BackendModelInstanceException(TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              (std::string("invalid value '") + string_value +
+               "' for model config parameter 'io_pooling', expected one of "
+               "true, false, on, off, 1, 0")
+                  .c_str()));
+        }
+        LOG_MESSAGE(
+            TRITONSERVER_LOG_VERBOSE,
+            (std::string("Configuring io_pooling to ") + string_value).c_str());
+      }
     }
   }
 
@@ -1481,12 +1600,137 @@ ModelInstanceState::ModelInstanceState(
 
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateInputs(expected_input_cnt));
   THROW_IF_BACKEND_INSTANCE_ERROR(ValidateOutputs());
+
+  if (io_pooling_enabled_) {
+    const int max_batch_size = model_state_->MaxBatchSize();
+    const size_t nonbatch_start = (max_batch_size > 0) ? 1 : 0;
+    pooled_input_placement_ = (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU)
+                                  ? TRITONSERVER_MEMORY_GPU
+                                  : TRITONSERVER_MEMORY_CPU;
+
+    // A tensor is static (modulo the batch dim) when every non-batch
+    // dimension is fixed. A scalar tensor (empty dims) is trivially static.
+    auto is_static_modulo_batch = [nonbatch_start](const OnnxTensorInfo& info) {
+      for (size_t i = nonbatch_start; i < info.dims_.size(); i++) {
+        if (info.dims_[i] < 0) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    // Only the inputs a request can carry are pooled: the configured inputs,
+    // and the sequence controls and states that the sequence batcher adds to
+    // each request. 'input_tensor_infos_' also lists the batch input targets,
+    // which ProcessBatchInput fills, and every overridable initializer, which
+    // a request can only override when the configuration declares it.
+    std::set<std::string> request_inputs;
+    auto add_names = [&request_inputs](
+                         triton::common::TritonJson::Value& ios,
+                         const char* key) {
+      for (size_t i = 0; i < ios.ArraySize(); i++) {
+        triton::common::TritonJson::Value io;
+        THROW_IF_BACKEND_INSTANCE_ERROR(ios.IndexAsObject(i, &io));
+        std::string name;
+        THROW_IF_BACKEND_INSTANCE_ERROR(io.MemberAsString(key, &name));
+        request_inputs.emplace(std::move(name));
+      }
+    };
+    triton::common::TritonJson::Value ios;
+    if (model_state->ModelConfig().Find("input", &ios)) {
+      add_names(ios, "name");
+    }
+    triton::common::TritonJson::Value controls;
+    if (sequence_batching.Find("control_input", &controls)) {
+      add_names(controls, "name");
+    }
+    triton::common::TritonJson::Value states;
+    if (sequence_batching.Find("state", &states)) {
+      add_names(states, "input_name");
+    }
+
+    for (const auto& io : input_tensor_infos_) {
+      const OnnxTensorInfo& info = io.second;
+      if (info.type_ == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING ||
+          request_inputs.count(io.first) == 0) {
+        continue;
+      }
+
+      PooledTensor pt;
+      pt.is_scalar = info.dims_.empty();
+
+      // A ragged input's dim 0 is the summed element count of the batch, not
+      // the batch size, so it is grown on demand like a dynamic one.
+      const bool static_shape = is_static_modulo_batch(info) &&
+                                !model_state_->IsInputRagged(io.first);
+
+      auto res = pooled_inputs_.emplace(io.first, std::move(pt));
+      PooledTensor* ptr = &res.first->second;
+
+      // Pre-size static tensors to their maximum batch high-water mark.
+      if (static_shape) {
+        int64_t element_cnt = std::max(max_batch_size, 1);
+        for (size_t i = nonbatch_start; i < info.dims_.size(); i++) {
+          element_cnt *= info.dims_[i];
+        }
+        const int64_t max_bytes =
+            GetByteSize(ConvertFromOnnxDataType(info.type_), {element_cnt});
+        THROW_IF_BACKEND_INSTANCE_ERROR(EnsurePooledCapacity(
+            ptr, io.first, max_bytes, pooled_input_placement_));
+      }
+    }
+
+    // Batch outputs keep the legacy path: their shape comes from the
+    // configuration, not from the model dims a pooled output is bound at. So
+    // do outputs without dims: ORT reports none both for a rank-0 tensor and
+    // for one whose shape it cannot infer, which bound as a scalar would fail
+    // every run, and a scalar has nothing to gain from pooling.
+    // Nothing is allocated here: the preferred placement is only known per
+    // batch, so each placement's buffer is allocated on first use.
+    const auto& model_outputs = model_state_->ModelOutputs();
+    for (const auto& output : model_outputs) {
+      const std::string& name = output.first;
+      auto iit = output_tensor_infos_.find(name);
+      if (iit == output_tensor_infos_.end() ||
+          iit->second.type_ == ONNX_TENSOR_ELEMENT_DATA_TYPE_STRING ||
+          model_state_->FindBatchOutput(name) != nullptr ||
+          iit->second.dims_.empty() || !is_static_modulo_batch(iit->second)) {
+        continue;
+      }
+
+      PooledOutput po;
+      po.dims = iit->second.dims_;
+      po.type = iit->second.type_;
+      // Sized for the maximum batch size (like pooled inputs) so that each
+      // placement's buffer is allocated once.
+      std::vector<int64_t> max_shape = po.dims;
+      if (max_batch_size > 0) {
+        max_shape[0] = max_batch_size;
+      }
+      po.max_byte_size =
+          GetByteSize(ConvertFromOnnxDataType(po.type), max_shape);
+      pooled_outputs_.emplace(name, std::move(po));
+    }
+  }
 }
 
 ModelInstanceState::~ModelInstanceState()
 {
   ReleaseOrtRunResources();
+  ReleaseInstanceResources();
+}
+
+void
+ModelInstanceState::ReleaseInstanceResources()
+{
   ort_api->ReleaseRunOptions(runOptions_);
+
+  // Release the pooled input/output buffers and their cached OrtValues. These
+  // are owned by 'pooled_inputs_'/'pooled_outputs_' and outlive individual
+  // batches, so they are cleaned up here rather than in ReleaseOrtRunResources.
+  pooled_inputs_.clear();
+  pooled_outputs_.clear();
+
   ort_api->ReleaseIoBinding(io_binding_);
   ort_api->ReleaseMemoryInfo(cuda_allocator_info_);
   if (session_ != nullptr) {
@@ -1536,6 +1780,102 @@ ModelInstanceState::ReleaseOrtRunResources()
     delete mem;
   }
   input_tensor_memories_.clear();
+}
+
+TRITONSERVER_Error*
+ModelInstanceState::EnsurePooledCapacity(
+    PooledTensor* pt, const std::string& name, size_t bytes,
+    TRITONSERVER_MemoryType desired_placement)
+{
+  if (pt->memory != nullptr && pt->memory->ByteSize() >= bytes) {
+    return nullptr;  // success
+  }
+
+  const size_t old_bytes = (pt->memory != nullptr) ? pt->memory->ByteSize() : 0;
+
+  // Growing invalidates the cached OrtValue view over the old buffer.
+  if (pt->value != nullptr) {
+    pt->value.reset();
+    pt->bound_shape.clear();
+  }
+  pt->memory.reset();
+
+  std::vector<BackendMemory::AllocationType> alloc_types;
+  int64_t memory_type_id = 0;
+  if (desired_placement == TRITONSERVER_MEMORY_GPU) {
+    alloc_types = {
+        BackendMemory::AllocationType::GPU_POOL,
+        BackendMemory::AllocationType::GPU};
+    memory_type_id = DeviceId();
+  } else if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+    // A host-placed pooled buffer on a GPU instance participates in a per-run
+    // device<->host transfer (e.g. ORT's D2H of a CPU-bound output at the end
+    // of RunWithBinding). Back it with page-locked (pinned) host memory so the
+    // transfer is a direct DMA instead of a synchronous copy staged through a
+    // driver-internal bounce buffer. Prefer the pre-allocated pinned pool (no
+    // per-allocation cudaHostAlloc), then a direct pinned allocation, then
+    // pageable host memory as a last resort.
+    alloc_types = {
+        BackendMemory::AllocationType::CPU_PINNED_POOL,
+        BackendMemory::AllocationType::CPU_PINNED,
+        BackendMemory::AllocationType::CPU};
+  } else {
+    alloc_types = {BackendMemory::AllocationType::CPU};
+  }
+
+  // A dynamic dimension can resolve to 0 elements at run time; allocate at
+  // least one byte so the pooled buffer (and the OrtValue view over it)
+  // always has a valid data pointer.
+  const size_t alloc_bytes = std::max<size_t>(bytes, 1);
+  BackendMemory* memory = nullptr;
+  RETURN_IF_ERROR(BackendMemory::Create(
+      model_state_->TritonMemoryManager(), alloc_types, memory_type_id,
+      alloc_bytes, &memory));
+  pt->memory.reset(memory);
+  pt->mem_type = memory->MemoryType();
+  pt->mem_type_id = memory->MemoryTypeId();
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      (std::string("io_pooling: grew buffer '") + name + "' from " +
+       std::to_string(old_bytes) + " to " + std::to_string(alloc_bytes) +
+       " bytes, allocated as " +
+       BackendMemory::AllocTypeString(memory->AllocType()))
+          .c_str());
+
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+ModelInstanceState::GetOrCreatePooledValue(
+    PooledTensor* pt, const std::vector<int64_t>& shape, size_t bytes,
+    ONNXTensorElementDataType type, OrtValue** out)
+{
+  if (pt->value != nullptr && pt->bound_shape == shape) {
+    *out = pt->value.get();
+    return nullptr;  // success
+  }
+
+  pt->value.reset();
+
+  const OrtMemoryInfo* allocator_info =
+      (pt->mem_type == TRITONSERVER_MEMORY_GPU) ? cuda_allocator_info_
+                                                : cpu_allocator_info_;
+  OrtValue* value = nullptr;
+  if (pt->is_scalar) {
+    RETURN_IF_ORT_ERROR(ort_api->CreateTensorWithDataAsOrtValue(
+        allocator_info, pt->memory->MemoryPtr(), bytes, nullptr /* scalar */,
+        0 /* number of dims */, type, &value));
+  } else {
+    RETURN_IF_ORT_ERROR(ort_api->CreateTensorWithDataAsOrtValue(
+        allocator_info, pt->memory->MemoryPtr(), bytes, shape.data(),
+        shape.size(), type, &value));
+  }
+
+  pt->value.reset(value);
+  pt->bound_shape = shape;
+  *out = value;
+  return nullptr;  // success
 }
 
 TRITONSERVER_Error*
@@ -2071,6 +2411,83 @@ ModelInstanceState::ProcessRequests(
     for (auto& output_name : StateForModel()->ModelOutputs()) {
       output_tensors_.emplace_back(nullptr);
 
+      auto pooled_it = io_pooling_enabled_
+                           ? pooled_outputs_.find(output_name.first)
+                           : pooled_outputs_.end();
+      if (pooled_it != pooled_outputs_.end()) {
+        // Pooled output: bind the preallocated, reused OrtValue of this
+        // batch's placement. Reads after RunWithBinding rely on its default
+        // end-of-run stream synchronization (we never disable it).
+        PooledOutput& po = pooled_it->second;
+
+        // The preferred location belongs to the request's response allocator,
+        // not to the model, so it is resolved on every batch.
+        TRITONSERVER_MemoryType desired_placement = preferred_memory_type;
+        int64_t desired_placement_id = preferred_memory_type_id;
+        auto err = TRITONBACKEND_RequestOutputBufferProperties(
+            requests[0], output_name.first.c_str(), /*byte_size*/ nullptr,
+            &desired_placement, &desired_placement_id);
+        if (err != nullptr) {
+          LOG_MESSAGE(
+              TRITONSERVER_LOG_VERBOSE,
+              (std::string(
+                   "Output Properties Unavailable. Using cpu as "
+                   "preferred location for output: " +
+                   output_name.first +
+                   " Error: " + TRITONSERVER_ErrorMessage(err))
+                   .c_str()));
+          TRITONSERVER_ErrorDelete(err);
+          desired_placement = TRITONSERVER_MEMORY_CPU;
+          desired_placement_id = 0;
+        }
+        // If the cuda allocator is not set, bind the output to CPU.
+        if (cuda_allocator_info_ == nullptr) {
+          desired_placement = TRITONSERVER_MEMORY_CPU;
+          desired_placement_id = 0;
+        }
+
+        const size_t placement_slot =
+            (desired_placement == TRITONSERVER_MEMORY_GPU) ? 1 : 0;
+        PooledTensor& pt = po.slots[placement_slot];
+
+        // The shape the output must have: the declared model dims with dim0
+        // set to the total batch size, per the Triton batching contract. ORT
+        // fails the run when an output it produces on the buffer's device has
+        // another shape, but when it copies the output into the buffer (a host
+        // buffer on a GPU instance) it only checks the element count, so a
+        // same-size output of another shape is read back at this one.
+        std::vector<int64_t> shape = po.dims;
+        if (model_state_->MaxBatchSize() > 0) {
+          shape[0] = total_batch_size;
+        }
+        const size_t byte_size =
+            GetByteSize(ConvertFromOnnxDataType(po.type), shape);
+
+        RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+            responses, request_count, all_response_failed,
+            EnsurePooledCapacity(
+                &pt, output_name.first, po.max_byte_size, desired_placement));
+
+        // Tell ReadOutputTensors where this batch's output lives.
+        if (pt.memory != nullptr) {
+          output_device_info_[output_name.first] = {
+              pt.mem_type, pt.mem_type_id};
+        }
+
+        if (!all_response_failed) {
+          OrtValue* pooled_value = nullptr;
+          RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+              responses, request_count, all_response_failed,
+              GetOrCreatePooledValue(
+                  &pt, shape, byte_size, po.type, &pooled_value));
+          RESPOND_ALL_AND_SET_TRUE_IF_ORT_ERROR(
+              responses, request_count, all_response_failed,
+              ort_api->BindOutput(
+                  io_binding_, output_name.first.c_str(), pooled_value));
+        }
+        continue;
+      }
+
       TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
       int64_t memory_type_id = 0;
 
@@ -2342,7 +2759,37 @@ ModelInstanceState::SetInputTensors(
       }
     }
 
-    if (input_datatype != TRITONSERVER_TYPE_BYTES) {
+    auto pooled_it = io_pooling_enabled_ ? pooled_inputs_.find(input_name)
+                                         : pooled_inputs_.end();
+    if (input_datatype != TRITONSERVER_TYPE_BYTES &&
+        pooled_it != pooled_inputs_.end()) {
+      // Pooled path: copy the whole batch into the pooled buffer. The
+      // collector may issue the copy asynchronously on the CUDA stream; the
+      // existing pre-Run sync covers it. The pooled OrtValue is owned by
+      // 'pooled_inputs_' and is intentionally NOT pushed into
+      // 'input_tensors_' (ReleaseOrtRunResources must never release it).
+      PooledTensor& pt = pooled_it->second;
+
+      size_t batchn_byte_size = BufferByteSize(input_datatype, batchn_shape);
+      RETURN_IF_ERROR(EnsurePooledCapacity(
+          &pt, input_name, batchn_byte_size, pooled_input_placement_));
+
+      const char* dst_buffer;
+      size_t dst_buffer_byte_size;
+      TRITONSERVER_MemoryType dst_memory_type;
+      int64_t dst_memory_type_id;
+      RETURN_IF_ERROR(collector->ProcessTensor(
+          input_name, pt.memory->MemoryPtr(), batchn_byte_size,
+          {{pt.mem_type, pt.mem_type_id}}, &dst_buffer, &dst_buffer_byte_size,
+          &dst_memory_type, &dst_memory_type_id));
+
+      OrtValue* pooled_value = nullptr;
+      RETURN_IF_ERROR(GetOrCreatePooledValue(
+          &pt, batchn_shape, batchn_byte_size,
+          ConvertToOnnxDataType(input_datatype), &pooled_value));
+      RETURN_IF_ORT_ERROR(
+          ort_api->BindInput(io_binding_, input_name, pooled_value));
+    } else if (input_datatype != TRITONSERVER_TYPE_BYTES) {
       // The input must be in contiguous CPU memory. Use appropriate
       // allocator info to bind inputs to the right device. .i.e bind inputs
       // to GPU if they are being provided on GPU.
@@ -2702,6 +3149,13 @@ ModelInstanceState::ReadOutputTensors(
   bool cuda_copy = false;
   auto& model_outputs = StateForModel()->ModelOutputs();
 
+  // Pooled outputs are read back through the bound values too, not from the
+  // pooled buffer: ORT can hand back its own value instead of writing into a
+  // bound buffer, and the pooled buffer then holds stale data. A graph output
+  // that is directly a graph input takes the feed's value
+  // (IExecutionFrame::Init in onnxruntime/core/framework/execution_frame.cc),
+  // and a result already on a device that serves the bound one is passed
+  // through (BatchOrCopyMLValue in onnxruntime/core/framework/utils.cc).
   size_t output_count = 0;
   RETURN_IF_ORT_ERROR(ort_api->GetBoundOutputValues(
       io_binding_, default_allocator_, &output_buffer_, &output_count));
