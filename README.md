@@ -287,26 +287,47 @@ for more information.
 * `session.use_device_allocator_for_initializers`: Use "1" to enable using device allocator for allocating initialized tensor memory and "0" to disable. The default is "0". See [this](https://onnxruntime.ai/docs/get-started/with-c.html) for more information.
 * `io_pooling`: Boolean (`true`/`on`/`1` or `false`/`off`/`0`, any other value
 makes the model fail to load), default `false`. When enabled, non-string inputs
-use per-instance pooled buffers that are reused across batches. This eliminates
-per-batch input buffer allocations and keeps the input device addresses stable
-across batches. Inputs whose non-batch dimensions are all static are allocated
-at model load, sized for `max_batch_size`; inputs with dynamic dimensions, and
-ragged inputs, get a buffer on first use that is grown on demand.
+and the non-string outputs whose non-batch dimensions are all static use
+per-instance pooled buffers that are reused across batches. This eliminates
+per-batch buffer allocations and keeps the I/O device addresses stable across
+batches. Inputs whose non-batch dimensions are all static are allocated at
+model load, sized for `max_batch_size`; inputs with dynamic dimensions, and
+ragged inputs, get a buffer on first use that is grown on demand (growth events
+are logged at VERBOSE level). A pooled output is allocated on the first batch
+that asks for its placement rather than at load, because only then is it known
+whether the output is requested in host or GPU memory; it is sized for
+`max_batch_size`. The preferred placement is a property of the batch's requests
+(a client using shared memory reports that region's placement, an ensemble step
+keeps the instance's GPU preference, everything else reports host), so an output
+asked for in both places keeps one buffer per placement and neither batch pays a
+transfer.
 A pooled buffer stays allocated for the lifetime of the instance and never
 shrinks, keeping the high-water mark of the largest batch it has seen, because a
 request of that size can recur and reusing the memory is the point of pooling.
 The memory held per instance is therefore the sum, over the statically-shaped
-inputs, of `max_batch_size * product(non-batch dims) * sizeof(type)`
-(`max_batch_size` counts as 1 for models without batching); for example 36.8 MiB
-for each fp32 `[3, 224, 224]` input with `max_batch_size` 64. Size
+inputs and the pooled outputs, of
+`max_batch_size * product(non-batch dims) * sizeof(type)` (`max_batch_size`
+counts as 1 for models without batching); for example 36.8 MiB for each fp32
+`[3, 224, 224]` input with `max_batch_size` 64. Size
 `--cuda-memory-pool-byte-size` (64 MB by default) and
 `--pinned-memory-pool-byte-size` (256 MB by default) for the largest expected
 request times the number of instances; when a pool is exhausted, a buffer
 escalates to a direct `cudaMalloc` or `cudaHostAlloc` allocation.
 Pooling always copies request data into the pooled buffer, which disables the
-zero-copy path used when a batch consists of a single contiguous request, so
-it does not pay off on CPU instances dominated by single-request batches.
-Batch inputs keep the legacy path.
+zero-copy path used when a batch consists of a single contiguous request, so it
+does not pay off on CPU instances dominated by single-request batches. A pooled
+output is bound with the exact shape `[total batch size, ...]` derived from the
+declared model dims, rather than taking the shape the model actually produces. A
+model whose ONNX signature passes Triton's batching validation but whose
+execution yields a differently shaped output therefore fails the inference with
+an `INTERNAL` error carrying ONNX Runtime's message rather than being read back
+and sliced at its true shape, which could have silently produced per-request
+results at the wrong geometry. ONNX Runtime only compares element counts when it
+copies an output into a host buffer of a GPU instance, so there an output of the
+declared size but another shape is read back at the declared shape.
+`io_pooling=false` restores reading back the shape ONNX Runtime produced. Batch
+inputs/outputs and outputs without dimensions (rank 0, or a shape ONNX Runtime
+cannot infer) keep the legacy path.
 
 ```
 parameters { key: "io_pooling" value: { string_value: "true" } }
