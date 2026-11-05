@@ -1375,7 +1375,8 @@ ModelInstanceState::Create(
 // arena in the session. The value comes from the model config and is shared by
 // all instances, so keep only the entries for this instance's devices: "gpu"
 // (no id) means this instance's GPU, entries for other GPUs are dropped, and
-// GPU entries are dropped for CPU instances. "cpu" entries are kept as given.
+// GPU entries are dropped for CPU instances. "cpu" entries and malformed
+// entries are kept as given, so ONNX Runtime still reports the malformed ones.
 static std::string
 FilterArenaShrinkageForInstance(
     const std::string& value, const bool is_gpu_instance, const int device_id)
@@ -1384,14 +1385,20 @@ FilterArenaShrinkageForInstance(
   std::istringstream entries(value);
   for (std::string entry; std::getline(entries, entry, ';');) {
     if (entry.rfind("gpu", 0) == 0) {
-      if (!is_gpu_instance) {
-        continue;
+      int entry_device_id = -1;
+      if (entry == "gpu") {
+        entry_device_id = device_id;
+      } else if (
+          (entry.size() > 4) && (entry.size() <= 13) && (entry[3] == ':') &&
+          (entry.find_first_not_of("0123456789", 4) == std::string::npos)) {
+        entry_device_id = std::stoi(entry.substr(4));
       }
-      const std::string own = "gpu:" + std::to_string(device_id);
-      if (entry != "gpu" && entry != own) {
-        continue;
+      if (entry_device_id >= 0) {
+        if (!is_gpu_instance || (entry_device_id != device_id)) {
+          continue;
+        }
+        entry = "gpu:" + std::to_string(device_id);
       }
-      entry = own;
     }
     if (!filtered.empty()) {
       filtered += ";";
