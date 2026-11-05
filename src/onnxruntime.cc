@@ -28,6 +28,7 @@
 
 #include <atomic>
 #include <mutex>
+#include <sstream>
 #include <vector>
 
 #include "onnxruntime_loader.h"
@@ -1369,6 +1370,37 @@ ModelInstanceState::Create(
   return nullptr;  // success
 }
 
+// The memory.enable_memory_arena_shrinkage value lists devices, e.g.
+// "cpu:0;gpu:0", and ONNX Runtime fails every Run() if a listed device has no
+// arena in the session. The value comes from the model config and is shared by
+// all instances, so keep only the entries for this instance's devices: "gpu"
+// (no id) means this instance's GPU, entries for other GPUs are dropped, and
+// GPU entries are dropped for CPU instances. "cpu" entries are kept as given.
+static std::string
+FilterArenaShrinkageForInstance(
+    const std::string& value, const bool is_gpu_instance, const int device_id)
+{
+  std::string filtered;
+  std::istringstream entries(value);
+  for (std::string entry; std::getline(entries, entry, ';');) {
+    if (entry.rfind("gpu", 0) == 0) {
+      if (!is_gpu_instance) {
+        continue;
+      }
+      const std::string own = "gpu:" + std::to_string(device_id);
+      if (entry != "gpu" && entry != own) {
+        continue;
+      }
+      entry = own;
+    }
+    if (!filtered.empty()) {
+      filtered += ";";
+    }
+    filtered += entry;
+  }
+  return filtered;
+}
+
 ModelInstanceState::ModelInstanceState(
     ModelState* model_state, TRITONBACKEND_ModelInstance* triton_model_instance)
     : BackendModelInstance(model_state, triton_model_instance),
@@ -1405,14 +1437,20 @@ ModelInstanceState::ModelInstanceState(
       THROW_IF_BACKEND_MODEL_ERROR(
           json_value.MemberAsString("string_value", &string_value));
 
+      const std::string instance_value = FilterArenaShrinkageForInstance(
+          string_value, Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU,
+          DeviceId());
       LOG_MESSAGE(
           TRITONSERVER_LOG_VERBOSE,
           (std::string("Configuring ") + enable_memory_arena_shrinkage_key +
-           " to " + string_value)
+           " to " + instance_value + " for instance " + Name() +
+           " (model config value '" + string_value + "')")
               .c_str());
-      THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddRunConfigEntry(
-          runOptions_, enable_memory_arena_shrinkage_key,
-          string_value.c_str()));
+      if (!instance_value.empty()) {
+        THROW_IF_BACKEND_MODEL_ORT_ERROR(ort_api->AddRunConfigEntry(
+            runOptions_, enable_memory_arena_shrinkage_key,
+            instance_value.c_str()));
+      }
     }
   }
 

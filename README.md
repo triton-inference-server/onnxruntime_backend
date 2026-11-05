@@ -281,9 +281,18 @@ for more information.
 * `enable_mem_pattern`: Use 1 to enable memory pattern and 0 to disable.
 See [this](https://onnxruntime.ai/docs/api/c/struct_ort_api.html#ad13b711736956bf0565fea0f8d7a5d75)
 for more information.
-* `memory.enable_memory_arena_shrinkage`:
-See [this](https://github.com/microsoft/onnxruntime/blob/master/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h)
-for more information.
+* `memory.enable_memory_arena_shrinkage`: List of device memory arenas to shrink
+after every inference, in ONNX Runtime's format (for example `cpu:0;gpu:0`). See
+[this](https://github.com/microsoft/onnxruntime/blob/main/include/onnxruntime/core/session/onnxruntime_run_options_config_keys.h)
+for more information. The list is applied per model instance: each instance keeps
+only the entries for its own devices, and `gpu` without a device id means the GPU
+the instance runs on. This lets one model with instances on several GPUs use
+shrinkage, for example:
+
+```
+instance_group [ { count: 1 kind: KIND_GPU } ]
+parameters { key: "memory.enable_memory_arena_shrinkage" value: { string_value: "gpu" } }
+```
 * `session.use_device_allocator_for_initializers`: Use "1" to enable using device allocator for allocating initialized tensor memory and "0" to disable. The default is "0". See [this](https://onnxruntime.ai/docs/get-started/with-c.html) for more information.
 
 ### Command line options
