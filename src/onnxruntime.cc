@@ -28,6 +28,7 @@
 
 #include <array>
 #include <atomic>
+#include <exception>
 #include <mutex>
 #include <vector>
 
@@ -1308,6 +1309,9 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance);
   void ReleaseOrtRunResources();
+  // Releases what the constructor acquires. Also called by the constructor
+  // when it throws, since the destructor then never runs.
+  void ReleaseInstanceResources();
   // Ensure 'pt' owns a buffer of at least 'bytes', growing (reallocating) it
   // if necessary. 'desired_placement' selects the device of a new buffer.
   TRITONSERVER_Error* EnsurePooledCapacity(
@@ -1447,8 +1451,21 @@ ModelInstanceState::ModelInstanceState(
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state), session_(nullptr), default_allocator_(nullptr),
       cuda_allocator_info_(nullptr), cpu_allocator_info_(nullptr),
-      io_binding_(nullptr), output_buffer_(nullptr)
+      io_binding_(nullptr), runOptions_(nullptr), output_buffer_(nullptr)
 {
+  // A failed load would otherwise keep the session and its weights allocated
+  // until the server restarts, one more copy per load attempt.
+  struct ReleaseOnThrow {
+    ModelInstanceState* state;
+    int uncaught = std::uncaught_exceptions();
+    ~ReleaseOnThrow()
+    {
+      if (std::uncaught_exceptions() > uncaught) {
+        state->ReleaseInstanceResources();
+      }
+    }
+  } release_on_throw{this};
+
   THROW_IF_BACKEND_INSTANCE_ERROR(model_state->LoadModel(
       ArtifactFilename(), Kind(), DeviceId(), &model_path_, &session_,
       &default_allocator_, CudaStream()));
@@ -1700,6 +1717,12 @@ ModelInstanceState::ModelInstanceState(
 ModelInstanceState::~ModelInstanceState()
 {
   ReleaseOrtRunResources();
+  ReleaseInstanceResources();
+}
+
+void
+ModelInstanceState::ReleaseInstanceResources()
+{
   ort_api->ReleaseRunOptions(runOptions_);
 
   // Release the pooled input/output buffers and their cached OrtValues. These
