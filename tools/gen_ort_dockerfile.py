@@ -167,10 +167,13 @@ def dockerfile_common():
     df = """
 ARG BASE_IMAGE={}
 ARG ONNXRUNTIME_VERSION={}
-ARG ONNXRUNTIME_REPO=https://github.com/microsoft/onnxruntime
+ARG ONNXRUNTIME_REPO={}
 ARG ONNXRUNTIME_BUILD_CONFIG={}
 """.format(
-        FLAGS.triton_container, FLAGS.ort_version, FLAGS.ort_build_config
+        FLAGS.triton_container,
+        FLAGS.ort_version,
+        FLAGS.ort_repo,
+        FLAGS.ort_build_config,
     )
 
     if FLAGS.ort_openvino is not None:
@@ -593,6 +596,14 @@ if __name__ == "__main__":
         default="Release",
         choices=["Debug", "Release", "RelWithDebInfo"],
         help="ORT build configuration.",
+    )
+    parser.add_argument(
+        "--ort-repo",
+        type=str,
+        default="https://github.com/microsoft/onnxruntime",
+        help="Default ONNX Runtime git repository. Written into the "
+        "Dockerfile, so do not pass credentials; override at build time with "
+        "'docker build --build-arg ONNXRUNTIME_REPO=<url>'.",
     )
     parser.add_argument(
         "--target-platform",
